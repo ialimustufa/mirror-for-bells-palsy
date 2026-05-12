@@ -1,85 +1,48 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, Pause, X, ChevronRight, Volume2, VolumeX, Flame, Camera, CameraOff, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import {
+  CALIBRATION_FRAMES,
+  CALIBRATION_RESET_EPS,
+  CALIBRATION_STABILITY_EPS,
+  COMFORT_DOSING,
+  DAY_END_HOUR,
+  DAY_START_HOUR,
+  FACE_CENTER_MAX_OFFSET,
+  FACE_TILT_MAX_RAD,
+  INTERSTITIAL_SEC,
+  PROFILE_BASELINE_TOP_FRACTION,
+  PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES,
+  PROFILE_HISTORY_LIMIT,
+  PROFILE_HOLD_SEC,
+  PROFILE_MIN_ALIGNMENT_RATIO,
+  PROFILE_MIN_SCORED_FRAMES,
+  PROFILE_REST_RETRY_LIMIT,
+  PROFILE_REST_SEC,
+  PROFILE_RETAKE_DAYS,
+  PROFILE_STEADY_NOISE_MAX,
+  PROFILE_USABLE_NOISE_MAX,
+  PROFILE_VERSION,
+  REPORT_SNAPSHOT_QUALITY,
+  REPORT_SNAPSHOT_WIDTH,
+} from "./domain/config";
+import { DAILY_ESSENTIALS, EXERCISE_BY_ID, EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, REGIONS } from "./domain/exercises";
+import {
+  DEFAULT_DATA,
+  applySessionDose,
+  buildSessionExercises,
+  clampNumber,
+  computeStreak,
+  daysBetween,
+  exerciseHoldSec,
+  exerciseRestSec,
+  formatClock,
+  getComfortDosing,
+  isCountedSession,
+  nextSessionAt,
+  todayISO,
+} from "./domain/session";
 import { compactAppDataForStorage, hydrateSessionImages, loadMirrorData, saveMirrorData } from "./storage";
-
-// Exercise definitions are the product content layer: the UI, daily plan, and session
-// runner all read from this single catalog so copy and timing stay in sync.
-const EXERCISES = [
-  { id: "eyebrow-raise", name: "Eyebrow Raise", region: "forehead", holdSec: 5, reps: 10, instruction: "Raise both eyebrows as if surprised. Hold gently for 5 seconds, then relax slowly.", tip: "If the affected side won't lift, assist lightly with a finger. Never strain — quality over force." },
-  { id: "gentle-frown", name: "Gentle Frown", region: "forehead", holdSec: 4, reps: 8, instruction: "Pull your eyebrows down and inward, as if concentrating. Hold, then relax.", tip: "Watch both brows in the mirror. Aim for symmetric movement, not strength." },
-  { id: "eye-close", name: "Soft Eye Closure", region: "eyes", holdSec: 5, reps: 10, instruction: "Slowly close your eyes — don't squeeze. Hold softly for 5 seconds, then open slowly.", tip: "Forceful blinking can encourage synkinesis. Slow and gentle is the goal." },
-  { id: "wink", name: "Independent Wink", region: "eyes", holdSec: 2, reps: 6, instruction: "Try to close one eye while keeping the other open. Switch sides each rep.", tip: "This builds independent control. It may feel awkward — that's normal early on." },
-  { id: "nose-wrinkle", name: "Nostril Flare", region: "nose", holdSec: 4, reps: 8, instruction: "Flare your nostrils outward, as if taking a deep breath through your nose. Hold gently, then relax.", tip: "If flaring feels stuck, try wrinkling the bridge upward instead — both engage the nasalis muscle group. Keep the rest of your face soft." },
-  { id: "cheek-puff", name: "Cheek Puff", region: "cheeks", holdSec: 5, reps: 8, instruction: "Take a breath, puff air into both cheeks, hold, then move air slowly from one cheek to the other.", tip: "If air leaks from the affected side, hold that lip lightly with a finger to build the seal." },
-  { id: "cheek-suck", name: "Cheek Suck", region: "cheeks", holdSec: 3, reps: 8, instruction: "Suck your cheeks inward against your teeth, like making a 'fish face'. Hold, then release.", tip: "This activates the buccinator muscle — important for chewing and speech." },
-  { id: "closed-smile", name: "Closed Smile", region: "mouth", holdSec: 5, reps: 10, instruction: "Smile with lips closed, lifting both corners of your mouth gently. Hold, then relax.", tip: "This is the cornerstone exercise. Watch both corners rise evenly in the mirror." },
-  { id: "open-smile", name: "Open Smile", region: "mouth", holdSec: 5, reps: 8, instruction: "Smile widely, showing your teeth. Hold for 5 seconds, then relax slowly.", tip: "Only progress to this when closed smile feels symmetric. Don't force a wider smile than the affected side allows." },
-  { id: "pucker", name: "Lip Pucker", region: "mouth", holdSec: 5, reps: 10, instruction: "Purse your lips forward as if blowing a kiss. Hold for 5 seconds, then relax.", tip: "Use the mirror to keep the pucker centered, not pulled toward the stronger side." },
-  { id: "lip-press", name: "Lip Press", region: "mouth", holdSec: 4, reps: 8, instruction: "Press your lips firmly but gently together. Hold, then release.", tip: "Builds the orbicularis oris — important for sealing food and clear speech." },
-  { id: "vowel-a", name: "Vowel A Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a slow, open A shape. Hold the jaw open gently, then relax fully.", tip: "Think 'ah'. Keep the mouth opening centered and avoid pulling toward the stronger side." },
-  { id: "vowel-e", name: "Vowel E Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a slow E shape. Stretch the lips sideways gently, hold, then relax.", tip: "Think 'ee'. Watch both mouth corners travel evenly without over-smiling." },
-  { id: "vowel-i", name: "Vowel I Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a slow I shape. Lift the corners lightly and keep the lips controlled.", tip: "Think 'ih'. This should be smaller and softer than a wide smile." },
-  { id: "vowel-o", name: "Vowel O Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a rounded O shape. Hold the lips in a soft circle, then relax.", tip: "Think 'oh'. Keep the circle centered rather than pulled to one side." },
-  { id: "vowel-u", name: "Vowel U Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a rounded U shape. Bring the lips forward gently, hold, then relax.", tip: "Think 'oo'. Keep the forward pucker even and avoid clenching." },
-  { id: "emoji-smile", name: "Emoji Smile 🙂", region: "emoji", holdSec: 4, reps: 6, instruction: "Make a gentle happy face with lips closed. Hold the smile softly, then relax back to neutral.", tip: "Keep it conversational, not forced. Watch both corners lift at the same speed." },
-  { id: "emoji-big-smile", name: "Emoji Big Smile 😄", region: "emoji", holdSec: 4, reps: 5, instruction: "Make a bright open smile, showing teeth only as much as feels comfortable. Hold, then release slowly.", tip: "Use less range if the stronger side pulls too far ahead." },
-  { id: "emoji-surprise", name: "Emoji Surprise 😮", region: "emoji", holdSec: 4, reps: 5, instruction: "Raise your eyebrows and make a soft O shape with your mouth, like a surprised face. Hold gently, then relax.", tip: "This links forehead lift with controlled lip rounding. Keep the jaw loose." },
-  { id: "emoji-wink", name: "Emoji Wink 😉", region: "emoji", holdSec: 3, reps: 5, instruction: "Make a playful wink expression. Close one eye gently while the mouth stays lightly lifted, then relax.", tip: "Avoid squeezing. The goal is clean eye control without pulling the cheek hard." },
-  { id: "emoji-kiss", name: "Emoji Kiss 😘", region: "emoji", holdSec: 4, reps: 5, instruction: "Pucker your lips forward like sending a kiss. Hold the center line steady, then relax.", tip: "Keep the lips centered and soft; do not clench the jaw." },
-  { id: "emoji-sad-frown", name: "Emoji Sad Frown ☹️", region: "emoji", holdSec: 4, reps: 5, instruction: "Make a gentle sad face by lowering the mouth corners and lightly drawing the brows together. Hold, then release.", tip: "Use a small expression. Stop if it creates strain around the eye or cheek." },
-  { id: "emoji-nose-scrunch", name: "Emoji Nose Scrunch 😖", region: "emoji", holdSec: 4, reps: 5, instruction: "Scrunch your nose lightly as if reacting to a strong smell. Hold the expression, then relax fully.", tip: "Keep the rest of the face soft so the nose and upper lip do the work." },
-];
-const EXERCISE_BY_ID = new Map(EXERCISES.map((exercise) => [exercise.id, exercise]));
-
-const REGIONS = [{ key: "all", label: "All" }, { key: "forehead", label: "Forehead" }, { key: "eyes", label: "Eyes" }, { key: "nose", label: "Nose" }, { key: "cheeks", label: "Cheeks" }, { key: "mouth", label: "Mouth" }, { key: "emoji", label: "Emoji" }];
-const DAILY_ESSENTIALS = ["eyebrow-raise", "eye-close", "nose-wrinkle", "cheek-puff", "closed-smile", "pucker"];
-const MOOD_OPTIONS = [{ key: "hopeful", label: "Hopeful", emoji: "🌱" }, { key: "okay", label: "Steady", emoji: "🌤" }, { key: "tired", label: "Tired", emoji: "🌙" }, { key: "frustrated", label: "Frustrated", emoji: "🌧" }];
-
-// Daily cadence: short sessions spread N times across waking hours.
-const DAY_START_HOUR = 9;  // 9 AM
-const DAY_END_HOUR = 21;   // 9 PM
-const INTERSTITIAL_SEC = 10;
-const HOLD_SEC = 4;       // fallback hold duration; profiled sessions can use exercise-specific dosing
-const REST_SEC = 2;       // fallback rest duration; serves as entry settle AND between-rep recovery
-const CALIBRATION_FRAMES = 24;
-const CALIBRATION_STABILITY_EPS = 0.006;
-const CALIBRATION_RESET_EPS = 0.018;
-const FACE_CENTER_MAX_OFFSET = 0.12;
-const FACE_TILT_MAX_RAD = 0.12;
-const PROFILE_VERSION = 1;
-const PROFILE_ASSESSMENT_EXERCISES = EXERCISES.map((exercise) => exercise.id);
-const PROFILE_HOLD_SEC = 4;
-const PROFILE_REST_SEC = 2;
-const PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES = 8;
-const PROFILE_REST_RETRY_LIMIT = 1;
-const PROFILE_BASELINE_TOP_FRACTION = 0.2;
-const PROFILE_MIN_SCORED_FRAMES = 8;
-const PROFILE_MIN_ALIGNMENT_RATIO = 0.7;
-const PROFILE_RETAKE_DAYS = 14;
-const PROFILE_HISTORY_LIMIT = 6;
-const PROFILE_STEADY_NOISE_MAX = 0.006;
-const PROFILE_USABLE_NOISE_MAX = 0.018;
-const REPORT_SNAPSHOT_WIDTH = 520;
-const REPORT_SNAPSHOT_QUALITY = 0.9;
-const COMFORT_DOSING = {
-  gentle: { key: "gentle", label: "Gentle", repScale: 0.65, minReps: 3, maxReps: 8, holdDeltaSec: -1, minHoldSec: 2, maxHoldSec: 4, restSec: 3 },
-  normal: { key: "normal", label: "Normal", repScale: 1, minReps: 4, maxReps: 10, holdDeltaSec: 0, minHoldSec: 2, maxHoldSec: 5, restSec: 2 },
-  advanced: { key: "advanced", label: "Advanced", repScale: 1.15, minReps: 5, maxReps: 12, holdDeltaSec: 0, minHoldSec: 2, maxHoldSec: 5, restSec: 2 },
-};
-
-// Persisted app state is intentionally compact and append-only for sessions/journal.
-// Derived trend metrics are recomputed in views instead of stored.
-const DEFAULT_DATA = { journal: [], sessions: [], movementProfile: null, initialMovementProfile: null, movementProfileHistory: [], prefs: { voiceEnabled: true, mirrorEnabled: true, symmetryEnabled: true, dailyGoal: 3, onboarded: false } };
-const todayISO = () => new Date().toISOString().split("T")[0];
-const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24));
-
-// Single-exercise standalone runs are tagged "practice" — they're still tracked and
-// charted, but don't count toward the daily-goal X-of-Y counter. Legacy records have no
-// kind and continue to count.
-function isCountedSession(s) {
-  return s?.kind !== "practice";
-}
 
 function normalizeAppData(parsed = {}) {
   const compactParsed = compactAppDataForStorage(parsed);
@@ -124,74 +87,6 @@ function mergeMovementProfileRetake(currentProfile, partialProfile) {
     initialAvgSymmetry: averageProfileSymmetry(exercises),
   };
 }
-
-function getComfortDosing(profileOrLevel) {
-  const key = typeof profileOrLevel === "string" ? profileOrLevel : profileOrLevel?.comfortLevel;
-  return COMFORT_DOSING[key] ?? COMFORT_DOSING.normal;
-}
-
-function clampNumber(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function applySessionDose(exercise, profile) {
-  const dosing = getComfortDosing(profile);
-  const reps = clampNumber(Math.round(exercise.reps * dosing.repScale), dosing.minReps, dosing.maxReps);
-  const holdSec = clampNumber(Math.round(exercise.holdSec + dosing.holdDeltaSec), dosing.minHoldSec, dosing.maxHoldSec);
-  return { ...exercise, baseReps: exercise.reps, baseHoldSec: exercise.holdSec, reps, holdSec, restSec: dosing.restSec, comfortLevel: dosing.key };
-}
-
-function buildSessionExercises(ids, profile) {
-  return ids.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean).map((exercise) => applySessionDose(exercise, profile));
-}
-
-function exerciseRestSec(exercise) {
-  return exercise?.restSec ?? REST_SEC;
-}
-
-function exerciseHoldSec(exercise) {
-  return exercise?.holdSec ?? HOLD_SEC;
-}
-
-// Evenly-spaced session times today (e.g. dailyGoal=5 → 9:00, 12:00, 15:00, 18:00, 21:00).
-function todaysSessionSlots(dailyGoal) {
-  if (!dailyGoal || dailyGoal <= 0) return [];
-  const minutes = (DAY_END_HOUR - DAY_START_HOUR) * 60;
-  const step = dailyGoal === 1 ? 0 : minutes / (dailyGoal - 1);
-  const slots = [];
-  for (let i = 0; i < dailyGoal; i++) {
-    const total = DAY_START_HOUR * 60 + step * i;
-    const h = Math.floor(total / 60), m = Math.round(total % 60);
-    const d = new Date(); d.setHours(h, m, 0, 0);
-    slots.push(d);
-  }
-  return slots;
-}
-
-function nextSessionAt(dailyGoal, completedToday) {
-  if (completedToday >= dailyGoal) return null;
-  const slots = todaysSessionSlots(dailyGoal);
-  return slots[completedToday] ?? null;
-}
-
-function formatClock(d) {
-  let h = d.getHours();
-  const m = d.getMinutes();
-  const ampm = h >= 12 ? "PM" : "AM";
-  h = h % 12 || 12;
-  return `${h}:${m.toString().padStart(2, "0")} ${ampm}`;
-}
-
-const computeStreak = (sessions) => {
-  if (!sessions.length) return 0;
-  const dates = [...new Set(sessions.map((s) => s.date))].sort().reverse();
-  let streak = 0; let cursor = todayISO();
-  for (const d of dates) {
-    if (d === cursor) { streak++; const prev = new Date(cursor); prev.setDate(prev.getDate() - 1); cursor = prev.toISOString().split("T")[0]; }
-    else if (daysBetween(d, cursor) > 0) break;
-  }
-  return streak;
-};
 
 /* MediaPipe Tasks Face Landmarker — 478 landmarks + 52 ARKit-style blendshapes */
 const TASKS_VISION_VERSION = "0.10.21";
@@ -1546,6 +1441,201 @@ function SecondaryButton({ children, onClick }) {
   return <button onClick={onClick} className="rounded-2xl p-4 text-left text-sm font-medium flex items-center justify-between transition hover:bg-white" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>{children}</button>;
 }
 
+function drawWinkArrows(canvas, video, lm, mirrorEnabled) {
+  if (!canvas || !video) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.round(rect.width * dpr), h = Math.round(rect.height * dpr);
+  if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, w, h);
+  if (!lm || lm.length < 364) return;
+  const t = objectCoverTransform(canvas, video);
+  if (!t) return;
+  const px = (p) => mirrorEnabled ? t.cw - (p.x * t.dw + t.ox) : (p.x * t.dw + t.ox);
+  const py = (p) => p.y * t.dh + t.oy;
+  // Eye centers from outer + inner corners
+  const eyeA = { x: (px(lm[33]) + px(lm[133])) / 2, y: (py(lm[33]) + py(lm[133])) / 2 };
+  const eyeB = { x: (px(lm[263]) + px(lm[362])) / 2, y: (py(lm[263]) + py(lm[362])) / 2 };
+  const screenLeft = eyeA.x < eyeB.x ? eyeA : eyeB;
+  const screenRight = eyeA.x < eyeB.x ? eyeB : eyeA;
+  const now = Date.now();
+  const closeLeft = Math.floor(now / 2400) % 2 === 0;
+  const closed = closeLeft ? screenLeft : screenRight;
+  const open = closeLeft ? screenRight : screenLeft;
+  const pulse = 0.5 + 0.5 * Math.sin(now / 240);
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  // Closed-eye marker: solid amber-red ring + arrow above + label
+  ctx.strokeStyle = `rgba(184, 84, 58, ${0.7 + 0.3 * pulse})`;
+  ctx.lineWidth = 3 * dpr;
+  ctx.beginPath();
+  ctx.arc(closed.x, closed.y, (22 + 4 * pulse) * dpr, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(closed.x, closed.y - 56 * dpr);
+  ctx.lineTo(closed.x, closed.y - 30 * dpr);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(closed.x - 7 * dpr, closed.y - 38 * dpr);
+  ctx.lineTo(closed.x, closed.y - 28 * dpr);
+  ctx.lineTo(closed.x + 7 * dpr, closed.y - 38 * dpr);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(184, 84, 58, 0.95)";
+  ctx.font = `600 ${12 * dpr}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillText("Close", closed.x, closed.y - 64 * dpr);
+
+  // Open-eye marker: dashed sage ring + label
+  ctx.strokeStyle = "rgba(122, 143, 115, 0.85)";
+  ctx.lineWidth = 2 * dpr;
+  ctx.setLineDash([5 * dpr, 5 * dpr]);
+  ctx.beginPath();
+  ctx.arc(open.x, open.y, 20 * dpr, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(122, 143, 115, 0.95)";
+  ctx.fillText("Keep open", open.x, open.y - 30 * dpr);
+}
+
+function WinkLivePreview({ stream, faceLandmarker, mirrorEnabled, className = "" }) {
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const [hasFace, setHasFace] = useState(false);
+
+  useEffect(() => {
+    if (videoRef.current && stream) videoRef.current.srcObject = stream;
+  }, [stream]);
+
+  useEffect(() => {
+    if (!faceLandmarker) return;
+    let raf = 0;
+    let alive = true;
+    let lastTs = 0;
+    const tick = () => {
+      if (!alive) return;
+      const v = videoRef.current;
+      const c = canvasRef.current;
+      if (v && c && v.readyState >= 2 && !v.paused && v.videoWidth > 0) {
+        let lm = null;
+        try {
+          const ts = Math.max(lastTs + 1, performance.now());
+          lastTs = ts;
+          const result = faceLandmarker.detectForVideo(v, ts);
+          lm = result?.faceLandmarks?.[0] ?? null;
+        } catch {
+          // Detection is best-effort; transient frame errors should not break preview.
+        }
+        drawWinkArrows(c, v, lm, mirrorEnabled);
+        if (lm && !hasFace) setHasFace(true);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { alive = false; cancelAnimationFrame(raf); };
+  }, [faceLandmarker, mirrorEnabled, hasFace]);
+
+  return (
+    <div className={`relative w-44 h-56 rounded-3xl overflow-hidden ${className}`} style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(244, 239, 230, 0.1)" }}>
+      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: mirrorEnabled ? "scaleX(-1)" : "none" }} />
+      <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+      {!hasFace && (
+        <div className="absolute inset-0 flex items-center justify-center text-xs opacity-70 pointer-events-none">Detecting face…</div>
+      )}
+    </div>
+  );
+}
+
+function ExerciseAnimation({ region, size = "lg", className = "" }) {
+  const sizeClass = { md: "w-28 h-28", lg: "w-40 h-40", xl: "w-44 h-44" }[size] ?? "w-40 h-40";
+  const accent = "#D4A574";
+  return (
+    <div className={`${sizeClass} ${className} rounded-3xl flex items-center justify-center`} style={{ background: "rgba(244, 239, 230, 0.06)", border: "1px solid rgba(244, 239, 230, 0.1)", color: "#F4EFE6" }} aria-hidden>
+      <svg viewBox="0 0 48 48" className="w-[78%] h-[78%]" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M24 5.5c-9.2 0-15.5 7.6-15.5 18.4 0 11 6.8 18.6 15.5 18.6s15.5-7.6 15.5-18.6C39.5 13.1 33.2 5.5 24 5.5Z" opacity="0.26" />
+        <path d="M24 14.5v17" opacity="0.16" />
+
+        {region === "forehead" && (
+          <g className="bp-anim-forehead">
+            <path d="M16 15.8c2.8-1.4 5.1-1.4 7.2-.2" stroke={accent} />
+            <path d="M24.8 15.6c2.1-1.2 4.4-1.2 7.2.2" stroke={accent} />
+            <path d="M17.5 11.2c4.2-1.7 8.8-1.7 13 0" opacity="0.58" />
+          </g>
+        )}
+
+        {region === "eyes" && (
+          <g className="bp-anim-eyes">
+            <path d="M14.5 21.2c2.3-2.2 5.1-2.2 7.4 0" stroke={accent} />
+            <path d="M26.1 21.2c2.3-2.2 5.1-2.2 7.4 0" stroke={accent} />
+            <path d="M15.8 24.2c1.5.9 3.1.9 4.8 0" opacity="0.58" />
+            <path d="M27.4 24.2c1.7.9 3.3.9 4.8 0" opacity="0.58" />
+          </g>
+        )}
+
+        {region === "nose" && (
+          <g className="bp-anim-nose">
+            <path d="M24 18.5c-.5 3.8-1.5 7.2-3.4 10.3" stroke={accent} />
+            <path d="M24 18.5c.5 3.8 1.5 7.2 3.4 10.3" stroke={accent} />
+            <path className="bp-anim-nostril" d="M18.2 31.3c1.4-1.1 2.8-1.1 4.1 0" opacity="0.58" />
+            <path className="bp-anim-nostril" d="M25.7 31.3c1.3-1.1 2.7-1.1 4.1 0" opacity="0.58" />
+          </g>
+        )}
+
+        {region === "cheeks" && (
+          <g className="bp-anim-cheeks">
+            <path d="M14.4 27.3c2.4 2.1 5.2 2.1 7.5 0" stroke={accent} />
+            <path d="M26.1 27.3c2.3 2.1 5.1 2.1 7.5 0" stroke={accent} />
+            <path d="M16.4 23.1c1.1-.6 2.3-.6 3.4 0" opacity="0.5" />
+            <path d="M28.2 23.1c1.1-.6 2.3-.6 3.4 0" opacity="0.5" />
+          </g>
+        )}
+
+        {region === "mouth" && (
+          <g>
+            <path d="M19.6 27.8h8.8" opacity="0.58" />
+            <path className="bp-anim-mouth-neutral" d="M17 31.2 L31 31.2" stroke={accent} />
+            <path className="bp-anim-mouth-smile" d="M17 31.2c4.5 3.4 9.5 3.4 14 0" stroke={accent} />
+          </g>
+        )}
+
+        {region === "emoji" && (
+          <g className="bp-anim-emoji">
+            <path d="M15.5 18.4c2.2-1.3 4.3-1.3 6.2 0" stroke={accent} />
+            <path d="M26.3 18.4c1.9-1.3 4-1.3 6.2 0" stroke={accent} />
+            <path d="M16.6 23.2c1.4 1 3 1 4.4 0" opacity="0.58" />
+            <path d="M27 23.2c1.4 1 3 1 4.4 0" opacity="0.58" />
+            <path d="M17 31.4c4.6 4 9.4 4 14 0" stroke={accent} />
+            <path d="M33.2 12.4l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3.9-1.8Z" fill={accent} stroke="none" />
+          </g>
+        )}
+      </svg>
+      <style>{`
+        .bp-anim-forehead { animation: bpForehead 2.4s ease-in-out infinite; }
+        .bp-anim-eyes path { animation: bpEyes 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+        .bp-anim-nose .bp-anim-nostril { animation: bpNose 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+        .bp-anim-cheeks path { animation: bpCheeks 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+        .bp-anim-mouth-neutral { animation: bpMouthNeutral 2.4s ease-in-out infinite; }
+        .bp-anim-mouth-smile { animation: bpMouthSmile 2.4s ease-in-out infinite; opacity: 0; }
+        .bp-anim-emoji { animation: bpEmoji 2.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+        @keyframes bpForehead { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2.4px); } }
+        @keyframes bpEyes { 0%, 100% { transform: scaleY(1); } 45%, 55% { transform: scaleY(0.18); } }
+        @keyframes bpNose { 0%, 100% { transform: scaleX(1); } 50% { transform: scaleX(1.5); } }
+        @keyframes bpCheeks { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.16); } }
+        @keyframes bpMouthNeutral { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+        @keyframes bpMouthSmile { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+        @keyframes bpEmoji { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+        @media (prefers-reduced-motion: reduce) {
+          .bp-anim-forehead, .bp-anim-eyes path, .bp-anim-nose .bp-anim-nostril, .bp-anim-cheeks path, .bp-anim-mouth-neutral, .bp-anim-mouth-smile, .bp-anim-emoji { animation: none; }
+          .bp-anim-mouth-smile { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function ExerciseGlyph({ exercise, exerciseId, region, size = "sm", tone = "light", className = "" }) {
   const resolved = exercise ?? EXERCISES.find((e) => e.id === exerciseId) ?? {};
   const regionKey = resolved.region ?? region ?? "mouth";
@@ -1742,13 +1832,12 @@ function ExerciseDetail({ exercise, movementProfile, onClose, onStart }) {
 function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref }) {
   // Phases: optional calibrate → rest (2s entry) → hold (4s) → rest (2s) → hold → ... → interstitial (10s) → next exercise → ... → summary
   // The single `rest` phase plays double-duty as exercise-entry settle AND between-rep recovery.
-  const initialRestSec = exerciseRestSec(session.exercises[0]);
-  const [phase, setPhase] = useState(() => (prefs.symmetryEnabled && prefs.mirrorEnabled ? "calibrate" : "rest"));
+  const [phase, setPhase] = useState(() => (prefs.symmetryEnabled && prefs.mirrorEnabled ? "calibrate" : "preview"));
   const [exIdx, setExIdx] = useState(0);
   const [repIdx, setRepIdx] = useState(0);
-  // Initialized to the first exercise rest duration because the session opens directly into the entry rest — if this
-  // were 0, the advance effect would short-circuit out of rest before phase-mount could update it.
-  const [secondsLeft, setSecondsLeft] = useState(() => (prefs.symmetryEnabled && prefs.mirrorEnabled ? null : initialRestSec));
+  // Initialized to the first phase's duration because the session opens directly into preview — if this
+  // were 0, the advance effect would short-circuit out before phase-mount could update it.
+  const [secondsLeft, setSecondsLeft] = useState(null);
   const [paused, setPaused] = useState(false);
   // Distinguishes the entry rest (no preceding hold) from the post-hold rest. Reset to true
   // on each exercise change.
@@ -1798,7 +1887,6 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const currentReps = current.reps;
   const currentRestSec = exerciseRestSec(current);
   const currentHoldSec = exerciseHoldSec(current);
-  const nextRestSec = exerciseRestSec(nextExercise);
   const autoPaused = symEnabled && trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
   const timerPaused = paused || autoPaused;
 
@@ -1814,7 +1902,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     return () => { active = false; };
   }, [prefs.mirrorEnabled]);
 
-  useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx]);
+  useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
 
   useEffect(() => {
     return () => {
@@ -1840,10 +1928,10 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   useEffect(() => {
     if (phase !== "calibrate") return;
     if (!symEnabled || cameraError || trackerStatus === "error") {
-      setPhase("rest");
-      setSecondsLeft(currentRestSec);
+      setPhase("preview");
+      setSecondsLeft(null);
     }
-  }, [phase, symEnabled, cameraError, trackerStatus, currentRestSec]);
+  }, [phase, symEnabled, cameraError, trackerStatus]);
 
   // Phase entry: set the timer and announce the phase.
   useEffect(() => {
@@ -1884,11 +1972,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       }
     } else if (phase === "interstitial") {
       speak(prefs.voiceEnabled, "Nice work. Take a breath.");
+    } else if (phase === "preview") {
+      speak(prefs.voiceEnabled, `Up next: ${current.name}. ${current.instruction}`);
     }
   }, [phase, exIdx, repIdx]);
 
   useEffect(() => {
-    if (timerPaused || phase === "summary" || phase === "calibrate") return;
+    if (timerPaused || phase === "summary" || phase === "calibrate" || phase === "preview") return;
     if (secondsLeft <= 0) {
       // Each branch sets BOTH the new phase and the new timer in one batch — otherwise the advance
       // effect would re-fire with stale secondsLeft = 0 and skip past the just-entered phase.
@@ -1928,8 +2018,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         setExIdx(exIdx + 1);
         setRepIdx(0);
         restIsEntryRef.current = true; // next exercise starts with an entry rest
-        setPhase("rest");
-        setSecondsLeft(nextRestSec);
+        setPhase("preview");
+        setSecondsLeft(null);
       }
       return;
     }
@@ -1997,8 +2087,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                     neutralBsRef.current = averageBlendshapes(calibBsBufferRef.current);
                     baselineSnapshotRef.current = captureSnapshot(v, snapshotCanvasRef.current);
                     restIsEntryRef.current = true;
-                    setPhase("rest");
-                    setSecondsLeft(currentRestSec);
+                    setPhase("preview");
+                    setSecondsLeft(null);
                   }
                 }
               }
@@ -2091,7 +2181,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     repBaselineProgressRef.current = [];
     repInitialBaselineProgressRef.current = [];
     repSnapshotsRef.current = [];
-    if (exIdx + 1 < totalExercises) { setExIdx(exIdx + 1); setRepIdx(0); restIsEntryRef.current = true; setPhase("rest"); setSecondsLeft(nextRestSec); }
+    if (exIdx + 1 < totalExercises) { setExIdx(exIdx + 1); setRepIdx(0); restIsEntryRef.current = true; setPhase("preview"); setSecondsLeft(null); }
     else setPhase("summary");
   };
 
@@ -2107,8 +2197,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     restIsEntryRef.current = true;
     setCalibrationProgress(0);
     setCalibrationStatus("Scoring skipped");
-    setPhase("rest");
-    setSecondsLeft(currentRestSec);
+    setPhase("preview");
+    setSecondsLeft(null);
   };
 
   const nextInterstitial = () => { flushSpeech(); setSecondsLeft(0); };
@@ -2123,6 +2213,21 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   };
 
   if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} onFinish={handleFinish} />;
+  if (phase === "preview") {
+    return (
+      <PreviewView
+        exercise={current}
+        exIdx={exIdx + 1}
+        totalExercises={totalExercises}
+        onStart={() => { flushSpeech(); setPhase("rest"); setSecondsLeft(currentRestSec); }}
+        onCancel={onCancel}
+        stream={stream}
+        faceLandmarker={faceLandmarker}
+        mirrorEnabled={prefs.mirrorEnabled}
+        cameraError={cameraError}
+      />
+    );
+  }
   if (phase === "interstitial") {
     return (
       <InterstitialView
@@ -2889,6 +2994,39 @@ function flushSpeech() {
   } catch { /* optional browser API */ }
 }
 
+function PreviewView({ exercise, exIdx, totalExercises, onStart, onCancel, stream, faceLandmarker, mirrorEnabled, cameraError }) {
+  if (!exercise) return null;
+  const useLiveWinkPreview = exercise.id === "wink" && stream && faceLandmarker && !cameraError && mirrorEnabled;
+  return (
+    <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
+      <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+        <div className="flex items-center justify-between p-4 shrink-0">
+          <button onClick={onCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="End"><X className="w-5 h-5" /></button>
+          <div className="text-xs opacity-70">Exercise {exIdx} of {totalExercises}</div>
+          <div className="w-10" />
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 pb-2 flex flex-col items-center text-center">
+          <div className="text-xs uppercase tracking-widest opacity-60 mt-2 mb-4">Up next</div>
+          {useLiveWinkPreview
+            ? <WinkLivePreview stream={stream} faceLandmarker={faceLandmarker} mirrorEnabled={mirrorEnabled} className="mb-5" />
+            : <ExerciseAnimation region={exercise.region} size="lg" className="mb-5" />}
+          <div className="text-3xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.01em" }}>{exercise.name}</div>
+          <div className="text-xs opacity-60 mb-5 tracking-wide">{exercise.reps} reps · {exerciseHoldSec(exercise)}s hold</div>
+          <div className="text-sm leading-relaxed mb-4 max-w-xs" style={{ color: "#F4EFE6" }}>{exercise.instruction}</div>
+          {exercise.tip && (
+            <div className="text-xs leading-relaxed opacity-60 max-w-xs mb-4" style={{ fontStyle: "italic" }}>{exercise.tip}</div>
+          )}
+        </div>
+        <div className="p-4 shrink-0" style={{ borderTop: "1px solid rgba(244,239,230,0.08)" }}>
+          <button onClick={onStart} className="w-full rounded-full px-6 py-4 font-semibold flex items-center justify-center gap-2 text-base" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+            I'm ready<ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercises, onNext, onCancel }) {
   if (!just) return null;
   return (
@@ -2927,11 +3065,8 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
           </div>
         )}
         {nextExercise && (
-          <div className="text-center pt-2 border-t" style={{ borderColor: "rgba(244,239,230,0.08)" }}>
-            <div className="text-xs uppercase tracking-widest opacity-60 mb-3 mt-4">Up next</div>
-            <ExerciseGlyph exercise={nextExercise} size="md" tone="dark" className="mx-auto mb-3" />
-            <div className="text-base" style={{ fontFamily: "Fraunces", fontWeight: 500 }}>{nextExercise.name}</div>
-            <div className="text-xs opacity-60 mt-1">{nextExercise.reps} reps · {nextExercise.holdSec}s hold</div>
+          <div className="text-center pt-3 mt-4 border-t" style={{ borderColor: "rgba(244,239,230,0.08)" }}>
+            <div className="text-[11px] uppercase tracking-widest opacity-50">{nextExercise.name} comes next</div>
           </div>
         )}
       </div>
