@@ -462,6 +462,24 @@ export async function saveMirrorData(next) {
   }
 }
 
+export async function deleteSessionImages(sessionId) {
+  if (!sessionId) return;
+  try {
+    const db = await openMirrorDb();
+    const tx = db.transaction(SESSION_IMAGES_STORE, "readwrite");
+    const done = transactionDone(tx);
+    const store = tx.objectStore(SESSION_IMAGES_STORE);
+    const keysRequest = store.index("sessionId").getAllKeys(sessionId);
+    const keys = await requestToPromise(keysRequest);
+    for (const key of keys) store.delete(key);
+    await done;
+  } catch (error) {
+    // Orphaned blobs are a storage cost only, not a correctness issue, so deletion
+    // is best-effort — the next save still drops the session record itself.
+    console.error("Failed to delete session images", error);
+  }
+}
+
 async function readImagesForSession(sessionId) {
   const db = await openMirrorDb();
   const tx = db.transaction(SESSION_IMAGES_STORE, "readonly");

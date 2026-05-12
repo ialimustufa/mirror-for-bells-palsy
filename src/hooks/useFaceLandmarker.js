@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-/* MediaPipe Tasks Face Landmarker — 478 landmarks + 52 ARKit-style blendshapes */
+/* MediaPipe Tasks Face Landmarker — 478 landmarks + 52 ARKit-style blendshapes + face pose matrices */
 const TASKS_VISION_VERSION = "0.10.21";
 const TASKS_VISION_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/vision_bundle.mjs`;
 const TASKS_WASM_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`;
@@ -10,7 +10,7 @@ function useFaceLandmarker(active) {
   const [status, setStatus] = useState("idle");
   const [faceLandmarker, setFaceLandmarker] = useState(null);
   const flRef = useRef(null);
-  const latestRef = useRef(null); // { landmarks, blendshapes }
+  const latestRef = useRef(null); // { landmarks, blendshapes, facialTransformationMatrix }
 
   useEffect(() => {
     if (!active || flRef.current) return;
@@ -27,6 +27,7 @@ function useFaceLandmarker(active) {
           baseOptions: { modelAssetPath: FACE_LANDMARKER_MODEL, delegate: "GPU" },
           runningMode: "VIDEO",
           outputFaceBlendshapes: true,
+          outputFacialTransformationMatrixes: true,
           numFaces: 1,
         });
         if (cancelled) { try { fl.close(); } catch { /* model may already be closed */ } return; }

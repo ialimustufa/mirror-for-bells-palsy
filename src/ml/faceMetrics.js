@@ -4,6 +4,7 @@ import {
   CALIBRATION_STABILITY_EPS,
   FACE_CENTER_MAX_OFFSET,
   FACE_TILT_MAX_RAD,
+  HOLD_HEAD_POSE_MAX_RAD,
   PROFILE_BASELINE_TOP_FRACTION,
   PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES,
   PROFILE_MIN_ALIGNMENT_RATIO,
@@ -149,10 +150,130 @@ const EXERCISE_LANDMARK_PAIRS = {
   },
 };
 
-// Convert landmarks to a face-local frame: origin at nose tip (landmark 1), x-axis
-// follows the eye line (33 -> 263), scale = inter-ocular distance. This removes
-// translation, roll, and scale; yaw/pitch still need MediaPipe's transform matrix.
-function faceFrameNormalize(lm) {
+function facialTransformInfo(matrix) {
+  if (!matrix) return null;
+  const data = matrix.data ?? matrix;
+  if (!data || data.length < 12) return null;
+  const rows = matrix.rows ?? 4;
+  const columns = matrix.columns ?? (data.length >= 16 ? 4 : 3);
+  if (rows < 3 || columns < 3 || data.length < rows * columns) return null;
+  return { data, rows, columns };
+}
+
+function facialTransformValue(info, row, column) {
+  // MediaPipe's MatrixData proto stores packed_data column-major by default,
+  // and the C++ face geometry pipeline writes it from Eigen (also column-major).
+  // The Tasks Vision JS binding passes packed_data through unchanged, so the
+  // (row, column) element lives at data[column * rows + row].
+  const value = Number(info.data[column * info.rows + row]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function cloneFacialTransformationMatrix(matrix) {
+  const info = facialTransformInfo(matrix);
+  if (!info) return null;
+  return {
+    rows: info.rows,
+    columns: info.columns,
+    data: Array.from(info.data, (value) => Number(value)),
+  };
+}
+
+function firstFacialTransformationMatrix(result) {
+  return cloneFacialTransformationMatrix(result?.facialTransformationMatrixes?.[0]);
+}
+
+function averageFacialTransformationMatrix(buffer) {
+  const matrices = (buffer ?? []).map(cloneFacialTransformationMatrix).filter(Boolean);
+  if (!matrices.length) return null;
+  const { rows, columns } = matrices[0];
+  const length = rows * columns;
+  const sums = new Float64Array(length);
+  let count = 0;
+  for (const matrix of matrices) {
+    if (matrix.rows !== rows || matrix.columns !== columns || matrix.data.length < length) continue;
+    for (let i = 0; i < length; i++) sums[i] += matrix.data[i];
+    count++;
+  }
+  if (!count) return null;
+  return { rows, columns, data: Array.from(sums, (value) => value / count) };
+}
+
+function smoothFacialTransformationMatrix(prev, next) {
+  const matrix = cloneFacialTransformationMatrix(next);
+  if (!matrix) return null;
+  const previous = cloneFacialTransformationMatrix(prev);
+  if (!previous || previous.rows !== matrix.rows || previous.columns !== matrix.columns || previous.data.length !== matrix.data.length) {
+    return matrix;
+  }
+  const a = SMOOTHING_ALPHA;
+  return {
+    rows: matrix.rows,
+    columns: matrix.columns,
+    data: matrix.data.map((value, index) => previous.data[index] + a * (value - previous.data[index])),
+  };
+}
+
+function compactFacialTransformationMatrix(matrix) {
+  const cloned = cloneFacialTransformationMatrix(matrix);
+  if (!cloned) return null;
+  return {
+    rows: cloned.rows,
+    columns: cloned.columns,
+    data: cloned.data.map((value) => roundMetric(value, 5)),
+  };
+}
+
+function facialTransformRotation(matrix) {
+  const info = facialTransformInfo(matrix);
+  if (!info) return null;
+  const m00 = facialTransformValue(info, 0, 0), m01 = facialTransformValue(info, 0, 1), m02 = facialTransformValue(info, 0, 2);
+  const m10 = facialTransformValue(info, 1, 0), m11 = facialTransformValue(info, 1, 1), m12 = facialTransformValue(info, 1, 2);
+  const m20 = facialTransformValue(info, 2, 0), m21 = facialTransformValue(info, 2, 1), m22 = facialTransformValue(info, 2, 2);
+  if ([m00, m01, m02, m10, m11, m12, m20, m21, m22].some((value) => value == null)) return null;
+
+  // The 3x3 part of MediaPipe's pose matrix is a pure rotation (canonical face
+  // → camera frame), so no scale normalization is needed.
+  return {
+    r00: m00, r01: m01, r02: m02,
+    r10: m10, r11: m11, r12: m12,
+    r20: m20, r21: m21, r22: m22,
+  };
+}
+
+// Angle between two head-pose rotations, in radians. Used to reject hold frames where
+// the user has yawed or pitched far from the neutral pose — the 2D alignment gate only
+// catches in-plane roll, so without this an off-axis frame still scores even though
+// perspective foreshortening and MediaPipe's weakly-scaled normalized z make symmetry
+// less reliable. Math: for orthogonal R_a, R_b, trace(R_a · R_bᵀ) = Frobenius inner
+// product of the entries = 1 + 2·cos(θ). Returns null when either matrix is missing,
+// so callers can treat that as "no gate, defer to other checks".
+function headPoseDeviationRad(currentMatrix, neutralMatrix) {
+  const a = facialTransformRotation(currentMatrix);
+  const b = facialTransformRotation(neutralMatrix);
+  if (!a || !b) return null;
+  const dot =
+    a.r00 * b.r00 + a.r01 * b.r01 + a.r02 * b.r02 +
+    a.r10 * b.r10 + a.r11 * b.r11 + a.r12 * b.r12 +
+    a.r20 * b.r20 + a.r21 * b.r21 + a.r22 * b.r22;
+  const cosTheta = Math.max(-1, Math.min(1, (dot - 1) / 2));
+  return Math.acos(cosTheta);
+}
+
+function inverseRotateLandmarkDelta(rotation, dx, dy, dz) {
+  // MediaPipe normalized landmarks use screen-positive Y. The face-geometry pose
+  // matrix follows a 3D camera convention, so flip Y before inverse rotation and
+  // flip it back for existing scorer conventions.
+  const vx = dx;
+  const vy = -dy;
+  const vz = dz ?? 0;
+  const x = rotation.r00 * vx + rotation.r10 * vy + rotation.r20 * vz;
+  const yUp = rotation.r01 * vx + rotation.r11 * vy + rotation.r21 * vz;
+  const z = rotation.r02 * vx + rotation.r12 * vy + rotation.r22 * vz;
+  return { x, y: -yUp, z };
+}
+
+function faceFrameNormalizeFallback(lm) {
   if (!lm || !lm[1] || !lm[33] || !lm[263]) return null;
   const o = lm[1];
   const ex = lm[263].x - lm[33].x, ey = lm[263].y - lm[33].y;
@@ -172,6 +293,46 @@ function faceFrameNormalize(lm) {
   return out;
 }
 
+// Convert landmarks to a face-local frame. When MediaPipe's facial transformation
+// matrix is available, remove the 3D head-pose rotation first, then use the
+// transformed inter-ocular distance as scale. Fallback keeps the legacy
+// nose-origin + eye-line roll/scale frame.
+function faceFrameNormalize(lm, facialTransformationMatrix = null) {
+  if (!lm || !lm[1] || !lm[33] || !lm[263]) return null;
+  const rotation = facialTransformRotation(facialTransformationMatrix);
+  if (!rotation) return faceFrameNormalizeFallback(lm);
+
+  const o = lm[1];
+  const eyeDelta = inverseRotateLandmarkDelta(
+    rotation,
+    lm[263].x - lm[33].x,
+    lm[263].y - lm[33].y,
+    (lm[263].z ?? 0) - (lm[33].z ?? 0),
+  );
+  const scale = Math.hypot(eyeDelta.x, eyeDelta.y, eyeDelta.z);
+  const planarScale = Math.hypot(eyeDelta.x, eyeDelta.y);
+  if (scale < 0.01 || planarScale < 0.001) return faceFrameNormalizeFallback(lm);
+
+  const ux = eyeDelta.x / planarScale;
+  const uy = eyeDelta.y / planarScale;
+  const out = new Array(lm.length);
+  for (let i = 0; i < lm.length; i++) {
+    const p = lm[i]; if (!p) continue;
+    const d = inverseRotateLandmarkDelta(
+      rotation,
+      p.x - o.x,
+      p.y - o.y,
+      (p.z ?? 0) - (o.z ?? 0),
+    );
+    out[i] = {
+      x: (d.x * ux + d.y * uy) / scale,
+      y: (-d.x * uy + d.y * ux) / scale,
+      z: d.z / scale,
+    };
+  }
+  return out;
+}
+
 function sumDisp(lmN, neuN, idxs, noiseFloor) {
   // Sum of per-landmark distance from neutral, with each point's natural at-rest jitter
   // subtracted out. This pulls subtle real movement (e.g. affected-side recruitment in
@@ -186,9 +347,9 @@ function sumDisp(lmN, neuN, idxs, noiseFloor) {
   return total;
 }
 
-function computePairwiseSymmetry(lm, neutral, mapping, noiseFloor) {
+function computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
   if (!mapping || !neutral) return null;
-  const lmN = faceFrameNormalize(lm), neuN = faceFrameNormalize(neutral);
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!lmN || !neuN) return null;
   const lDisp = sumDisp(lmN, neuN, mapping.left, noiseFloor);
   const rDisp = sumDisp(lmN, neuN, mapping.right, noiseFloor);
@@ -203,15 +364,16 @@ function computePairwiseSymmetry(lm, neutral, mapping, noiseFloor) {
 // Per-landmark "noise" = each point's average jitter from the neutral mean across the
 // calibration window. Captured during get-ready, then subtracted from displacement
 // during hold to expose subtle real motion.
-function computeNoiseFloor(buffer, neutral) {
+function computeNoiseFloor(buffer, neutral, matrixBuffer = null, neutralFacialTransformationMatrix = null) {
   if (!buffer || buffer.length < 5 || !neutral) return null;
-  const neuN = faceFrameNormalize(neutral);
+  const neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!neuN) return null;
   const N = neutral.length;
   const sums = new Float32Array(N);
   const counts = new Uint16Array(N);
-  for (const lm of buffer) {
-    const lmN = faceFrameNormalize(lm);
+  for (let sampleIndex = 0; sampleIndex < buffer.length; sampleIndex++) {
+    const lm = buffer[sampleIndex];
+    const lmN = faceFrameNormalize(lm, matrixBuffer?.[sampleIndex]);
     if (!lmN) continue;
     for (let i = 0; i < N; i++) {
       const a = lmN[i], b = neuN[i];
@@ -230,9 +392,9 @@ function dist3(a, b) {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-function computeSymmetry(current, neutral) {
+function computeSymmetry(current, neutral, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
   if (!current || !neutral) return null;
-  const curN = faceFrameNormalize(current), neuN = faceFrameNormalize(neutral);
+  const curN = faceFrameNormalize(current, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!curN || !neuN) return null;
   let weighted = 0, weight = 0;
   let leftTotal = 0, rightTotal = 0;
@@ -341,8 +503,8 @@ const CALIBRATION_DELTA_POINTS = [1, 4, 10, 33, 61, 152, 199, 263, 291];
 // defaults until we tune them against captured calibration samples.
 const CORE_QUALITY_POINTS = [1, 4, 10, 33, 263];
 
-function normalizedFrameDelta(aLm, bLm) {
-  const aN = faceFrameNormalize(aLm), bN = faceFrameNormalize(bLm);
+function normalizedFrameDelta(aLm, bLm, aFacialTransformationMatrix = null, bFacialTransformationMatrix = null) {
+  const aN = faceFrameNormalize(aLm, aFacialTransformationMatrix), bN = faceFrameNormalize(bLm, bFacialTransformationMatrix);
   if (!aN || !bN) return Infinity;
   let total = 0, count = 0;
   for (const i of CALIBRATION_DELTA_POINTS) {
@@ -387,9 +549,9 @@ function averageBlendshapes(buffer) {
 // faces; blendshapes regress toward bilaterally similar values.
 const NOSE_BS_WEIGHT = 0.03;
 
-function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs) {
+function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
   if (!lm || !neutral) return null;
-  const lmN = faceFrameNormalize(lm), neuN = faceFrameNormalize(neutral);
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!lmN || !neuN) return null;
   const cur = noseShape(lmN), neu = noseShape(neuN);
   if (!cur || !neu) return null;
@@ -430,9 +592,9 @@ function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs) {
   return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
 }
 
-function computeBrowSymmetry(lm, neutral) {
+function computeBrowSymmetry(lm, neutral, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
   if (!lm || !neutral) return null;
-  const lmN = faceFrameNormalize(lm), neuN = faceFrameNormalize(neutral);
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!lmN || !neuN) return null;
   const lCur = browEyeGap(lmN, BROW_LANDMARKS.leftBrow,  BROW_LANDMARKS.leftEyeTop);
   const lNeu = browEyeGap(neuN, BROW_LANDMARKS.leftBrow,  BROW_LANDMARKS.leftEyeTop);
@@ -447,11 +609,21 @@ function computeBrowSymmetry(lm, neutral) {
   return { symmetry, leftDisp: lLift, rightDisp: rLift, peak };
 }
 
-function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs) {
+function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+  // Reject frames where the head has drifted significantly from the neutral pose.
+  // When both matrices are present, this is a 3D yaw/pitch/roll check that the 2D
+  // alignment gate can't make. If either matrix is null, the deviation is null and
+  // we fall through to the fallback normalization path.
+  const poseDeviation = headPoseDeviationRad(facialTransformationMatrix, neutralFacialTransformationMatrix);
+  if (poseDeviation != null && poseDeviation > HOLD_HEAD_POSE_MAX_RAD) return null;
+
   const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId] ?? null;
-  const browResult = BROW_EXERCISES.has(exerciseId) ? computeBrowSymmetry(lm, neutral) : null;
-  const noseResult = NOSE_EXERCISES.has(exerciseId) ? computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs) : null;
-  return browResult ?? noseResult ?? computePairwiseSymmetry(lm, neutral, mapping, noiseFloor) ?? computeSymmetry(lm, neutral);
+  const browResult = BROW_EXERCISES.has(exerciseId) ? computeBrowSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
+  const noseResult = NOSE_EXERCISES.has(exerciseId) ? computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
+  return browResult
+    ?? noseResult
+    ?? computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix)
+    ?? computeSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix);
 }
 
 function roundMetric(v, digits = 4) {
@@ -551,7 +723,7 @@ function effectiveProfileThreshold(exerciseId, threshold) {
   return threshold;
 }
 
-function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, comfortLevel }) {
+function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatrix, exerciseStats, affectedSide, comfortLevel }) {
   const exercises = {};
   for (const stat of exerciseStats) {
     const leftBaseline = stat.leftRobustAvg ?? stat.leftAvg;
@@ -600,6 +772,11 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
     comfortLevel,
     neutralLandmarks: compactLandmarks(neutral),
     noiseFloor: compactNoiseFloor(noise),
+    normalization: {
+      method: neutralFacialTransformationMatrix ? "mediapipe-facial-transformation-matrix-v2" : "eye-line-roll-scale",
+      fallbackMethod: "eye-line-roll-scale",
+      neutralFacialTransformationMatrix: compactFacialTransformationMatrix(neutralFacialTransformationMatrix),
+    },
     calibrationQuality: {
       frames: CALIBRATION_FRAMES,
       exerciseNeutralMinFrames: PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES,
@@ -1028,6 +1205,7 @@ export {
   EXERCISE_BLENDSHAPES,
   NOSE_EXERCISES,
   activationThresholdForExercise,
+  averageFacialTransformationMatrix,
   averageBlendshapes,
   averageLandmarks,
   baselineProgressLabel,
@@ -1045,16 +1223,19 @@ export {
   computeNoseSymmetry,
   computePairwiseSymmetry,
   computeSymmetry,
+  compactFacialTransformationMatrix,
   drawOverlay,
   effectiveProfileThreshold,
   exerciseBaselineQuality,
   faceAlignmentFeedback,
   faceFrameNormalize,
+  firstFacialTransformationMatrix,
   focusReason,
   formatProfileDate,
   formatProfileSide,
   getAdaptiveFocusItems,
   getProfileExercise,
+  headPoseDeviationRad,
   latestExerciseProgressById,
   latestExerciseScoreById,
   latestSessionBaselineProgress,
@@ -1071,6 +1252,7 @@ export {
   roundMetric,
   sessionFocusRecommendation,
   signedPointDelta,
+  smoothFacialTransformationMatrix,
   smoothLandmarks,
   summarizeBaselineProgress,
   summarizeSessionBaselineProgress,

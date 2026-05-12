@@ -9,10 +9,11 @@ import {
   isCountedSession,
   todayISO,
 } from "./domain/session";
-import { compactAppDataForStorage, hydrateSessionImages, loadMirrorData, saveMirrorData } from "./storage";
+import { compactAppDataForStorage, deleteSessionImages, hydrateSessionImages, loadMirrorData, saveMirrorData } from "./storage";
 import { primeSpeech } from "./lib/speech";
 import { SessionMode } from "./session/SessionMode";
 import { ProfileAssessment } from "./profile/ProfileAssessment";
+import { TrialMode } from "./trial/TrialMode";
 import {
   BottomNav,
   ExerciseDetail,
@@ -37,6 +38,14 @@ export default function App() {
   const [profileAssessment, setProfileAssessment] = useState(null);
   const [exerciseDetail, setExerciseDetail] = useState(null);
   const [viewingReport, setViewingReport] = useState(null);
+  // Path-based route for the public /trial demo. Listening to popstate covers the
+  // history-driven nav back from the trial page; the rest of the app remains state-routed.
+  const [pathname, setPathname] = useState(() => (typeof window !== "undefined" ? window.location.pathname : "/"));
+  useEffect(() => {
+    const onPop = () => setPathname(window.location.pathname);
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -103,12 +112,27 @@ export default function App() {
     setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
   const completeSession = (rec) => { persist({ ...data, sessions: [...data.sessions, rec] }); setSession(null); };
+  const deleteSession = useCallback(async (session) => {
+    if (!session) return;
+    const id = session.id;
+    const ts = session.ts;
+    const sessions = data.sessions.filter((s) => {
+      if (s === session) return false;
+      if (id && s.id === id) return false;
+      if (!id && ts && s.ts === ts && s.date === session.date) return false;
+      return true;
+    });
+    if (sessions.length === data.sessions.length) return;
+    await persist({ ...data, sessions });
+    if (id) deleteSessionImages(id);
+  }, [data, persist]);
   const saveJournal = (entry) => { const filtered = data.journal.filter((j) => j.date !== entry.date); persist({ ...data, journal: [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date)) }); };
   const togglePref = (key) => persist({ ...data, prefs: { ...data.prefs, [key]: !data.prefs[key] } });
   const setPref = (key, value) => persist({ ...data, prefs: { ...data.prefs, [key]: value } });
 
   const streak = useMemo(() => computeStreak(data.sessions), [data.sessions]);
 
+  if (pathname === "/trial") return <TrialMode />;
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F4EFE6" }}><div className="text-stone-600">Loading…</div></div>;
 
   return (
@@ -124,7 +148,7 @@ export default function App() {
           {view === "home" && <HomeView data={data} streak={streak} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} />}
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} onStartSession={startSession} onShowDetail={setExerciseDetail} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onStartProfile={openProfileAssessment} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onStartProfile={openProfileAssessment} />}
         </main>
       </div>
       <BottomNav view={view} setView={setView} />

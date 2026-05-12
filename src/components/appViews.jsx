@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronRight, Flame, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2 } from "lucide-react";
+import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronRight, Flame, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, REGIONS } from "../domain/exercises";
@@ -194,7 +194,65 @@ function SecondaryButton({ children, onClick }) {
   return <button onClick={onClick} className="rounded-2xl p-4 text-left text-sm font-medium flex items-center justify-between transition hover:bg-white" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>{children}</button>;
 }
 
-function drawWinkArrows(canvas, video, lm, mirrorEnabled) {
+function drawArrow(ctx, x, y, kind, label, dpr, color, pulse = 1, side) {
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 2.5 * dpr;
+  ctx.font = `600 ${11 * dpr}px system-ui, -apple-system, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+
+  if (kind === "ring" || kind === "ringDashed") {
+    if (kind === "ringDashed") ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.beginPath();
+    ctx.arc(x, y, (18 + 4 * pulse) * dpr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    if (label) ctx.fillText(label, x, y - 28 * dpr);
+  } else if (kind === "up" || kind === "down") {
+    const sign = kind === "up" ? -1 : 1;
+    const tailY = y + sign * 22 * dpr;
+    const headY = y + sign * (38 + 6 * pulse) * dpr;
+    ctx.beginPath();
+    ctx.moveTo(x, tailY);
+    ctx.lineTo(x, headY);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x - 6 * dpr, headY - sign * 9 * dpr);
+    ctx.lineTo(x, headY);
+    ctx.lineTo(x + 6 * dpr, headY - sign * 9 * dpr);
+    ctx.stroke();
+    if (label) {
+      const labelY = kind === "up" ? headY - 6 * dpr : headY + 14 * dpr;
+      ctx.fillText(label, x, labelY);
+    }
+  } else if (kind === "out" || kind === "in") {
+    const sign = kind === "out"
+      ? (side === "left" ? -1 : 1)
+      : (side === "left" ? 1 : -1);
+    const tailX = x + sign * 18 * dpr;
+    const headX = x + sign * (38 + 6 * pulse) * dpr;
+    ctx.beginPath();
+    ctx.moveTo(tailX, y);
+    ctx.lineTo(headX, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(headX - sign * 9 * dpr, y - 6 * dpr);
+    ctx.lineTo(headX, y);
+    ctx.lineTo(headX - sign * 9 * dpr, y + 6 * dpr);
+    ctx.stroke();
+    if (label) {
+      ctx.textAlign = sign < 0 ? "right" : "left";
+      ctx.fillText(label, headX + sign * 4 * dpr, y - 8 * dpr);
+    }
+  }
+  ctx.restore();
+}
+
+function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
   if (!canvas || !video) return;
   const rect = canvas.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
@@ -202,59 +260,120 @@ function drawWinkArrows(canvas, video, lm, mirrorEnabled) {
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, w, h);
-  if (!lm || lm.length < 364) return;
+  if (!lm || lm.length < 478) return;
   const t = objectCoverTransform(canvas, video);
   if (!t) return;
+
   const px = (p) => mirrorEnabled ? t.cw - (p.x * t.dw + t.ox) : (p.x * t.dw + t.ox);
   const py = (p) => p.y * t.dh + t.oy;
-  // Eye centers from outer + inner corners
-  const eyeA = { x: (px(lm[33]) + px(lm[133])) / 2, y: (py(lm[33]) + py(lm[133])) / 2 };
-  const eyeB = { x: (px(lm[263]) + px(lm[362])) / 2, y: (py(lm[263]) + py(lm[362])) / 2 };
-  const screenLeft = eyeA.x < eyeB.x ? eyeA : eyeB;
-  const screenRight = eyeA.x < eyeB.x ? eyeB : eyeA;
+  const avg = (...idxs) => {
+    let sx = 0, sy = 0;
+    for (const i of idxs) { sx += px(lm[i]); sy += py(lm[i]); }
+    return { x: sx / idxs.length, y: sy / idxs.length };
+  };
+  const pair = (a, b) => (a.x < b.x ? [a, b] : [b, a]);
+
+  // Anchors are screen-space and ordered by screen position so "*L" is always
+  // on the screen-left regardless of whether the video is mirrored.
+  const [eyeL, eyeR] = pair(avg(33, 133), avg(263, 362));
+  const [browL, browR] = pair(avg(70, 63, 105, 66, 107), avg(336, 296, 334, 293, 300));
+  const [cheekL, cheekR] = pair({ x: px(lm[50]), y: py(lm[50]) }, { x: px(lm[280]), y: py(lm[280]) });
+  const [nostrilL, nostrilR] = pair({ x: px(lm[64]), y: py(lm[64]) }, { x: px(lm[294]), y: py(lm[294]) });
+  const [mouthL, mouthR] = pair({ x: px(lm[61]), y: py(lm[61]) }, { x: px(lm[291]), y: py(lm[291]) });
+  const mouthC = avg(13, 14);
+
   const now = Date.now();
-  const closeLeft = Math.floor(now / 2400) % 2 === 0;
-  const closed = closeLeft ? screenLeft : screenRight;
-  const open = closeLeft ? screenRight : screenLeft;
   const pulse = 0.5 + 0.5 * Math.sin(now / 240);
+  const alt = Math.floor(now / 2400) % 2 === 0;
 
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
+  const PRIMARY = `rgba(184, 84, 58, ${0.78 + 0.22 * pulse})`;
+  const SECONDARY = "rgba(122, 143, 115, 0.85)";
 
-  // Closed-eye marker: solid amber-red ring + arrow above + label
-  ctx.strokeStyle = `rgba(184, 84, 58, ${0.7 + 0.3 * pulse})`;
-  ctx.lineWidth = 3 * dpr;
-  ctx.beginPath();
-  ctx.arc(closed.x, closed.y, (22 + 4 * pulse) * dpr, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(closed.x, closed.y - 56 * dpr);
-  ctx.lineTo(closed.x, closed.y - 30 * dpr);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(closed.x - 7 * dpr, closed.y - 38 * dpr);
-  ctx.lineTo(closed.x, closed.y - 28 * dpr);
-  ctx.lineTo(closed.x + 7 * dpr, closed.y - 38 * dpr);
-  ctx.stroke();
-  ctx.fillStyle = "rgba(184, 84, 58, 0.95)";
-  ctx.font = `600 ${12 * dpr}px system-ui, -apple-system, sans-serif`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.fillText("Close", closed.x, closed.y - 64 * dpr);
-
-  // Open-eye marker: dashed sage ring + label
-  ctx.strokeStyle = "rgba(122, 143, 115, 0.85)";
-  ctx.lineWidth = 2 * dpr;
-  ctx.setLineDash([5 * dpr, 5 * dpr]);
-  ctx.beginPath();
-  ctx.arc(open.x, open.y, 20 * dpr, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle = "rgba(122, 143, 115, 0.95)";
-  ctx.fillText("Keep open", open.x, open.y - 30 * dpr);
+  switch (exerciseId) {
+    case "eyebrow-raise":
+      drawArrow(ctx, browL.x, browL.y, "up", "Lift", dpr, PRIMARY, pulse);
+      drawArrow(ctx, browR.x, browR.y, "up", "Lift", dpr, PRIMARY, pulse);
+      break;
+    case "gentle-frown":
+      drawArrow(ctx, browL.x, browL.y, "down", "Pull", dpr, PRIMARY, pulse);
+      drawArrow(ctx, browR.x, browR.y, "down", "Pull", dpr, PRIMARY, pulse);
+      break;
+    case "eye-close":
+      drawArrow(ctx, eyeL.x, eyeL.y, "ring", "Close softly", dpr, PRIMARY, pulse);
+      drawArrow(ctx, eyeR.x, eyeR.y, "ring", null, dpr, PRIMARY, pulse);
+      break;
+    case "wink":
+    case "emoji-wink": {
+      const closed = alt ? eyeL : eyeR;
+      const open = alt ? eyeR : eyeL;
+      drawArrow(ctx, closed.x, closed.y, "ring", "Close", dpr, PRIMARY, pulse);
+      drawArrow(ctx, open.x, open.y, "ringDashed", "Keep open", dpr, SECONDARY, 1);
+      break;
+    }
+    case "nose-wrinkle":
+      drawArrow(ctx, nostrilL.x, nostrilL.y, "out", "Flare", dpr, PRIMARY, pulse, "left");
+      drawArrow(ctx, nostrilR.x, nostrilR.y, "out", null, dpr, PRIMARY, pulse, "right");
+      break;
+    case "emoji-nose-scrunch":
+      drawArrow(ctx, nostrilL.x, nostrilL.y, "up", "Scrunch", dpr, PRIMARY, pulse);
+      drawArrow(ctx, nostrilR.x, nostrilR.y, "up", null, dpr, PRIMARY, pulse);
+      break;
+    case "cheek-puff":
+      drawArrow(ctx, cheekL.x, cheekL.y, "out", "Puff", dpr, PRIMARY, pulse, "left");
+      drawArrow(ctx, cheekR.x, cheekR.y, "out", null, dpr, PRIMARY, pulse, "right");
+      break;
+    case "cheek-suck":
+      drawArrow(ctx, cheekL.x, cheekL.y, "in", "Pull in", dpr, PRIMARY, pulse, "left");
+      drawArrow(ctx, cheekR.x, cheekR.y, "in", null, dpr, PRIMARY, pulse, "right");
+      break;
+    case "closed-smile":
+    case "emoji-smile":
+      drawArrow(ctx, mouthL.x, mouthL.y, "up", "Lift", dpr, PRIMARY, pulse);
+      drawArrow(ctx, mouthR.x, mouthR.y, "up", "Lift", dpr, PRIMARY, pulse);
+      break;
+    case "open-smile":
+    case "emoji-big-smile":
+      drawArrow(ctx, mouthL.x, mouthL.y, "up", "Smile wide", dpr, PRIMARY, pulse);
+      drawArrow(ctx, mouthR.x, mouthR.y, "up", null, dpr, PRIMARY, pulse);
+      break;
+    case "emoji-sad-frown":
+      drawArrow(ctx, mouthL.x, mouthL.y, "down", "Lower", dpr, PRIMARY, pulse);
+      drawArrow(ctx, mouthR.x, mouthR.y, "down", null, dpr, PRIMARY, pulse);
+      break;
+    case "pucker":
+    case "emoji-kiss":
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Pucker forward", dpr, PRIMARY, pulse);
+      break;
+    case "lip-press":
+      drawArrow(ctx, mouthC.x, mouthC.y, "ringDashed", "Press lips", dpr, PRIMARY, pulse);
+      break;
+    case "vowel-a":
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Open: ah", dpr, PRIMARY, pulse);
+      break;
+    case "vowel-e":
+      drawArrow(ctx, mouthL.x, mouthL.y, "out", "Wide: ee", dpr, PRIMARY, pulse, "left");
+      drawArrow(ctx, mouthR.x, mouthR.y, "out", null, dpr, PRIMARY, pulse, "right");
+      break;
+    case "vowel-i":
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Soft: ih", dpr, PRIMARY, pulse);
+      break;
+    case "vowel-o":
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Round: oh", dpr, PRIMARY, pulse);
+      break;
+    case "vowel-u":
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Forward: oo", dpr, PRIMARY, pulse);
+      break;
+    case "emoji-surprise":
+      drawArrow(ctx, browL.x, browL.y, "up", "Lift", dpr, PRIMARY, pulse);
+      drawArrow(ctx, browR.x, browR.y, "up", null, dpr, PRIMARY, pulse);
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "O-shape", dpr, PRIMARY, pulse);
+      break;
+    default:
+      drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Follow along", dpr, PRIMARY, pulse);
+  }
 }
 
-function WinkLivePreview({ stream, faceLandmarker, mirrorEnabled, className = "" }) {
+function LiveExercisePreview({ exerciseId, stream, faceLandmarker, mirrorEnabled, className = "" }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [hasFace, setHasFace] = useState(false);
@@ -282,17 +401,17 @@ function WinkLivePreview({ stream, faceLandmarker, mirrorEnabled, className = ""
         } catch {
           // Detection is best-effort; transient frame errors should not break preview.
         }
-        drawWinkArrows(c, v, lm, mirrorEnabled);
+        drawArrowMarkers(c, v, lm, mirrorEnabled, exerciseId);
         if (lm && !hasFace) setHasFace(true);
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [faceLandmarker, mirrorEnabled, hasFace]);
+  }, [faceLandmarker, mirrorEnabled, hasFace, exerciseId]);
 
   return (
-    <div className={`relative w-44 h-56 rounded-3xl overflow-hidden ${className}`} style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(244, 239, 230, 0.1)" }}>
+    <div className={`relative w-full max-w-[16rem] aspect-[3/4] rounded-3xl overflow-hidden ${className}`} style={{ background: "rgba(0,0,0,0.4)", border: "1px solid rgba(244, 239, 230, 0.1)" }}>
       <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: mirrorEnabled ? "scaleX(-1)" : "none" }} />
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />
       {!hasFace && (
@@ -661,7 +780,7 @@ function BalanceBar({ label, frac, highlight, color }) {
 
 function PreviewView({ exercise, exIdx, totalExercises, onStart, onCancel, stream, faceLandmarker, mirrorEnabled, cameraError }) {
   if (!exercise) return null;
-  const useLiveWinkPreview = exercise.id === "wink" && stream && faceLandmarker && !cameraError && mirrorEnabled;
+  const useLivePreview = stream && faceLandmarker && !cameraError && mirrorEnabled;
   return (
     <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
       <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
@@ -672,8 +791,8 @@ function PreviewView({ exercise, exIdx, totalExercises, onStart, onCancel, strea
         </div>
         <div className="flex-1 overflow-y-auto px-6 pb-2 flex flex-col items-center text-center">
           <div className="text-xs uppercase tracking-widest opacity-60 mt-2 mb-4">Up next</div>
-          {useLiveWinkPreview
-            ? <WinkLivePreview stream={stream} faceLandmarker={faceLandmarker} mirrorEnabled={mirrorEnabled} className="mb-5" />
+          {useLivePreview
+            ? <LiveExercisePreview exerciseId={exercise.id} stream={stream} faceLandmarker={faceLandmarker} mirrorEnabled={mirrorEnabled} className="mb-5" />
             : <ExerciseAnimation region={exercise.region} size="lg" className="mb-5" />}
           <div className="text-3xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.01em" }}>{exercise.name}</div>
           <div className="text-xs opacity-60 mb-5 tracking-wide">{exercise.reps} reps · {exerciseHoldSec(exercise)}s hold</div>
@@ -898,7 +1017,43 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
   );
 }
 
-function PastSessionsList({ sessions, onOpen }) {
+function PastSessionRow({ session, onOpen, onDelete }) {
+  const [confirming, setConfirming] = useState(false);
+  const exCount = (session.exercises ?? session.scores ?? []).length;
+  const progress = preferredBaselineProgress(session);
+  const canDelete = typeof onDelete === "function";
+  return (
+    <div className="rounded-xl px-3 py-2.5 flex items-center gap-3 transition hover:bg-white" style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}>
+      <button onClick={() => onOpen(session)} disabled={confirming} className="flex-1 min-w-0 flex items-center gap-3 text-left disabled:opacity-50">
+        <div className="text-xs text-stone-500 tabular-nums w-28 shrink-0">{formatSessionDate(session)}</div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm flex items-center gap-2">
+            <span>{exCount} exercise{exCount !== 1 ? "s" : ""}</span>
+            {session.kind === "practice" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(184, 84, 58, 0.12)", color: "#B8543A" }}>Practice</span>}
+          </div>
+          <div className="text-xs text-stone-500 tabular-nums">{formatDuration(session.duration)}{progress ? ` · ${baselineProgressLabel(progress)}` : ""}</div>
+        </div>
+        {session.sessionAvg != null
+          ? <div className="tabular-nums font-semibold text-base" style={{ fontFamily: "Fraunces", color: scoreColor(session.sessionAvg) }}>{displayPct(session.sessionAvg)}%</div>
+          : <div className="text-xs text-stone-400">—</div>}
+      </button>
+      {confirming ? (
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => setConfirming(false)} className="text-xs px-2 py-1 rounded-lg text-stone-600 hover:bg-white">Cancel</button>
+          <button onClick={() => { setConfirming(false); onDelete(session); }} className="text-xs px-2 py-1 rounded-lg font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Delete</button>
+        </div>
+      ) : canDelete ? (
+        <button onClick={() => setConfirming(true)} aria-label="Delete session" className="shrink-0 p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-white transition">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      ) : (
+        <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
+      )}
+    </div>
+  );
+}
+
+function PastSessionsList({ sessions, onOpen, onDelete }) {
   const sorted = [...sessions].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 30);
   if (sorted.length === 0) return null;
   return (
@@ -907,23 +1062,7 @@ function PastSessionsList({ sessions, onOpen }) {
       <div className="space-y-1.5">
         {sorted.map((s) => {
           const exCount = (s.exercises ?? s.scores ?? []).length;
-          const progress = preferredBaselineProgress(s);
-          return (
-            <button key={s.ts || `${s.date}-${exCount}`} onClick={() => onOpen(s)} className="w-full rounded-xl px-3 py-2.5 flex items-center gap-3 transition hover:bg-white text-left" style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}>
-              <div className="text-xs text-stone-500 tabular-nums w-28 shrink-0">{formatSessionDate(s)}</div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm flex items-center gap-2">
-                  <span>{exCount} exercise{exCount !== 1 ? "s" : ""}</span>
-                  {s.kind === "practice" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(184, 84, 58, 0.12)", color: "#B8543A" }}>Practice</span>}
-                </div>
-                <div className="text-xs text-stone-500 tabular-nums">{formatDuration(s.duration)}{progress ? ` · ${baselineProgressLabel(progress)}` : ""}</div>
-              </div>
-              {s.sessionAvg != null
-                ? <div className="tabular-nums font-semibold text-base" style={{ fontFamily: "Fraunces", color: scoreColor(s.sessionAvg) }}>{displayPct(s.sessionAvg)}%</div>
-                : <div className="text-xs text-stone-400">—</div>}
-              <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
-            </button>
-          );
+          return <PastSessionRow key={s.id || s.ts || `${s.date}-${exCount}`} session={s} onOpen={onOpen} onDelete={onDelete} />;
         })}
       </div>
     </div>
@@ -1193,7 +1332,7 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
   );
 }
 
-function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenReport, onStartProfile }) {
+function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onStartProfile }) {
   // Progress charts are projections of journal/session history. Keeping them derived
   // avoids migration work when scoring or display rules change.
   const totalSessions = data.sessions.length;
@@ -1299,7 +1438,7 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
           <span>Symmetric</span>
         </div>
       </div>
-      <PastSessionsList sessions={data.sessions} onOpen={onOpenReport} />
+      <PastSessionsList sessions={data.sessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
       <MovementProfileCard profile={data.movementProfile} initialProfile={data.initialMovementProfile} history={data.movementProfileHistory} sessions={data.sessions} progressByExercise={progressByExercise} onStart={onStartProfile} />
       {journalChartData.length > 1 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>

@@ -32,6 +32,7 @@ FaceLandmarker.createFromOptions(fileset, {
   baseOptions: { modelAssetPath: FACE_LANDMARKER_MODEL, delegate: "GPU" },
   runningMode: "VIDEO",
   outputFaceBlendshapes: true,
+  outputFacialTransformationMatrixes: true,
   numFaces: 1,
 });
 ```
@@ -40,6 +41,8 @@ For each frame, MediaPipe returns:
 
 - A dense face mesh with 3D landmark coordinates.
 - Face blendshape coefficients, such as brow raise, eye blink, smile, and nose sneer.
+- A facial transformation matrix that maps the canonical MediaPipe face model into
+  the detected face pose.
 
 The ML model only provides geometry and blendshape estimates. The rehab-oriented symmetry score is custom logic in this app.
 
@@ -51,10 +54,10 @@ For each animation frame:
 
 1. Read the current video frame.
 2. Run `faceLandmarker.detectForVideo(video, timestamp)`.
-3. Extract the first face's landmarks and blendshapes.
-4. Smooth landmarks using an exponential moving average.
-5. During calibration, collect stable neutral frames.
-6. During holds, compute exercise-specific symmetry.
+3. Extract the first face's landmarks, blendshapes, and facial transformation matrix.
+4. Smooth landmarks and the transform matrix using an exponential moving average.
+5. During calibration, collect stable neutral frames and neutral pose matrices.
+6. During holds, compute exercise-specific symmetry in the matrix-normalized face frame.
 7. Accumulate valid scores across the hold window.
 8. Save the average rep score and a peak-movement snapshot.
 
@@ -63,8 +66,8 @@ Simplified:
 ```text
 video frame
 -> detectForVideo
--> raw landmarks
--> smoothLandmarks
+-> raw landmarks + transform matrix
+-> smoothLandmarks + smoothFacialTransformationMatrix
 -> calibration or scoring branch
 -> live score
 -> rep average
@@ -74,9 +77,16 @@ video frame
 
 The first-use movement profile flow uses the same MediaPipe runtime and the same scoring functions inside `ProfileAssessment`. The difference is that it saves baseline metrics instead of producing a normal practice session record.
 
-## Landmark Smoothing
+## Landmark And Pose Smoothing
 
 Landmarks are smoothed with an exponential moving average in `smoothLandmarks`.
+MediaPipe facial transformation matrices use the same EMA in
+`smoothFacialTransformationMatrix`. The matrix's `data` field is column-major
+(it comes straight from MediaPipe's protobuf `packed_data`, which is filled
+from Eigen's column-major storage), so the scorer reads element `(row, col)` as
+`data[col * rows + row]`. EMA on rotation matrices is not strictly orthogonal-preserving,
+but the alpha is high enough and per-frame pose change small enough that the smoothed
+3x3 stays close to a rotation in practice.
 
 ```text
 smoothed = previous + alpha * (current - previous)
@@ -114,6 +124,8 @@ This produces:
 
 - `neutralRef`: the user's neutral resting landmark positions.
 - `noiseRef`: a per-landmark noise floor used to subtract calibration jitter from later displacement measurements.
+- `neutralMatrixRef`: the average neutral facial transformation matrix used to normalize
+  the neutral frame into the same canonical pose space as live hold frames.
 
 `normalizedFrameDelta` uses `CALIBRATION_DELTA_POINTS`:
 
@@ -145,34 +157,70 @@ This is not full head-pose estimation. It is a practical guardrail to prevent po
 "center your face" or "keep your eyes level" so calibration prompts explain what is
 blocking capture.
 
+## Hold-Time Head-Pose Gate
+
+`isFaceAligned` is a 2D screen-space check, so it only catches in-plane roll. It can't
+see a user who keeps their face centered and eye-line level while yawing or pitching
+significantly toward or away from the camera. The 3D pose matrix lets us close that
+gap during scoring.
+
+For every hold frame, `computeExerciseSymmetry` computes `headPoseDeviationRad` — the
+angle between the current pose matrix and the neutral pose matrix captured at the end
+of calibration:
+
+```text
+cos(θ) = (trace(R_current · R_neutralᵀ) − 1) / 2
+       = (Σ R_current[i,j] · R_neutral[i,j] − 1) / 2     // both rotations are orthogonal
+```
+
+If the deviation exceeds `HOLD_HEAD_POSE_MAX_RAD` (≈ 0.20 rad / ~11.5°), the frame is
+dropped from scoring. This is well outside normal micro-wobble but well inside what
+the 2D gate already permits, so it only fires on real yaw/pitch drift.
+
+The gate is no-op when either matrix is missing, so the fallback eye-line normalization
+path is unaffected.
+
 ## Face-Local Normalization
 
 Landmarks are converted into a face-local coordinate frame using `faceFrameNormalize`.
+When MediaPipe returns a valid facial transformation matrix, Mirror uses it first:
 
-The transform uses:
-
-- Landmark `1` as the origin, near the nose tip.
-- Eye-line `33 -> 263` as the local x-axis.
-- Inter-ocular distance as scale.
-
-For each landmark:
-
-```text
-dx = point.x - nose_tip.x
-dy = point.y - nose_tip.y
-
-local_x = dot([dx, dy], eye_axis) / eye_distance
-local_y = dot([dx, dy], perpendicular_eye_axis) / eye_distance
-local_z = (point.z - nose_tip.z) / eye_distance
-```
+1. Center each landmark at nose tip landmark `1`.
+2. Read the 3x3 rotation submatrix from the column-major `data` field. The matrix
+   maps canonical face coordinates into the detected face's camera frame, so its
+   transpose `R^T` is the inverse rotation that brings camera-frame deltas back
+   into the canonical face frame.
+3. Flip Y on each landmark delta (MediaPipe normalized landmarks use image-Y-down
+   while the pose matrix uses 3D-Y-up), apply `R^T`, then flip Y back.
+4. Use the transformed 3D inter-ocular distance between landmarks `33` and `263` as scale.
+5. Apply a residual eye-line roll correction in the normalized frame.
 
 This removes:
 
 - Translation from the face moving in the frame.
 - Roll from the head tilting clockwise or counterclockwise.
 - Scale from the user moving closer or farther from the camera.
+- Much of the yaw and pitch foreshortening that affected the older 2D eye-line frame.
 
-It does not fully remove yaw or pitch. That would require a stronger 3D transform using MediaPipe's face transform matrix or a solved head-pose model.
+If the matrix is missing or malformed, Mirror falls back to the original transform:
+
+- Landmark `1` as the origin, near the nose tip.
+- Eye-line `33 -> 263` as the local x-axis.
+- 2D inter-ocular distance as scale.
+
+For each landmark:
+
+```text
+pose_delta = inverse_face_pose_rotation(point - nose_tip)
+scale = distance_3d(pose_delta_eye_33_to_263)
+
+local_x = dot(pose_delta.xy, corrected_eye_axis) / scale
+local_y = dot(pose_delta.xy, perpendicular_corrected_eye_axis) / scale
+local_z = pose_delta.z / scale
+```
+
+Calibration noise uses the same transform buffer, so neutral jitter is measured in
+the same pose-normalized coordinate system used during exercise scoring.
 
 ## Generic Landmark Pair Symmetry
 
@@ -483,6 +531,11 @@ means the entire profile is bad; it identifies the specific movement that needs 
   comfortLevel,
   neutralLandmarks,
   noiseFloor,
+  normalization: {
+    method,
+    fallbackMethod,
+    neutralFacialTransformationMatrix
+  },
   calibrationQuality,
   initialAvgSymmetry,
   exercises: {
@@ -723,7 +776,10 @@ The overlay is visual feedback only. The scoring logic uses the normalized landm
 
 - The app is not a medical grading system.
 - Landmark quality depends on camera quality, lighting, occlusion, and face angle.
-- Current normalization removes translation, roll, and scale, but not full yaw or pitch.
+- Matrix-based normalization reduces yaw and pitch effects when MediaPipe returns a
+  valid transform matrix; extreme face angles can still distort landmarks.
+- If MediaPipe does not return a usable matrix, the scorer falls back to the older
+  eye-line roll/scale normalization.
 - Thresholds are heuristic and tuned for practice feedback, not clinical measurement.
 - The app assumes a single visible face.
 - Scores should be interpreted as trend and practice feedback, not diagnosis.
@@ -732,7 +788,6 @@ The overlay is visual feedback only. The scoring logic uses the normalized landm
 
 Potential technical improvements:
 
-- Use MediaPipe facial transformation matrices or solvePnP for stronger 3D head-pose normalization.
 - Add exercise-specific direction vectors for cheek, smile, pucker, and eye closure.
 - Track affected-side progress separately from symmetry.
 - Add calibration quality metrics and warnings.

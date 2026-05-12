@@ -6,7 +6,7 @@ import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
-import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, getProfileExercise, normalizedFrameDelta, smoothLandmarks, summarizeBaselineProgress, summarizeSessionBaselineProgress } from "../ml/faceMetrics";
+import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeSessionBaselineProgress } from "../ml/faceMetrics";
 
 function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref }) {
   // Phases: optional calibrate → rest (2s entry) → hold (4s) → rest (2s) → hold → ... → interstitial (10s) → next exercise → ... → summary
@@ -33,10 +33,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
   const calibBufferRef = useRef([]);
   const calibBsBufferRef = useRef([]);
+  const calibMatrixBufferRef = useRef([]);
   const lastCalibLmRef = useRef(null);
+  const lastCalibMatrixRef = useRef(null);
   const neutralRef = useRef(null);
   const noiseRef = useRef(null);
   const neutralBsRef = useRef(null);
+  const neutralMatrixRef = useRef(null);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationStatus, setCalibrationStatus] = useState("Preparing tracker");
   const peakRepScoreRef = useRef(null);
@@ -80,10 +83,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     if (phase !== "calibrate") return;
     calibBufferRef.current = [];
     calibBsBufferRef.current = [];
+    calibMatrixBufferRef.current = [];
     lastCalibLmRef.current = null;
+    lastCalibMatrixRef.current = null;
     neutralRef.current = null;
     noiseRef.current = null;
     neutralBsRef.current = null;
+    neutralMatrixRef.current = null;
     baselineSnapshotRef.current = null;
     setCalibrationProgress(0);
     setCalibrationStatus("Preparing tracker");
@@ -210,13 +216,16 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         const taskResult = faceLandmarker.detectForVideo(v, ts);
         const rawLm = taskResult.faceLandmarks?.[0];
         const bsArr = taskResult.faceBlendshapes?.[0]?.categories;
+        const rawMatrix = firstFacialTransformationMatrix(taskResult);
 
         if (rawLm) {
           const prevLm = latestRef.current?.landmarks;
+          const prevMatrix = latestRef.current?.facialTransformationMatrix;
           const lm = smoothLandmarks(prevLm, rawLm);
+          const facialTransformationMatrix = smoothFacialTransformationMatrix(prevMatrix, rawMatrix);
           const bsMap = {};
           if (bsArr) for (const c of bsArr) bsMap[c.categoryName] = c.score;
-          latestRef.current = { landmarks: lm, blendshapes: bsMap };
+          latestRef.current = { landmarks: lm, blendshapes: bsMap, facialTransformationMatrix };
           const alignment = faceAlignmentFeedback(lm);
           const aligned = alignment.aligned;
           setPostureAligned((prev) => (prev === aligned ? prev : aligned));
@@ -226,29 +235,36 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               if (!aligned) {
                 calibBufferRef.current = [];
                 calibBsBufferRef.current = [];
+                calibMatrixBufferRef.current = [];
                 lastCalibLmRef.current = null;
+                lastCalibMatrixRef.current = null;
                 setCalibrationProgress(0);
                 setCalibrationStatus(alignment.label);
               } else {
-                const delta = lastCalibLmRef.current ? normalizedFrameDelta(lm, lastCalibLmRef.current) : 0;
+                const delta = lastCalibLmRef.current ? normalizedFrameDelta(lm, lastCalibLmRef.current, facialTransformationMatrix, lastCalibMatrixRef.current) : 0;
                 lastCalibLmRef.current = lm;
+                lastCalibMatrixRef.current = facialTransformationMatrix;
                 if (delta > CALIBRATION_RESET_EPS) {
                   calibBufferRef.current = [lm];
                   calibBsBufferRef.current = [bsMap];
+                  calibMatrixBufferRef.current = [facialTransformationMatrix];
                   setCalibrationProgress(1);
                   setCalibrationStatus(calibrationPrompt(1, delta));
                 } else {
                   if (calibBufferRef.current.length < CALIBRATION_FRAMES) {
                     calibBufferRef.current.push(lm);
                     calibBsBufferRef.current.push(bsMap);
+                    calibMatrixBufferRef.current.push(facialTransformationMatrix);
                   }
                   const progress = calibBufferRef.current.length;
                   setCalibrationProgress((prev) => (prev === progress ? prev : progress));
                   setCalibrationStatus(calibrationPrompt(progress, delta));
                   if (progress >= CALIBRATION_FRAMES) {
                     const neutral = averageLandmarks(calibBufferRef.current);
+                    const neutralMatrix = averageFacialTransformationMatrix(calibMatrixBufferRef.current);
                     neutralRef.current = neutral;
-                    noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral);
+                    neutralMatrixRef.current = neutralMatrix;
+                    noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral, calibMatrixBufferRef.current, neutralMatrix);
                     neutralBsRef.current = averageBlendshapes(calibBsBufferRef.current);
                     baselineSnapshotRef.current = captureSnapshot(v, snapshotCanvasRef.current);
                     restIsEntryRef.current = true;
@@ -269,7 +285,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               // Nose exercises: aperture widening + upward ala lift (handles both wrinkle and flare).
               // Other exercises: face-local landmark-pair displacement with per-landmark noise
               // subtracted out. Fallback: generic 9-pair.
-              symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current);
+              symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current, facialTransformationMatrix, neutralMatrixRef.current);
               if (symResult != null) {
                 const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
@@ -318,7 +334,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           if (phase === "calibrate") {
             calibBufferRef.current = [];
             calibBsBufferRef.current = [];
+            calibMatrixBufferRef.current = [];
             lastCalibLmRef.current = null;
+            lastCalibMatrixRef.current = null;
             baselineSnapshotRef.current = null;
             setCalibrationProgress(0);
             setCalibrationStatus("Find your face in the camera");
@@ -354,10 +372,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     flushSpeech();
     calibBufferRef.current = [];
     calibBsBufferRef.current = [];
+    calibMatrixBufferRef.current = [];
     lastCalibLmRef.current = null;
+    lastCalibMatrixRef.current = null;
     neutralRef.current = null;
     noiseRef.current = null;
     neutralBsRef.current = null;
+    neutralMatrixRef.current = null;
     baselineSnapshotRef.current = captureSnapshot(videoRef.current, snapshotCanvasRef.current);
     restIsEntryRef.current = true;
     setCalibrationProgress(0);

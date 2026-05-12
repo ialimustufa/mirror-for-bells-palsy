@@ -11,8 +11,17 @@ export const CALIBRATION_RESET_EPS = 0.018;
 
 export const FACE_CENTER_MAX_OFFSET = 0.12;
 export const FACE_TILT_MAX_RAD = 0.12;
+// 2D alignment only catches in-plane roll. The 3D pose matrix lets us also reject
+// hold frames where the user has yawed or pitched far from the neutral pose, which
+// degrades the corrected normalization through perspective and weak-z effects.
+// ~11.5°: well outside normal micro-wobble, well inside what the 2D gate permits.
+export const HOLD_HEAD_POSE_MAX_RAD = 0.20;
 
-export const PROFILE_VERSION = 1;
+// v3: corrected column-major reading of MediaPipe's facial transformation matrix
+// (the pose-inverse step now applies R^T rather than R) plus the hold-time
+// head-pose-deviation gate. Off-axis baselines captured pre-v3 may have slightly
+// inflated leftBaselineMovement/rightBaselineMovement.
+export const PROFILE_VERSION = 3;
 export const PROFILE_HOLD_SEC = 4;
 export const PROFILE_REST_SEC = 2;
 export const PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES = 8;

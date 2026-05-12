@@ -6,7 +6,7 @@ import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { ExerciseGlyph, RealtimeFeedback, TrackerStatusPill } from "../components/appViews";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
-import { averageBlendshapes, averageLandmarks, buildMovementProfile, calibrationPrompt, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, exerciseBaselineQuality, faceAlignmentFeedback, inferLimitedSide, normalizedFrameDelta, robustMovementWindow, smoothLandmarks } from "../ml/faceMetrics";
+import { averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, buildMovementProfile, calibrationPrompt, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, exerciseBaselineQuality, faceAlignmentFeedback, firstFacialTransformationMatrix, inferLimitedSide, normalizedFrameDelta, robustMovementWindow, smoothFacialTransformationMatrix, smoothLandmarks } from "../ml/faceMetrics";
 
 function emptyAssessmentFrameStats() {
   return { frames: 0, holdFrames: 0, alignedFrames: 0, leftSum: 0, rightSum: 0, symSum: 0, leftPeak: 0, rightPeak: 0, symPeak: null, samples: [] };
@@ -63,14 +63,19 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
   const neutralRef = useRef(null);
   const noiseRef = useRef(null);
   const neutralBsRef = useRef(null);
+  const neutralMatrixRef = useRef(null);
   const calibBufferRef = useRef([]);
   const calibBsBufferRef = useRef([]);
+  const calibMatrixBufferRef = useRef([]);
   const lastCalibLmRef = useRef(null);
+  const lastCalibMatrixRef = useRef(null);
   const exerciseNeutralRef = useRef(null);
   const exerciseNoiseRef = useRef(null);
   const exerciseNeutralBsRef = useRef(null);
+  const exerciseNeutralMatrixRef = useRef(null);
   const restBufferRef = useRef([]);
   const restBsBufferRef = useRef([]);
+  const restMatrixBufferRef = useRef([]);
   const restRetryRef = useRef(0);
   const statRef = useRef(emptyAssessmentFrameStats());
   const activeCamera = phase !== "intro" && phase !== "summary";
@@ -89,9 +94,12 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     neutralRef.current = null;
     noiseRef.current = null;
     neutralBsRef.current = null;
+    neutralMatrixRef.current = null;
     calibBufferRef.current = [];
     calibBsBufferRef.current = [];
+    calibMatrixBufferRef.current = [];
     lastCalibLmRef.current = null;
+    lastCalibMatrixRef.current = null;
     setCalibrationProgress(0);
     setCalibrationStatus("Preparing tracker");
   }, [phase]);
@@ -110,9 +118,11 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     restRetryRef.current = 0;
     restBufferRef.current = [];
     restBsBufferRef.current = [];
+    restMatrixBufferRef.current = [];
     exerciseNeutralRef.current = null;
     exerciseNoiseRef.current = null;
     exerciseNeutralBsRef.current = null;
+    exerciseNeutralMatrixRef.current = null;
     setRestStatus("Relax your face. Capturing a neutral baseline for this exercise.");
   }, [phase, exIdx]);
 
@@ -130,13 +140,16 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
         }
         if (restFrames.length >= PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES) {
           const exerciseNeutral = averageLandmarks(restFrames);
+          const exerciseNeutralMatrix = averageFacialTransformationMatrix(restMatrixBufferRef.current);
           exerciseNeutralRef.current = exerciseNeutral;
-          exerciseNoiseRef.current = computeNoiseFloor(restFrames, exerciseNeutral);
+          exerciseNeutralMatrixRef.current = exerciseNeutralMatrix;
+          exerciseNoiseRef.current = computeNoiseFloor(restFrames, exerciseNeutral, restMatrixBufferRef.current, exerciseNeutralMatrix);
           exerciseNeutralBsRef.current = averageBlendshapes(restBsBufferRef.current);
         } else {
           exerciseNeutralRef.current = null;
           exerciseNoiseRef.current = null;
           exerciseNeutralBsRef.current = null;
+          exerciseNeutralMatrixRef.current = null;
         }
         setPhase("hold");
         setSecondsLeft(PROFILE_HOLD_SEC);
@@ -170,11 +183,13 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
         const result = faceLandmarker.detectForVideo(v, ts);
         const rawLm = result.faceLandmarks?.[0];
         const bsArr = result.faceBlendshapes?.[0]?.categories;
+        const rawMatrix = firstFacialTransformationMatrix(result);
         if (rawLm) {
           const lm = smoothLandmarks(latestRef.current?.landmarks, rawLm);
+          const facialTransformationMatrix = smoothFacialTransformationMatrix(latestRef.current?.facialTransformationMatrix, rawMatrix);
           const bsMap = {};
           if (bsArr) for (const c of bsArr) bsMap[c.categoryName] = c.score;
-          latestRef.current = { landmarks: lm, blendshapes: bsMap };
+          latestRef.current = { landmarks: lm, blendshapes: bsMap, facialTransformationMatrix };
           const alignment = faceAlignmentFeedback(lm);
           const aligned = alignment.aligned;
           setPostureAligned((prev) => (prev === aligned ? prev : aligned));
@@ -183,29 +198,36 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
             if (!aligned) {
               calibBufferRef.current = [];
               calibBsBufferRef.current = [];
+              calibMatrixBufferRef.current = [];
               lastCalibLmRef.current = null;
+              lastCalibMatrixRef.current = null;
               setCalibrationProgress(0);
               setCalibrationStatus(alignment.label);
             } else {
-              const delta = lastCalibLmRef.current ? normalizedFrameDelta(lm, lastCalibLmRef.current) : 0;
+              const delta = lastCalibLmRef.current ? normalizedFrameDelta(lm, lastCalibLmRef.current, facialTransformationMatrix, lastCalibMatrixRef.current) : 0;
               lastCalibLmRef.current = lm;
+              lastCalibMatrixRef.current = facialTransformationMatrix;
               if (delta > CALIBRATION_RESET_EPS) {
                 calibBufferRef.current = [lm];
                 calibBsBufferRef.current = [bsMap];
+                calibMatrixBufferRef.current = [facialTransformationMatrix];
                 setCalibrationProgress(1);
                 setCalibrationStatus(calibrationPrompt(1, delta));
               } else {
                 if (calibBufferRef.current.length < CALIBRATION_FRAMES) {
                   calibBufferRef.current.push(lm);
                   calibBsBufferRef.current.push(bsMap);
+                  calibMatrixBufferRef.current.push(facialTransformationMatrix);
                 }
                 const progress = calibBufferRef.current.length;
                 setCalibrationProgress((prev) => (prev === progress ? prev : progress));
                 setCalibrationStatus(calibrationPrompt(progress, delta));
                 if (progress >= CALIBRATION_FRAMES) {
                   const neutral = averageLandmarks(calibBufferRef.current);
+                  const neutralMatrix = averageFacialTransformationMatrix(calibMatrixBufferRef.current);
                   neutralRef.current = neutral;
-                  noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral);
+                  neutralMatrixRef.current = neutralMatrix;
+                  noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral, calibMatrixBufferRef.current, neutralMatrix);
                   neutralBsRef.current = averageBlendshapes(calibBsBufferRef.current);
                   setPhase("rest");
                   setSecondsLeft(PROFILE_REST_SEC);
@@ -216,6 +238,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
             if (aligned) {
               restBufferRef.current.push(lm);
               restBsBufferRef.current.push(bsMap);
+              restMatrixBufferRef.current.push(facialTransformationMatrix);
               const count = restBufferRef.current.length;
               const remaining = Math.max(0, PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES - count);
               setRestStatus(remaining > 0
@@ -235,7 +258,8 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
               const neutral = exerciseNeutralRef.current ?? neutralRef.current;
               const noise = exerciseNoiseRef.current ?? noiseRef.current;
               const neutralBs = exerciseNeutralBsRef.current ?? neutralBsRef.current;
-              const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs);
+              const neutralMatrix = exerciseNeutralMatrixRef.current ?? neutralMatrixRef.current;
+              const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs, facialTransformationMatrix, neutralMatrix);
               if (sym) {
                 stat.frames++;
                 stat.leftSum += sym.leftDisp;
@@ -259,7 +283,9 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
           if (phase === "calibrate") {
             calibBufferRef.current = [];
             calibBsBufferRef.current = [];
+            calibMatrixBufferRef.current = [];
             lastCalibLmRef.current = null;
+            lastCalibMatrixRef.current = null;
             setCalibrationProgress(0);
             setCalibrationStatus("Find your face in the camera");
           } else if (phase === "rest") {
@@ -282,9 +308,11 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     setSecondsLeft(PROFILE_REST_SEC);
     restBufferRef.current = [];
     restBsBufferRef.current = [];
+    restMatrixBufferRef.current = [];
     exerciseNeutralRef.current = null;
     exerciseNoiseRef.current = null;
     exerciseNeutralBsRef.current = null;
+    exerciseNeutralMatrixRef.current = null;
     setPhase("calibrate");
   };
 
@@ -292,6 +320,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     const profile = buildMovementProfile({
       neutral: neutralRef.current,
       noise: noiseRef.current,
+      neutralFacialTransformationMatrix: neutralMatrixRef.current,
       exerciseStats,
       affectedSide: isPartialRetake ? existingProfile?.affectedSide ?? affectedSide : affectedSide,
       comfortLevel: isPartialRetake ? existingProfile?.comfortLevel ?? comfortLevel : comfortLevel,

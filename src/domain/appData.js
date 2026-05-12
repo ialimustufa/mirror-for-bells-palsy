@@ -17,9 +17,17 @@ export function normalizeAppData(parsed = {}) {
 
 export function archiveMovementProfile(profile, archivedAt = Date.now()) {
   if (!profile) return null;
-  const { neutralLandmarks, noiseFloor, ...summary } = profile;
+  const { neutralLandmarks, noiseFloor, normalization, ...summary } = profile;
+  const { neutralFacialTransformationMatrix, ...normalizationSummary } = normalization ?? {};
+  const archivedNormalization = normalization
+    ? {
+      ...normalizationSummary,
+      hasNeutralFacialTransformationMatrix: Boolean(neutralFacialTransformationMatrix),
+    }
+    : null;
   return {
     ...summary,
+    ...(archivedNormalization ? { normalization: archivedNormalization } : {}),
     archivedAt,
     hasNeutralLandmarks: Boolean(neutralLandmarks),
     hasNoiseFloor: Boolean(noiseFloor),
