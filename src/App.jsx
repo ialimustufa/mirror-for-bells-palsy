@@ -582,14 +582,15 @@ export default function App() {
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F4EFE6" }}><div className="text-stone-600">Loading…</div></div>;
 
   return (
-    <div className="min-h-screen relative" style={{ background: "#F4EFE6", fontFamily: "Manrope, system-ui, sans-serif", color: "#1F1B16" }}>
+    <div className="min-h-screen relative lg:pl-20" style={{ background: "#F4EFE6", fontFamily: "Manrope, system-ui, sans-serif", color: "#1F1B16" }}>
       <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden>
         <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full blur-3xl opacity-30" style={{ background: "#D4A574" }} />
         <div className="absolute top-1/2 -left-32 w-80 h-80 rounded-full blur-3xl opacity-20" style={{ background: "#7A8F73" }} />
       </div>
-      <div className="relative max-w-2xl mx-auto px-5 pb-28 pt-8">
+      <Sidebar view={view} setView={setView} streak={streak} />
+      <div className="relative max-w-2xl mx-auto px-5 pb-28 pt-8 lg:pb-12">
         <Header view={view} streak={streak} />
-        <main className="mt-8">
+        <main className="mt-8 lg:mt-2">
           {view === "home" && <HomeView data={data} streak={streak} onStartSession={startSession} onGo={setView} />}
           {view === "practice" && <PracticeView onStartSession={startSession} onShowDetail={setExerciseDetail} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
@@ -608,7 +609,7 @@ export default function App() {
 function Header({ view, streak }) {
   const titles = { home: "Today", practice: "Practice", journal: "Journal", progress: "Progress" };
   return (
-    <header className="flex items-center justify-between">
+    <header className="flex items-center justify-between lg:hidden">
       <div className="flex items-center gap-2">
         <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: "#1F1B16" }}>
           <div className="w-4 h-4 rounded-full" style={{ background: "#F4EFE6" }} />
@@ -620,6 +621,35 @@ function Header({ view, streak }) {
       </div>
       {streak > 0 && <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full" style={{ background: "rgba(184, 84, 58, 0.1)", color: "#B8543A" }}><Flame className="w-4 h-4" /><span className="text-sm font-semibold">{streak}</span></div>}
     </header>
+  );
+}
+
+function Sidebar({ view, setView, streak }) {
+  const items = [{ key: "home", label: "Today", icon: Home }, { key: "practice", label: "Practice", icon: Sparkles }, { key: "journal", label: "Journal", icon: BookOpen }, { key: "progress", label: "Progress", icon: TrendingUp }];
+  return (
+    <aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-20 z-20 flex-col items-center py-5 gap-2" style={{ background: "rgba(31, 27, 22, 0.94)", borderRight: "1px solid rgba(244,239,230,0.06)" }}>
+      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ background: "#F4EFE6" }} title="Mirror">
+        <div className="w-4 h-4 rounded-full" style={{ background: "#1F1B16" }} />
+      </div>
+      <div className="flex flex-col items-center gap-1 flex-1 mt-2">
+        {items.map((item) => {
+          const Icon = item.icon;
+          const active = view === item.key;
+          return (
+            <button key={item.key} onClick={() => setView(item.key)} className="w-14 h-14 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition-colors" style={{ background: active ? "#F4EFE6" : "transparent", color: active ? "#1F1B16" : "rgba(244,239,230,0.65)" }}>
+              <Icon className="w-4 h-4" strokeWidth={2.2} />
+              <span className="text-[9px] font-semibold">{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {streak > 0 && (
+        <div className="flex flex-col items-center gap-0.5 px-2 py-2 rounded-2xl" style={{ background: "rgba(184, 84, 58, 0.18)", color: "#FFB48F" }} title={`${streak} day streak`}>
+          <Flame className="w-4 h-4" />
+          <span className="text-xs font-semibold tabular-nums">{streak}</span>
+        </div>
+      )}
+    </aside>
   );
 }
 
@@ -739,7 +769,7 @@ function PracticeView({ onStartSession, onShowDetail }) {
         {filtered.map((ex) => <ExerciseRow key={ex.id} exercise={ex} selected={selected.has(ex.id)} onToggle={() => toggle(ex.id)} onShow={() => onShowDetail(ex)} />)}
       </div>
       {selected.size > 0 && (
-        <div className="fixed bottom-24 left-0 right-0 px-5 z-30">
+        <div className="fixed bottom-24 left-0 right-0 px-5 z-30 lg:bottom-6 lg:left-20">
           <div className="max-w-2xl mx-auto">
             <button onClick={() => onStartSession([...selected])} className="w-full rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
               <Play className="w-4 h-4 fill-current" />Start with {selected.size} exercise{selected.size > 1 ? "s" : ""}
@@ -1067,7 +1097,8 @@ function SessionMode({ session, prefs, sessionsToday, onComplete, onCancel, onTo
   }[phase];
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+    <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
+      <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
       <div className="flex items-center justify-between p-4 shrink-0">
         <button onClick={onCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="End"><X className="w-5 h-5" /></button>
         <div className="text-xs opacity-70">Exercise {exIdx + 1} of {totalExercises}</div>
@@ -1139,6 +1170,7 @@ function SessionMode({ session, prefs, sessionsToday, onComplete, onCancel, onTo
           </button>
           <button onClick={handleSkipExercise} className="flex-1 rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Skip<ChevronRight className="w-4 h-4" /></button>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -1238,7 +1270,8 @@ function flushSpeech() {
 function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercises, onSkip, onCancel }) {
   if (!just) return null;
   return (
-    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+    <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
+      <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
       <div className="flex items-center justify-between p-4 shrink-0">
         <button onClick={onCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="End"><X className="w-5 h-5" /></button>
         <div className="text-xs opacity-70">Exercise {exIdx} of {totalExercises} complete</div>
@@ -1285,6 +1318,7 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
         </button>
       </div>
       <style>{`@keyframes fadeInRep { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      </div>
     </div>
   );
 }
@@ -1332,7 +1366,8 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, onFinish, session, o
   })();
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col overflow-y-auto" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+    <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
+      <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:shadow-2xl overflow-y-auto" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
       <div className="max-w-md mx-auto w-full px-6 py-10 flex-1 flex flex-col">
         {isView && (
           <button onClick={onClose} className="self-start mb-4 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Close report"><X className="w-5 h-5" /></button>
@@ -1393,6 +1428,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, onFinish, session, o
         )}
         <div className="text-xs opacity-60 leading-relaxed mb-6 px-2 text-center">Symmetry is auto-detected from facial landmarks. Some movement variation is normal even in healthy faces.</div>
         <button onClick={isView ? onClose : onFinish} className="w-full rounded-full py-3.5 font-semibold mt-auto" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isView ? "Close" : "Done"}</button>
+      </div>
       </div>
     </div>
   );
@@ -1685,7 +1721,7 @@ function ToggleRow({ label, description, value, onToggle }) {
 function BottomNav({ view, setView }) {
   const items = [{ key: "home", label: "Today", icon: Home }, { key: "practice", label: "Practice", icon: Sparkles }, { key: "journal", label: "Journal", icon: BookOpen }, { key: "progress", label: "Progress", icon: TrendingUp }];
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-2" style={{ background: "linear-gradient(to top, rgba(244,239,230,1) 60%, rgba(244,239,230,0))" }}>
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-2" style={{ background: "linear-gradient(to top, rgba(244,239,230,1) 60%, rgba(244,239,230,0))" }}>
       <div className="max-w-2xl mx-auto rounded-full flex items-center p-1.5 backdrop-blur-md" style={{ background: "rgba(31, 27, 22, 0.92)", boxShadow: "0 8px 32px rgba(31, 27, 22, 0.15)" }}>
         {items.map((item) => {
           const Icon = item.icon;
