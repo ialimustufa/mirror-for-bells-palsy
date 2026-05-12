@@ -2156,6 +2156,18 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         </div>
       )}
 
+      <div className="px-4 pb-3 shrink-0">
+        <div className="rounded-2xl p-3" style={{ background: "rgba(244, 239, 230, 0.1)", border: `1px solid ${phaseTone.color}` }}>
+          <div className="flex items-center justify-between gap-3 mb-1.5">
+            <div className="text-[11px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>
+              {phaseTone.tag}
+            </div>
+            <div className="text-xs opacity-70 whitespace-nowrap">Rep {repIdx + 1} / {currentReps}</div>
+          </div>
+          <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{phaseTone.prompt}</div>
+        </div>
+      </div>
+
       <div className="flex-1 relative overflow-hidden">
         {prefs.mirrorEnabled && !cameraError ? (
           <>
@@ -2203,9 +2215,6 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       </div>
 
       <div className="p-4 shrink-0" style={{ borderTop: phase === "hold" || phase === "rest" || phase === "calibrate" ? `2px solid ${phaseTone.color}` : "2px solid transparent", transition: "border-color 300ms" }}>
-        <div className="text-sm mb-4 leading-relaxed min-h-[2.5em]" style={{ color: phase === "rest" || phase === "hold" || phase === "calibrate" ? phaseTone.color : "rgba(244,239,230,0.8)" }}>
-          {phaseTone.prompt}
-        </div>
         <div className="flex gap-3">
           <button onClick={() => { setPaused((p) => { if (!p) flushSpeech(); return !p; }); }} className="flex-1 rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "rgba(244, 239, 230, 0.15)", color: "#F4EFE6" }}>
             {paused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}{paused ? "Resume" : "Pause"}
