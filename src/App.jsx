@@ -1152,11 +1152,6 @@ function faceAlignmentFeedback(lm) {
   return { aligned: false, label: "Keep your eyes level", issue: "tilt", centerOff, tiltRad };
 }
 
-// Posture: face roughly centered & level. Uses landmark 1 (nose tip) and the eye-line tilt.
-function isFaceAligned(lm) {
-  return faceAlignmentFeedback(lm).aligned;
-}
-
 function calibrationPrompt(progress, delta) {
   if (delta > CALIBRATION_RESET_EPS) return "Too much movement. Relax your jaw, stop talking, and hold neutral.";
   if (delta > CALIBRATION_STABILITY_EPS) return "Small movement detected. Keep the same resting expression.";
@@ -1804,6 +1799,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const currentRestSec = exerciseRestSec(current);
   const currentHoldSec = exerciseHoldSec(current);
   const nextRestSec = exerciseRestSec(nextExercise);
+  const autoPaused = symEnabled && trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
+  const timerPaused = paused || autoPaused;
 
   useEffect(() => {
     if (!prefs.mirrorEnabled) {
@@ -1891,7 +1888,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   }, [phase, exIdx, repIdx]);
 
   useEffect(() => {
-    if (paused || phase === "summary" || phase === "calibrate") return;
+    if (timerPaused || phase === "summary" || phase === "calibrate") return;
     if (secondsLeft <= 0) {
       // Each branch sets BOTH the new phase and the new timer in one batch — otherwise the advance
       // effect would re-fire with stale secondsLeft = 0 and skip past the just-entered phase.
@@ -1938,7 +1935,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     }
     const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [secondsLeft, paused, phase]);
+  }, [secondsLeft, timerPaused, phase]);
 
   // FaceLandmarker detection + overlay loop — synchronous detectForVideo, runs continuously so the overlay stays live
   useEffect(() => {
@@ -1965,11 +1962,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           const bsMap = {};
           if (bsArr) for (const c of bsArr) bsMap[c.categoryName] = c.score;
           latestRef.current = { landmarks: lm, blendshapes: bsMap };
+          const alignment = faceAlignmentFeedback(lm);
+          const aligned = alignment.aligned;
+          setPostureAligned((prev) => (prev === aligned ? prev : aligned));
 
           if (phase === "calibrate") {
-            const alignment = faceAlignmentFeedback(lm);
-            const aligned = alignment.aligned;
-            setPostureAligned((prev) => (prev === aligned ? prev : aligned));
             if (!neutralRef.current) {
               if (!aligned) {
                 calibBufferRef.current = [];
@@ -2007,53 +2004,62 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               }
             }
           } else if (phase === "hold") {
-            // Brow exercises: pitch-invariant brow-to-eye gap delta.
-            // Nose exercises: aperture widening + upward ala lift (handles both wrinkle and flare).
-            // Other exercises: face-local landmark-pair displacement with per-landmark noise
-            // subtracted out. Fallback: generic 9-pair.
-            const symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current);
-            if (symResult != null) {
-              const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
-              const activated = !profileThreshold || symResult.peak >= profileThreshold;
-              if (activated) {
-                setLiveScore(symResult.symmetry);
-                setLiveBalance({ left: symResult.leftDisp, right: symResult.rightDisp });
-                // Time-average accumulator — every valid frame contributes equally to the rep score.
-                // A saved movement profile raises this from generic movement to user-scaled movement.
-                holdScoreSumRef.current += symResult.symmetry;
-                holdScoreCountRef.current++;
-                holdLeftSumRef.current += symResult.leftDisp;
-                holdRightSumRef.current += symResult.rightDisp;
-                setLiveBaselineProgress(computeBaselineProgress(current.id, symResult, movementProfile));
-                if (peakRepScoreRef.current == null || symResult.symmetry > peakRepScoreRef.current) {
-                  peakRepScoreRef.current = symResult.symmetry;
+            if (!aligned) {
+              setLiveScore(null);
+              setLiveBalance(null);
+              setLiveBaselineProgress(null);
+            } else {
+              let symResult = null;
+              // Brow exercises: pitch-invariant brow-to-eye gap delta.
+              // Nose exercises: aperture widening + upward ala lift (handles both wrinkle and flare).
+              // Other exercises: face-local landmark-pair displacement with per-landmark noise
+              // subtracted out. Fallback: generic 9-pair.
+              symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current);
+              if (symResult != null) {
+                const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
+                const activated = !profileThreshold || symResult.peak >= profileThreshold;
+                if (activated) {
+                  setLiveScore(symResult.symmetry);
+                  setLiveBalance({ left: symResult.leftDisp, right: symResult.rightDisp });
+                  // Time-average accumulator — every valid frame contributes equally to the rep score.
+                  // A saved movement profile raises this from generic movement to user-scaled movement.
+                  holdScoreSumRef.current += symResult.symmetry;
+                  holdScoreCountRef.current++;
+                  holdLeftSumRef.current += symResult.leftDisp;
+                  holdRightSumRef.current += symResult.rightDisp;
+                  setLiveBaselineProgress(computeBaselineProgress(current.id, symResult, movementProfile));
+                  if (peakRepScoreRef.current == null || symResult.symmetry > peakRepScoreRef.current) {
+                    peakRepScoreRef.current = symResult.symmetry;
+                  }
+                } else {
+                  setLiveScore(null);
+                  setLiveBalance(null);
+                  setLiveBaselineProgress(null);
                 }
-              } else {
-                setLiveScore(null);
-                setLiveBalance(null);
-                setLiveBaselineProgress(null);
               }
-            }
-            // Auto-advance gate AND snapshot trigger. For brow exercises, the brow-lift magnitude is more
-            // precise than the blendshape (subtle lifts saturate browOuterUp poorly).
-            let activation;
-            if ((isBrow || isNose) && symResult) activation = symResult.peak;
-            else if (bsMapping)       activation = bsActivation(bsMap, bsMapping);
-            else                      activation = symResult ? symResult.peak : 0;
-            if (activation > peakDispRef.current) {
-              peakDispRef.current = activation;
-              // Capture snapshot at peak movement, not peak score — score can be misleading on asymmetric faces
-              peakSnapshotRef.current = captureSnapshot(v, snapshotCanvasRef.current);
+              // Auto-advance gate AND snapshot trigger. For brow exercises, the brow-lift magnitude is more
+              // precise than the blendshape (subtle lifts saturate browOuterUp poorly).
+              let activation;
+              if ((isBrow || isNose) && symResult) activation = symResult.peak;
+              else if (bsMapping)       activation = bsActivation(bsMap, bsMapping);
+              else                      activation = symResult ? symResult.peak : 0;
+              if (activation > peakDispRef.current) {
+                peakDispRef.current = activation;
+                // Capture snapshot at peak movement, not peak score — score can be misleading on asymmetric faces
+                peakSnapshotRef.current = captureSnapshot(v, snapshotCanvasRef.current);
+              }
             }
             // Hold runs for the full holdSec timer — no auto-advance on detected release.
             // We still track peak for snapshot capture, just don't end the phase early.
           }
 
-          const aligned = isFaceAligned(lm);
-          setPostureAligned((prev) => (prev === aligned ? prev : aligned));
           drawOverlay(overlayRef.current, v, lm, { aligned, phase });
         } else {
           latestRef.current = null;
+          setPostureAligned(false);
+          setLiveScore(null);
+          setLiveBalance(null);
+          setLiveBaselineProgress(null);
           if (phase === "calibrate") {
             calibBufferRef.current = [];
             calibBsBufferRef.current = [];
@@ -2137,6 +2143,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     rest: { tag: "RESTING POSE",  title: current.name, prompt: current.instruction, color: "#7A8F73", verb: "rest" },
   }[phase];
   const calibrationPct = Math.round((calibrationProgress / CALIBRATION_FRAMES) * 100);
+  const displayPrompt = autoPaused ? "Paused. Center your face inside the ring to continue." : phaseTone.prompt;
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -2164,7 +2171,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             </div>
             <div className="text-xs opacity-70 whitespace-nowrap">Rep {repIdx + 1} / {currentReps}</div>
           </div>
-          <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{phaseTone.prompt}</div>
+          <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{displayPrompt}</div>
         </div>
       </div>
 
@@ -2189,6 +2196,15 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
         {phase === "hold" && liveScore != null && (
           <div className="absolute top-4 right-4"><RealtimeFeedback symmetry={liveScore} balance={liveBalance} baseline={liveBaselineProgress} /></div>
+        )}
+
+        {autoPaused && (
+          <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
+            <div className="rounded-2xl px-4 py-3 text-center shadow-xl" style={{ background: "rgba(31, 27, 22, 0.88)", border: "1px solid rgba(212, 165, 116, 0.75)", color: "#F4EFE6" }}>
+              <div className="text-xs font-bold uppercase tracking-[0.18em] mb-1" style={{ color: "#D4A574" }}>Auto paused</div>
+              <div className="text-sm leading-relaxed">Center your face inside the ring to continue.</div>
+            </div>
+          </div>
         )}
 
 
@@ -2300,6 +2316,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
   const scoredStats = exerciseStats.map((s) => s.symAvg).filter((v) => v != null);
   const summaryAvg = scoredStats.length ? scoredStats.reduce((sum, v) => sum + v, 0) / scoredStats.length : null;
   const retakeCount = exerciseStats.filter((s) => s.quality?.key === "retake").length;
+  const autoPaused = trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
 
   useEffect(() => {
     if (!activeCamera) return;
@@ -2359,6 +2376,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
 
   useEffect(() => {
     if (phase !== "rest" && phase !== "hold") return;
+    if (autoPaused) return;
     if (secondsLeft <= 0) {
       if (phase === "rest") {
         const restFrames = restBufferRef.current;
@@ -2395,7 +2413,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     }
     const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(id);
-  }, [phase, secondsLeft, exIdx, current, exercises.length]);
+  }, [phase, secondsLeft, exIdx, current, exercises.length, autoPaused]);
 
   useEffect(() => {
     if (!faceLandmarker || !videoRef.current || !activeCamera) return;
@@ -2465,29 +2483,37 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
               setRestStatus(`${alignment.label} so this exercise gets its own baseline.`);
             }
           } else if (phase === "hold") {
-            const stat = statRef.current;
-            stat.holdFrames++;
-            if (aligned) stat.alignedFrames++;
-            const neutral = exerciseNeutralRef.current ?? neutralRef.current;
-            const noise = exerciseNoiseRef.current ?? noiseRef.current;
-            const neutralBs = exerciseNeutralBsRef.current ?? neutralBsRef.current;
-            const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs);
-            if (sym) {
-              stat.frames++;
-              stat.leftSum += sym.leftDisp;
-              stat.rightSum += sym.rightDisp;
-              stat.symSum += sym.symmetry;
-              stat.leftPeak = Math.max(stat.leftPeak, sym.leftDisp);
-              stat.rightPeak = Math.max(stat.rightPeak, sym.rightDisp);
-              stat.symPeak = stat.symPeak == null ? sym.symmetry : Math.max(stat.symPeak, sym.symmetry);
-              stat.samples.push({ left: sym.leftDisp, right: sym.rightDisp, symmetry: sym.symmetry, peak: sym.peak });
-              setLiveScore(sym.symmetry);
-              setLiveBalance({ left: sym.leftDisp, right: sym.rightDisp });
+            if (!aligned) {
+              setLiveScore(null);
+              setLiveBalance(null);
+            } else {
+              const stat = statRef.current;
+              stat.holdFrames++;
+              stat.alignedFrames++;
+              const neutral = exerciseNeutralRef.current ?? neutralRef.current;
+              const noise = exerciseNoiseRef.current ?? noiseRef.current;
+              const neutralBs = exerciseNeutralBsRef.current ?? neutralBsRef.current;
+              const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs);
+              if (sym) {
+                stat.frames++;
+                stat.leftSum += sym.leftDisp;
+                stat.rightSum += sym.rightDisp;
+                stat.symSum += sym.symmetry;
+                stat.leftPeak = Math.max(stat.leftPeak, sym.leftDisp);
+                stat.rightPeak = Math.max(stat.rightPeak, sym.rightDisp);
+                stat.symPeak = stat.symPeak == null ? sym.symmetry : Math.max(stat.symPeak, sym.symmetry);
+                stat.samples.push({ left: sym.leftDisp, right: sym.rightDisp, symmetry: sym.symmetry, peak: sym.peak });
+                setLiveScore(sym.symmetry);
+                setLiveBalance({ left: sym.leftDisp, right: sym.rightDisp });
+              }
             }
           }
           drawOverlay(overlayRef.current, v, lm, { aligned, phase });
         } else {
           latestRef.current = null;
+          setPostureAligned(false);
+          setLiveScore(null);
+          setLiveBalance(null);
           if (phase === "calibrate") {
             calibBufferRef.current = [];
             calibBsBufferRef.current = [];
@@ -2625,6 +2651,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     : phase === "hold"
       ? { tag: "ASSESS", title: current.name, prompt: current.instruction, color: "#B8543A" }
       : { tag: "REST", title: current.name, prompt: restStatus, color: "#7A8F73" };
+  const displayPrompt = autoPaused ? "Paused. Center your face inside the ring to continue." : phaseTone.prompt;
 
   return (
     <div className="fixed inset-0 z-[60] flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -2661,6 +2688,15 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
             <div className="absolute top-4 right-4"><RealtimeFeedback symmetry={liveScore} balance={liveBalance} /></div>
           )}
 
+          {autoPaused && (
+            <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
+              <div className="rounded-2xl px-4 py-3 text-center shadow-xl" style={{ background: "rgba(31, 27, 22, 0.88)", border: "1px solid rgba(212, 165, 116, 0.75)", color: "#F4EFE6" }}>
+                <div className="text-xs font-bold uppercase tracking-[0.18em] mb-1" style={{ color: "#D4A574" }}>Auto paused</div>
+                <div className="text-sm leading-relaxed">Center your face inside the ring to continue.</div>
+              </div>
+            </div>
+          )}
+
           <div className="absolute inset-x-0 top-0 h-1.5 transition-colors duration-300" style={{ background: phaseTone.color }} />
           <div className="absolute inset-0 flex flex-col justify-end pointer-events-none">
             <div className="p-6 pb-4" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.95) 0%, rgba(31,27,22,0.7) 60%, transparent 100%)" }}>
@@ -2677,7 +2713,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
         </div>
 
         <div className="p-4 shrink-0" style={{ borderTop: `2px solid ${phaseTone.color}` }}>
-          <div className="text-sm mb-4 leading-relaxed min-h-[2.5em]" style={{ color: phaseTone.color }}>{phaseTone.prompt}</div>
+          <div className="text-sm mb-4 leading-relaxed min-h-[2.5em]" style={{ color: phaseTone.color }}>{displayPrompt}</div>
           <button onClick={onSkip} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip baseline</button>
         </div>
       </div>
