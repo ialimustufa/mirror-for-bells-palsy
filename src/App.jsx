@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, Pause, X, ChevronRight, Volume2, VolumeX, Flame, Camera, CameraOff, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { compactAppDataForStorage, exportMirrorDataForTransfer, hydrateSessionImages, importMirrorDataFromTransfer, loadMirrorData, saveMirrorData } from "./storage";
+import { compactAppDataForStorage, hydrateSessionImages, loadMirrorData, saveMirrorData } from "./storage";
 
 // Exercise definitions are the product content layer: the UI, daily plan, and session
 // runner all read from this single catalog so copy and timing stay in sync.
@@ -1279,121 +1279,6 @@ export default function App() {
       finally { setLoading(false); }
     })();
   }, []);
-
-  useEffect(() => {
-    if (loading) return undefined;
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("mirrorExport") === "1") {
-      let cancelled = false;
-      (async () => {
-        try {
-          const dataForTransfer = await exportMirrorDataForTransfer();
-          document.title = `Mirror export: ${dataForTransfer?.sessions?.length ?? 0} sessions`;
-          if (!cancelled) {
-            window.parent?.postMessage({
-              type: "mirror-data-export",
-              sourceOrigin: window.location.origin,
-              data: dataForTransfer,
-            }, params.get("target") || "*");
-          }
-        } catch (error) {
-          console.error("Failed to export Mirror data", error);
-        }
-      })();
-      return () => { cancelled = true; };
-    }
-
-    const exportTo = params.get("exportTo");
-    if (exportTo) {
-      let cancelled = false;
-      (async () => {
-        try {
-          const dataForTransfer = await exportMirrorDataForTransfer();
-          const sessionCount = dataForTransfer?.sessions?.length ?? 0;
-          await fetch(exportTo, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(dataForTransfer),
-          });
-          if (!cancelled) document.title = `Mirror export: ${sessionCount} sessions sent`;
-        } catch (error) {
-          console.error("Failed to send Mirror export", error);
-          if (!cancelled) document.title = "Mirror export failed";
-        }
-      })();
-      return () => { cancelled = true; };
-    }
-
-    const importFrom = params.get("importFrom");
-    if (importFrom) {
-      let cancelled = false;
-      (async () => {
-        try {
-          const response = await fetch(importFrom);
-          if (!response.ok) throw new Error(`Import fetch failed with ${response.status}`);
-          const incoming = await response.json();
-          const incomingSessions = incoming?.sessions?.length ?? 0;
-          const saved = await importMirrorDataFromTransfer(incoming);
-          if (!cancelled) {
-            setData(normalizeAppData(saved));
-            document.title = `Mirror import: ${incomingSessions} -> ${saved?.sessions?.length ?? 0} sessions`;
-            window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash || ""}`);
-          }
-        } catch (error) {
-          console.error("Failed to fetch Mirror import", error);
-          if (!cancelled) document.title = "Mirror import failed";
-        }
-      })();
-      return () => { cancelled = true; };
-    }
-
-    const migrateFrom = params.get("migrateFrom");
-    if (!migrateFrom) return undefined;
-
-    let sourceUrl;
-    try {
-      sourceUrl = new URL(migrateFrom);
-    } catch {
-      console.error("Invalid Mirror migration source", migrateFrom);
-      return undefined;
-    }
-
-    let cancelled = false;
-    const iframe = document.createElement("iframe");
-    iframe.style.display = "none";
-
-    function cleanup() {
-      window.removeEventListener("message", handleMessage);
-      try { iframe.remove(); } catch { /* iframe may already be gone */ }
-    }
-
-    async function handleMessage(event) {
-      if (event.origin !== sourceUrl.origin || event.data?.type !== "mirror-data-export" || cancelled) return;
-      const incomingSessions = event.data.data?.sessions?.length ?? 0;
-      try {
-        const saved = await importMirrorDataFromTransfer(event.data.data);
-        document.title = `Mirror import: ${incomingSessions} -> ${saved?.sessions?.length ?? 0} sessions`;
-        if (!cancelled) setData(normalizeAppData(saved));
-      } catch (error) {
-        console.error("Failed to import Mirror data", error);
-      } finally {
-        if (!cancelled) window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash || ""}`);
-        cleanup();
-      }
-    }
-
-    window.addEventListener("message", handleMessage);
-    sourceUrl.searchParams.set("mirrorExport", "1");
-    sourceUrl.searchParams.set("target", window.location.origin);
-    iframe.src = sourceUrl.toString();
-    document.body.appendChild(iframe);
-
-    return () => {
-      cancelled = true;
-      cleanup();
-    };
-  }, [loading]);
 
   useEffect(() => {
     const link = document.createElement("link");

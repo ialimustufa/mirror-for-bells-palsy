@@ -525,19 +525,3 @@ export async function hydrateSessionImages(session) {
     return session;
   }
 }
-
-export async function exportMirrorDataForTransfer() {
-  const data = await loadMirrorData();
-  if (!data) return null;
-  const sessions = [];
-  for (const session of data.sessions ?? []) {
-    sessions.push(await hydrateSessionImages(session));
-  }
-  return { ...data, sessions };
-}
-
-export async function importMirrorDataFromTransfer(incoming) {
-  const current = await loadMirrorData();
-  const merged = mergeMirrorData(current, incoming);
-  return saveMirrorData(merged);
-}
