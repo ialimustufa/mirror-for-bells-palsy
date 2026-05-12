@@ -3,6 +3,7 @@ import { Camera, CameraOff, RefreshCw, Loader2, AlertCircle, ArrowLeft } from "l
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS } from "../domain/config";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
+import { MadeByFooter } from "../components/MadeByFooter";
 import {
   averageBlendshapes,
   averageFacialTransformationMatrix,
@@ -516,9 +517,12 @@ function TrialMode() {
         </div>
 
         <footer className="mt-8 text-xs text-stone-500 max-w-3xl">
-          Built with MediaPipe Face Landmarker — 478 facial landmarks plus 52 ARKit blendshapes, running entirely
-          on your device. No video leaves your browser. The neutral baseline above is the same one used during
-          full Mirror sessions to score real movement above per-landmark jitter.
+          <p>
+            Built with MediaPipe Face Landmarker — 478 facial landmarks plus 52 ARKit blendshapes, running entirely
+            on your device. No video leaves your browser. The neutral baseline above is the same one used during
+            full Mirror sessions to score real movement above per-landmark jitter.
+          </p>
+          <MadeByFooter className="mt-3" />
         </footer>
       </div>
     </div>

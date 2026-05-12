@@ -14,6 +14,7 @@ import { primeSpeech } from "./lib/speech";
 import { SessionMode } from "./session/SessionMode";
 import { ProfileAssessment } from "./profile/ProfileAssessment";
 import { TrialMode } from "./trial/TrialMode";
+import { MadeByFooter } from "./components/MadeByFooter";
 import {
   BottomNav,
   ExerciseDetail,
@@ -150,6 +151,9 @@ export default function App() {
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
           {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onStartProfile={openProfileAssessment} />}
         </main>
+        <footer className="mt-10 text-center text-xs text-stone-500">
+          <MadeByFooter />
+        </footer>
       </div>
       <BottomNav view={view} setView={setView} />
       {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} initialMovementProfile={data.initialMovementProfile ?? data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO() && isCountedSession(s)).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} />}
