@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, Pause, X, ChevronRight, Volume2, VolumeX, Flame, Camera, CameraOff, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
+import { compactAppDataForStorage, exportMirrorDataForTransfer, hydrateSessionImages, importMirrorDataFromTransfer, loadMirrorData, saveMirrorData } from "./storage";
 
 // Exercise definitions are the product content layer: the UI, daily plan, and session
 // runner all read from this single catalog so copy and timing stay in sync.
@@ -16,15 +17,24 @@ const EXERCISES = [
   { id: "open-smile", name: "Open Smile", region: "mouth", holdSec: 5, reps: 8, instruction: "Smile widely, showing your teeth. Hold for 5 seconds, then relax slowly.", tip: "Only progress to this when closed smile feels symmetric. Don't force a wider smile than the affected side allows." },
   { id: "pucker", name: "Lip Pucker", region: "mouth", holdSec: 5, reps: 10, instruction: "Purse your lips forward as if blowing a kiss. Hold for 5 seconds, then relax.", tip: "Use the mirror to keep the pucker centered, not pulled toward the stronger side." },
   { id: "lip-press", name: "Lip Press", region: "mouth", holdSec: 4, reps: 8, instruction: "Press your lips firmly but gently together. Hold, then release.", tip: "Builds the orbicularis oris — important for sealing food and clear speech." },
-  { id: "vowel-sounds", name: "Vowel Articulation", region: "mouth", holdSec: 3, reps: 5, instruction: "Slowly and exaggeratedly mouth: A — E — I — O — U. Hold each shape briefly.", tip: "Speak out loud if you can. This integrates retraining into real speech patterns." },
+  { id: "vowel-a", name: "Vowel A Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a slow, open A shape. Hold the jaw open gently, then relax fully.", tip: "Think 'ah'. Keep the mouth opening centered and avoid pulling toward the stronger side." },
+  { id: "vowel-e", name: "Vowel E Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a slow E shape. Stretch the lips sideways gently, hold, then relax.", tip: "Think 'ee'. Watch both mouth corners travel evenly without over-smiling." },
+  { id: "vowel-i", name: "Vowel I Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a slow I shape. Lift the corners lightly and keep the lips controlled.", tip: "Think 'ih'. This should be smaller and softer than a wide smile." },
+  { id: "vowel-o", name: "Vowel O Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a rounded O shape. Hold the lips in a soft circle, then relax.", tip: "Think 'oh'. Keep the circle centered rather than pulled to one side." },
+  { id: "vowel-u", name: "Vowel U Shape", region: "mouth", holdSec: 4, reps: 5, instruction: "Say or silently mouth a rounded U shape. Bring the lips forward gently, hold, then relax.", tip: "Think 'oo'. Keep the forward pucker even and avoid clenching." },
+  { id: "emoji-smile", name: "Emoji Smile 🙂", region: "emoji", holdSec: 4, reps: 6, instruction: "Make a gentle happy face with lips closed. Hold the smile softly, then relax back to neutral.", tip: "Keep it conversational, not forced. Watch both corners lift at the same speed." },
+  { id: "emoji-big-smile", name: "Emoji Big Smile 😄", region: "emoji", holdSec: 4, reps: 5, instruction: "Make a bright open smile, showing teeth only as much as feels comfortable. Hold, then release slowly.", tip: "Use less range if the stronger side pulls too far ahead." },
+  { id: "emoji-surprise", name: "Emoji Surprise 😮", region: "emoji", holdSec: 4, reps: 5, instruction: "Raise your eyebrows and make a soft O shape with your mouth, like a surprised face. Hold gently, then relax.", tip: "This links forehead lift with controlled lip rounding. Keep the jaw loose." },
+  { id: "emoji-wink", name: "Emoji Wink 😉", region: "emoji", holdSec: 3, reps: 5, instruction: "Make a playful wink expression. Close one eye gently while the mouth stays lightly lifted, then relax.", tip: "Avoid squeezing. The goal is clean eye control without pulling the cheek hard." },
+  { id: "emoji-kiss", name: "Emoji Kiss 😘", region: "emoji", holdSec: 4, reps: 5, instruction: "Pucker your lips forward like sending a kiss. Hold the center line steady, then relax.", tip: "Keep the lips centered and soft; do not clench the jaw." },
+  { id: "emoji-sad-frown", name: "Emoji Sad Frown ☹️", region: "emoji", holdSec: 4, reps: 5, instruction: "Make a gentle sad face by lowering the mouth corners and lightly drawing the brows together. Hold, then release.", tip: "Use a small expression. Stop if it creates strain around the eye or cheek." },
+  { id: "emoji-nose-scrunch", name: "Emoji Nose Scrunch 😖", region: "emoji", holdSec: 4, reps: 5, instruction: "Scrunch your nose lightly as if reacting to a strong smell. Hold the expression, then relax fully.", tip: "Keep the rest of the face soft so the nose and upper lip do the work." },
 ];
 const EXERCISE_BY_ID = new Map(EXERCISES.map((exercise) => [exercise.id, exercise]));
 
-const REGIONS = [{ key: "all", label: "All" }, { key: "forehead", label: "Forehead" }, { key: "eyes", label: "Eyes" }, { key: "nose", label: "Nose" }, { key: "cheeks", label: "Cheeks" }, { key: "mouth", label: "Mouth" }];
+const REGIONS = [{ key: "all", label: "All" }, { key: "forehead", label: "Forehead" }, { key: "eyes", label: "Eyes" }, { key: "nose", label: "Nose" }, { key: "cheeks", label: "Cheeks" }, { key: "mouth", label: "Mouth" }, { key: "emoji", label: "Emoji" }];
 const DAILY_ESSENTIALS = ["eyebrow-raise", "eye-close", "nose-wrinkle", "cheek-puff", "closed-smile", "pucker"];
 const MOOD_OPTIONS = [{ key: "hopeful", label: "Hopeful", emoji: "🌱" }, { key: "okay", label: "Steady", emoji: "🌤" }, { key: "tired", label: "Tired", emoji: "🌙" }, { key: "frustrated", label: "Frustrated", emoji: "🌧" }];
-
-const STORAGE_KEY = "mirror-app-data";
 
 // Daily cadence: short sessions spread N times across waking hours.
 const DAY_START_HOUR = 9;  // 9 AM
@@ -72,14 +82,15 @@ function isCountedSession(s) {
 }
 
 function normalizeAppData(parsed = {}) {
-  const movementProfileHistory = Array.isArray(parsed.movementProfileHistory) ? parsed.movementProfileHistory : [];
-  const inferredInitialProfile = parsed.initialMovementProfile ?? movementProfileHistory.at(-1) ?? parsed.movementProfile ?? null;
+  const compactParsed = compactAppDataForStorage(parsed);
+  const movementProfileHistory = Array.isArray(compactParsed.movementProfileHistory) ? compactParsed.movementProfileHistory : [];
+  const inferredInitialProfile = compactParsed.initialMovementProfile ?? movementProfileHistory.at(-1) ?? compactParsed.movementProfile ?? null;
   return {
     ...DEFAULT_DATA,
-    ...parsed,
+    ...compactParsed,
     initialMovementProfile: inferredInitialProfile,
     movementProfileHistory,
-    prefs: { ...DEFAULT_DATA.prefs, ...(parsed.prefs ?? {}) },
+    prefs: { ...DEFAULT_DATA.prefs, ...(compactParsed.prefs ?? {}) },
   };
 }
 
@@ -202,6 +213,11 @@ const EXERCISE_BLENDSHAPES = {
   "closed-smile":  { left: "mouthSmileLeft",  right: "mouthSmileRight" },
   "open-smile":    { left: "mouthSmileLeft",  right: "mouthSmileRight" },
   "lip-press":     { left: "mouthPressLeft",  right: "mouthPressRight" },
+  "emoji-smile":    { left: "mouthSmileLeft",  right: "mouthSmileRight" },
+  "emoji-big-smile": { left: "mouthSmileLeft", right: "mouthSmileRight" },
+  "emoji-wink":     { left: "eyeBlinkLeft",    right: "eyeBlinkRight" },
+  "emoji-sad-frown": { left: "mouthFrownLeft", right: "mouthFrownRight" },
+  "emoji-nose-scrunch": { left: "noseSneerLeft", right: "noseSneerRight" },
 };
 
 function bsActivation(bsMap, mapping) {
@@ -264,9 +280,53 @@ const EXERCISE_LANDMARK_PAIRS = {
     left:  [61, 84, 91, 78, 95, 88, 178, 39],
     right: [291, 314, 321, 308, 324, 318, 402, 269],
   },
-  "vowel-sounds":   {
-    left:  [61, 84, 91, 78, 95, 88, 178, 40, 17],
-    right: [291, 314, 321, 308, 324, 318, 402, 270, 17],
+  "vowel-a":        {
+    left:  [61, 84, 91, 146, 78, 95, 88, 178, 40, 17, 200],
+    right: [291, 314, 321, 375, 308, 324, 318, 402, 270, 17, 200],
+  },
+  "vowel-e":        {
+    left:  [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181],
+    right: [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405],
+  },
+  "vowel-i":        {
+    left:  [61, 84, 91, 78, 95, 88, 178, 39, 40],
+    right: [291, 314, 321, 308, 324, 318, 402, 269, 270],
+  },
+  "vowel-o":        {
+    left:  [61, 91, 146, 78, 185, 95, 88, 178, 40, 37, 0],
+    right: [291, 321, 375, 308, 409, 324, 318, 402, 270, 267, 0],
+  },
+  "vowel-u":        {
+    left:  [61, 91, 146, 78, 185, 95, 88, 178, 40, 37, 0],
+    right: [291, 321, 375, 308, 409, 324, 318, 402, 270, 267, 0],
+  },
+  "emoji-smile":    {
+    left:  [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181],
+    right: [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405],
+  },
+  "emoji-big-smile": {
+    left:  [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 185, 181, 17],
+    right: [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 409, 405, 17],
+  },
+  "emoji-surprise": {
+    left:  [70, 63, 105, 66, 107, 61, 91, 146, 78, 185, 95, 88, 178, 40, 37, 0, 17],
+    right: [300, 293, 334, 296, 336, 291, 321, 375, 308, 409, 324, 318, 402, 270, 267, 0, 17],
+  },
+  "emoji-wink":     {
+    left:  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 61, 84, 91],
+    right: [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466, 291, 314, 321],
+  },
+  "emoji-kiss":     {
+    left:  [61, 91, 146, 78, 185, 95, 88, 178, 40, 39, 37, 0],
+    right: [291, 321, 375, 308, 409, 324, 318, 402, 270, 269, 267, 0],
+  },
+  "emoji-sad-frown": {
+    left:  [70, 63, 105, 66, 107, 61, 84, 91, 146, 78, 95, 88, 178, 39, 181],
+    right: [300, 293, 334, 296, 336, 291, 314, 321, 375, 308, 324, 318, 402, 269, 405],
+  },
+  "emoji-nose-scrunch": {
+    left:  [49, 48, 64, 102, 219, 218, 122, 33, 7, 163, 144, 145, 159, 160],
+    right: [279, 278, 294, 331, 439, 438, 351, 263, 249, 390, 373, 374, 386, 387],
   },
 };
 
@@ -408,7 +468,10 @@ const NOSE_LANDMARKS = {
   leftAla: [102, 219, 218],
   rightAla: [331, 439, 438],
 };
-const NOSE_EXERCISES = new Set(["nose-wrinkle"]);
+const NOSE_EXERCISES = new Set(["nose-wrinkle", "emoji-nose-scrunch"]);
+const NOSE_MIN_SIGNAL = 0.0012;
+const NOSE_PROFILE_THRESHOLD_FLOOR = 0.0015;
+const NOSE_PROFILE_THRESHOLD_MAX = 0.0025;
 
 function avgXY(frame, idxs) {
   let sx = 0, sy = 0, c = 0;
@@ -452,13 +515,18 @@ function noseShape(frame) {
   };
 }
 
-const CALIBRATION_STABILITY_POINTS = [1, 4, 10, 33, 61, 152, 199, 263, 291];
+// Delta gating intentionally watches mouth corners and chin so talking, jaw motion,
+// and expression changes reset neutral calibration.
+const CALIBRATION_DELTA_POINTS = [1, 4, 10, 33, 61, 152, 199, 263, 291];
+// Profile quality uses a stricter stable-core subset. Thresholds are compatibility
+// defaults until we tune them against captured calibration samples.
+const CORE_QUALITY_POINTS = [1, 4, 10, 33, 263];
 
 function normalizedFrameDelta(aLm, bLm) {
   const aN = faceFrameNormalize(aLm), bN = faceFrameNormalize(bLm);
   if (!aN || !bN) return Infinity;
   let total = 0, count = 0;
-  for (const i of CALIBRATION_STABILITY_POINTS) {
+  for (const i of CALIBRATION_DELTA_POINTS) {
     const a = aN[i], b = bN[i];
     if (!a || !b) continue;
     total += Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0));
@@ -538,7 +606,7 @@ function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs) {
   // Adaptive gate: small absolute floor for real flare signals, but rises with calibration
   // jitter so a noisy session doesn't drift into "scored" territory after denoising.
   const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
-  if (peak < Math.max(0.003, noiseGate)) return null;
+  if (peak < Math.max(NOSE_MIN_SIGNAL, noiseGate)) return null;
   const symmetry = Math.min(lMag, rMag) / peak;
   return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
 }
@@ -651,6 +719,19 @@ function inferLimitedSide(left, right) {
   return left < right ? "left" : "right";
 }
 
+function activationThresholdForExercise(exerciseId, peak) {
+  if (NOSE_EXERCISES.has(exerciseId)) {
+    return roundMetric(Math.max(peak * 0.25, NOSE_PROFILE_THRESHOLD_FLOOR));
+  }
+  return roundMetric(Math.max(peak * 0.35, 0.004));
+}
+
+function effectiveProfileThreshold(exerciseId, threshold) {
+  if (threshold == null) return null;
+  if (NOSE_EXERCISES.has(exerciseId)) return Math.min(threshold, NOSE_PROFILE_THRESHOLD_MAX);
+  return threshold;
+}
+
 function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, comfortLevel }) {
   const exercises = {};
   for (const stat of exerciseStats) {
@@ -680,7 +761,7 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
       leftPeakMovement: roundMetric(leftPeak),
       rightPeakMovement: roundMetric(rightPeak),
       initialSymmetry: symmetryBaseline == null ? null : roundMetric(symmetryBaseline),
-      activationThreshold: roundMetric(Math.max(peak * 0.35, 0.004)),
+      activationThreshold: activationThresholdForExercise(stat.exerciseId, peak),
       limitedSide: inferLimitedSide(leftPeak, rightPeak),
     };
   }
@@ -690,7 +771,7 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
     : null;
   const noiseValues = noise ? Array.from(noise).filter((v) => Number.isFinite(v)) : [];
   const avgNoise = noiseValues.length ? noiseValues.reduce((a, b) => a + b, 0) / noiseValues.length : null;
-  const coreNoiseValues = noise ? CALIBRATION_STABILITY_POINTS.map((idx) => noise[idx]).filter((v) => Number.isFinite(v)) : [];
+  const coreNoiseValues = noise ? CORE_QUALITY_POINTS.map((idx) => noise[idx]).filter((v) => Number.isFinite(v)) : [];
   const coreAvgNoise = coreNoiseValues.length ? coreNoiseValues.reduce((a, b) => a + b, 0) / coreNoiseValues.length : null;
   const p90Noise = percentile(noiseValues, 0.9);
   return {
@@ -706,6 +787,7 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
       baselineTopFraction: PROFILE_BASELINE_TOP_FRACTION,
       avgNoise: roundMetric(avgNoise, 5),
       coreAvgNoise: roundMetric(coreAvgNoise, 5),
+      coreQualityPoints: CORE_QUALITY_POINTS,
       p90Noise: roundMetric(p90Noise, 5),
       stabilityEps: CALIBRATION_STABILITY_EPS,
       steadyNoiseMax: PROFILE_STEADY_NOISE_MAX,
@@ -1187,16 +1269,131 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const stored = await window.storage.get(STORAGE_KEY);
-        if (stored?.value) {
-          const parsed = JSON.parse(stored.value);
-          setData(normalizeAppData(parsed));
-          if (!parsed.prefs?.onboarded) setShowOnboarding(true);
+        const stored = await loadMirrorData();
+        if (stored) {
+          const normalized = normalizeAppData(stored);
+          setData(normalized);
+          if (!normalized.prefs?.onboarded) setShowOnboarding(true);
         } else { setShowOnboarding(true); }
       } catch { setShowOnboarding(true); }
       finally { setLoading(false); }
     })();
   }, []);
+
+  useEffect(() => {
+    if (loading) return undefined;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("mirrorExport") === "1") {
+      let cancelled = false;
+      (async () => {
+        try {
+          const dataForTransfer = await exportMirrorDataForTransfer();
+          document.title = `Mirror export: ${dataForTransfer?.sessions?.length ?? 0} sessions`;
+          if (!cancelled) {
+            window.parent?.postMessage({
+              type: "mirror-data-export",
+              sourceOrigin: window.location.origin,
+              data: dataForTransfer,
+            }, params.get("target") || "*");
+          }
+        } catch (error) {
+          console.error("Failed to export Mirror data", error);
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+
+    const exportTo = params.get("exportTo");
+    if (exportTo) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const dataForTransfer = await exportMirrorDataForTransfer();
+          const sessionCount = dataForTransfer?.sessions?.length ?? 0;
+          await fetch(exportTo, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(dataForTransfer),
+          });
+          if (!cancelled) document.title = `Mirror export: ${sessionCount} sessions sent`;
+        } catch (error) {
+          console.error("Failed to send Mirror export", error);
+          if (!cancelled) document.title = "Mirror export failed";
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+
+    const importFrom = params.get("importFrom");
+    if (importFrom) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const response = await fetch(importFrom);
+          if (!response.ok) throw new Error(`Import fetch failed with ${response.status}`);
+          const incoming = await response.json();
+          const incomingSessions = incoming?.sessions?.length ?? 0;
+          const saved = await importMirrorDataFromTransfer(incoming);
+          if (!cancelled) {
+            setData(normalizeAppData(saved));
+            document.title = `Mirror import: ${incomingSessions} -> ${saved?.sessions?.length ?? 0} sessions`;
+            window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash || ""}`);
+          }
+        } catch (error) {
+          console.error("Failed to fetch Mirror import", error);
+          if (!cancelled) document.title = "Mirror import failed";
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+
+    const migrateFrom = params.get("migrateFrom");
+    if (!migrateFrom) return undefined;
+
+    let sourceUrl;
+    try {
+      sourceUrl = new URL(migrateFrom);
+    } catch {
+      console.error("Invalid Mirror migration source", migrateFrom);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+
+    function cleanup() {
+      window.removeEventListener("message", handleMessage);
+      try { iframe.remove(); } catch { /* iframe may already be gone */ }
+    }
+
+    async function handleMessage(event) {
+      if (event.origin !== sourceUrl.origin || event.data?.type !== "mirror-data-export" || cancelled) return;
+      const incomingSessions = event.data.data?.sessions?.length ?? 0;
+      try {
+        const saved = await importMirrorDataFromTransfer(event.data.data);
+        document.title = `Mirror import: ${incomingSessions} -> ${saved?.sessions?.length ?? 0} sessions`;
+        if (!cancelled) setData(normalizeAppData(saved));
+      } catch (error) {
+        console.error("Failed to import Mirror data", error);
+      } finally {
+        if (!cancelled) window.history.replaceState(null, "", `${window.location.pathname}${window.location.hash || ""}`);
+        cleanup();
+      }
+    }
+
+    window.addEventListener("message", handleMessage);
+    sourceUrl.searchParams.set("mirrorExport", "1");
+    sourceUrl.searchParams.set("target", window.location.origin);
+    iframe.src = sourceUrl.toString();
+    document.body.appendChild(iframe);
+
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [loading]);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -1207,8 +1404,17 @@ export default function App() {
   }, []);
 
   const persist = useCallback(async (next) => {
-    setData(next);
-    try { await window.storage.set(STORAGE_KEY, JSON.stringify(next)); } catch (e) { console.error(e); }
+    const compactNext = compactAppDataForStorage(next);
+    setData(compactNext);
+    try {
+      const saved = await saveMirrorData(next);
+      setData(normalizeAppData(saved));
+    } catch (e) { console.error("Failed to persist app data", e); }
+  }, []);
+
+  const openStoredReport = useCallback(async (sessionRecord) => {
+    const hydrated = await hydrateSessionImages(sessionRecord);
+    setViewingReport(hydrated);
   }, []);
 
   const finishOnboarding = (startProfile = false) => {
@@ -1261,7 +1467,7 @@ export default function App() {
           {view === "home" && <HomeView data={data} streak={streak} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} />}
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} onStartSession={startSession} onShowDetail={setExerciseDetail} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={setViewingReport} onStartProfile={openProfileAssessment} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onStartProfile={openProfileAssessment} />}
         </main>
       </div>
       <BottomNav view={view} setView={setView} />
@@ -1517,6 +1723,17 @@ function ExerciseGlyph({ exercise, exerciseId, region, size = "sm", tone = "ligh
             <path d="M19.6 27.8h8.8" opacity="0.58" />
           </>
         )}
+
+        {regionKey === "emoji" && (
+          <>
+            <path d="M15.5 18.4c2.2-1.3 4.3-1.3 6.2 0" stroke={accent} />
+            <path d="M26.3 18.4c1.9-1.3 4-1.3 6.2 0" stroke={accent} />
+            <path d="M16.6 23.2c1.4 1 3 1 4.4 0" opacity="0.58" />
+            <path d="M27 23.2c1.4 1 3 1 4.4 0" opacity="0.58" />
+            <path d="M17 31.4c4.6 4 9.4 4 14 0" stroke={accent} />
+            <path d="M33.2 12.4l.9 1.8 2 .3-1.4 1.4.3 2-1.8-.9-1.8.9.3-2-1.4-1.4 2-.3.9-1.8Z" fill={accent} stroke="none" />
+          </>
+        )}
       </svg>
     </div>
   );
@@ -1533,6 +1750,13 @@ function PracticeView({ movementProfile, sessions, onStartSession, onShowDetail 
   useEffect(() => { if (movementProfile) setSelected(new Set(profilePlan)); }, [movementProfile, profilePlan]);
   const filtered = region === "all" ? EXERCISES : EXERCISES.filter((e) => e.region === region);
   const toggle = (id) => { const next = new Set(selected); next.has(id) ? next.delete(id) : next.add(id); setSelected(next); };
+  const shownIds = filtered.map((exercise) => exercise.id);
+  const selectedShownCount = shownIds.filter((id) => selected.has(id)).length;
+  const allShownSelected = shownIds.length > 0 && selectedShownCount === shownIds.length;
+  const recommendedSelected = selected.size === profilePlan.length && profilePlan.every((id) => selected.has(id));
+  const selectRecommended = () => setSelected(new Set(profilePlan));
+  const selectAllShown = () => setSelected((prev) => new Set([...prev, ...shownIds]));
+  const clearSelection = () => setSelected(new Set());
 
   return (
     <div className="space-y-5">
@@ -1547,7 +1771,7 @@ function PracticeView({ movementProfile, sessions, onStartSession, onShowDetail 
               <div className="text-sm font-semibold">Baseline focus selected</div>
               <div className="text-xs text-stone-600">{dosing.label} dose · starts with the lowest baseline movements.</div>
             </div>
-            <button onClick={() => setSelected(new Set(profilePlan))} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>Reset</button>
+            <button onClick={selectRecommended} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>Recommended</button>
           </div>
           <div className="space-y-2">
             {focusItems.map((item) => (
@@ -1566,6 +1790,14 @@ function PracticeView({ movementProfile, sessions, onStartSession, onShowDetail 
         {REGIONS.map((r) => (
           <button key={r.key} onClick={() => setRegion(r.key)} className="px-3.5 py-1.5 rounded-full text-sm whitespace-nowrap" style={{ background: region === r.key ? "#1F1B16" : "rgba(255,255,255,0.6)", color: region === r.key ? "#F4EFE6" : "#1F1B16", border: region === r.key ? "none" : "1px solid rgba(31, 27, 22, 0.08)" }}>{r.label}</button>
         ))}
+      </div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+        <div className="text-xs text-stone-600">{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={selectRecommended} disabled={recommendedSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(122, 143, 115, 0.16)", color: "#3E5F3B" }}>{recommendedSelected ? "Recommended selected" : "Recommended"}</button>
+          <button onClick={selectAllShown} disabled={allShownSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "#1F1B16", color: "#F4EFE6" }}>{allShownSelected ? "Shown selected" : "Select all shown"}</button>
+          {selected.size > 0 && <button onClick={clearSelection} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}>Clear</button>}
+        </div>
       </div>
       <div className="space-y-2.5">
         {filtered.map((ex) => <ExerciseRow key={ex.id} exercise={ex} sessionExercise={applySessionDose(ex, movementProfile)} selected={selected.has(ex.id)} onToggle={() => toggle(ex.id)} onShow={() => onShowDetail(ex)} />)}
@@ -1828,6 +2060,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     if (!faceLandmarker || !videoRef.current) return;
     const bsMapping = EXERCISE_BLENDSHAPES[current.id] ?? null;
     const isBrow = BROW_EXERCISES.has(current.id);
+    const isNose = NOSE_EXERCISES.has(current.id);
 
     let raf, alive = true, lastTs = 0;
     const tick = () => {
@@ -1895,7 +2128,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             // subtracted out. Fallback: generic 9-pair.
             const symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current);
             if (symResult != null) {
-              const profileThreshold = getProfileExercise(movementProfile, current.id)?.activationThreshold;
+              const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
               const activated = !profileThreshold || symResult.peak >= profileThreshold;
               if (activated) {
                 setLiveScore(symResult.symmetry);
@@ -1919,7 +2152,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             // Auto-advance gate AND snapshot trigger. For brow exercises, the brow-lift magnitude is more
             // precise than the blendshape (subtle lifts saturate browOuterUp poorly).
             let activation;
-            if (isBrow && symResult) activation = symResult.peak;
+            if ((isBrow || isNose) && symResult) activation = symResult.peak;
             else if (bsMapping)       activation = bsActivation(bsMap, bsMapping);
             else                      activation = symResult ? symResult.peak : 0;
             if (activation > peakDispRef.current) {
