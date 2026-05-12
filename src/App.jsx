@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Home, Sparkles, BookOpen, TrendingUp, Play, Pause, X, ChevronRight, Volume2, VolumeX, Flame, Camera, CameraOff, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle } from "lucide-react";
+import { Home, Sparkles, BookOpen, TrendingUp, Play, Pause, X, ChevronRight, Volume2, VolumeX, Flame, Camera, CameraOff, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 
 // Exercise definitions are the product content layer: the UI, daily plan, and session
@@ -9,7 +9,7 @@ const EXERCISES = [
   { id: "gentle-frown", name: "Gentle Frown", region: "forehead", holdSec: 4, reps: 8, instruction: "Pull your eyebrows down and inward, as if concentrating. Hold, then relax.", tip: "Watch both brows in the mirror. Aim for symmetric movement, not strength." },
   { id: "eye-close", name: "Soft Eye Closure", region: "eyes", holdSec: 5, reps: 10, instruction: "Slowly close your eyes — don't squeeze. Hold softly for 5 seconds, then open slowly.", tip: "Forceful blinking can encourage synkinesis. Slow and gentle is the goal." },
   { id: "wink", name: "Independent Wink", region: "eyes", holdSec: 2, reps: 6, instruction: "Try to close one eye while keeping the other open. Switch sides each rep.", tip: "This builds independent control. It may feel awkward — that's normal early on." },
-  { id: "nose-wrinkle", name: "Nostril Flare", region: "nose", holdSec: 3, reps: 8, instruction: "Flare your nostrils outward, as if taking a deep breath through your nose. Hold gently, then relax.", tip: "If flaring feels stuck, try wrinkling the bridge upward instead — both engage the nasalis muscle group. Keep the rest of your face soft." },
+  { id: "nose-wrinkle", name: "Nostril Flare", region: "nose", holdSec: 4, reps: 8, instruction: "Flare your nostrils outward, as if taking a deep breath through your nose. Hold gently, then relax.", tip: "If flaring feels stuck, try wrinkling the bridge upward instead — both engage the nasalis muscle group. Keep the rest of your face soft." },
   { id: "cheek-puff", name: "Cheek Puff", region: "cheeks", holdSec: 5, reps: 8, instruction: "Take a breath, puff air into both cheeks, hold, then move air slowly from one cheek to the other.", tip: "If air leaks from the affected side, hold that lip lightly with a finger to build the seal." },
   { id: "cheek-suck", name: "Cheek Suck", region: "cheeks", holdSec: 3, reps: 8, instruction: "Suck your cheeks inward against your teeth, like making a 'fish face'. Hold, then release.", tip: "This activates the buccinator muscle — important for chewing and speech." },
   { id: "closed-smile", name: "Closed Smile", region: "mouth", holdSec: 5, reps: 10, instruction: "Smile with lips closed, lifting both corners of your mouth gently. Hold, then relax.", tip: "This is the cornerstone exercise. Watch both corners rise evenly in the mirror." },
@@ -18,6 +18,7 @@ const EXERCISES = [
   { id: "lip-press", name: "Lip Press", region: "mouth", holdSec: 4, reps: 8, instruction: "Press your lips firmly but gently together. Hold, then release.", tip: "Builds the orbicularis oris — important for sealing food and clear speech." },
   { id: "vowel-sounds", name: "Vowel Articulation", region: "mouth", holdSec: 3, reps: 5, instruction: "Slowly and exaggeratedly mouth: A — E — I — O — U. Hold each shape briefly.", tip: "Speak out loud if you can. This integrates retraining into real speech patterns." },
 ];
+const EXERCISE_BY_ID = new Map(EXERCISES.map((exercise) => [exercise.id, exercise]));
 
 const REGIONS = [{ key: "all", label: "All" }, { key: "forehead", label: "Forehead" }, { key: "eyes", label: "Eyes" }, { key: "nose", label: "Nose" }, { key: "cheeks", label: "Cheeks" }, { key: "mouth", label: "Mouth" }];
 const DAILY_ESSENTIALS = ["eyebrow-raise", "eye-close", "nose-wrinkle", "cheek-puff", "closed-smile", "pucker"];
@@ -33,12 +34,24 @@ const HOLD_SEC = 4;       // fallback hold duration; profiled sessions can use e
 const REST_SEC = 2;       // fallback rest duration; serves as entry settle AND between-rep recovery
 const CALIBRATION_FRAMES = 24;
 const CALIBRATION_STABILITY_EPS = 0.006;
+const CALIBRATION_RESET_EPS = 0.018;
+const FACE_CENTER_MAX_OFFSET = 0.12;
+const FACE_TILT_MAX_RAD = 0.12;
 const PROFILE_VERSION = 1;
-const PROFILE_ASSESSMENT_EXERCISES = ["eyebrow-raise", "eye-close", "nose-wrinkle", "closed-smile", "pucker"];
+const PROFILE_ASSESSMENT_EXERCISES = EXERCISES.map((exercise) => exercise.id);
 const PROFILE_HOLD_SEC = 4;
 const PROFILE_REST_SEC = 2;
+const PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES = 8;
+const PROFILE_REST_RETRY_LIMIT = 1;
+const PROFILE_BASELINE_TOP_FRACTION = 0.2;
+const PROFILE_MIN_SCORED_FRAMES = 8;
+const PROFILE_MIN_ALIGNMENT_RATIO = 0.7;
 const PROFILE_RETAKE_DAYS = 14;
 const PROFILE_HISTORY_LIMIT = 6;
+const PROFILE_STEADY_NOISE_MAX = 0.006;
+const PROFILE_USABLE_NOISE_MAX = 0.018;
+const REPORT_SNAPSHOT_WIDTH = 520;
+const REPORT_SNAPSHOT_QUALITY = 0.9;
 const COMFORT_DOSING = {
   gentle: { key: "gentle", label: "Gentle", repScale: 0.65, minReps: 3, maxReps: 8, holdDeltaSec: -1, minHoldSec: 2, maxHoldSec: 4, restSec: 3 },
   normal: { key: "normal", label: "Normal", repScale: 1, minReps: 4, maxReps: 10, holdDeltaSec: 0, minHoldSec: 2, maxHoldSec: 5, restSec: 2 },
@@ -47,15 +60,25 @@ const COMFORT_DOSING = {
 
 // Persisted app state is intentionally compact and append-only for sessions/journal.
 // Derived trend metrics are recomputed in views instead of stored.
-const DEFAULT_DATA = { journal: [], sessions: [], movementProfile: null, movementProfileHistory: [], prefs: { voiceEnabled: true, mirrorEnabled: true, symmetryEnabled: true, dailyGoal: 3, onboarded: false } };
+const DEFAULT_DATA = { journal: [], sessions: [], movementProfile: null, initialMovementProfile: null, movementProfileHistory: [], prefs: { voiceEnabled: true, mirrorEnabled: true, symmetryEnabled: true, dailyGoal: 3, onboarded: false } };
 const todayISO = () => new Date().toISOString().split("T")[0];
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24));
 
+// Single-exercise standalone runs are tagged "practice" — they're still tracked and
+// charted, but don't count toward the daily-goal X-of-Y counter. Legacy records have no
+// kind and continue to count.
+function isCountedSession(s) {
+  return s?.kind !== "practice";
+}
+
 function normalizeAppData(parsed = {}) {
+  const movementProfileHistory = Array.isArray(parsed.movementProfileHistory) ? parsed.movementProfileHistory : [];
+  const inferredInitialProfile = parsed.initialMovementProfile ?? movementProfileHistory.at(-1) ?? parsed.movementProfile ?? null;
   return {
     ...DEFAULT_DATA,
     ...parsed,
-    movementProfileHistory: Array.isArray(parsed.movementProfileHistory) ? parsed.movementProfileHistory : [],
+    initialMovementProfile: inferredInitialProfile,
+    movementProfileHistory,
     prefs: { ...DEFAULT_DATA.prefs, ...(parsed.prefs ?? {}) },
   };
 }
@@ -68,6 +91,26 @@ function archiveMovementProfile(profile, archivedAt = Date.now()) {
     archivedAt,
     hasNeutralLandmarks: Boolean(neutralLandmarks),
     hasNoiseFloor: Boolean(noiseFloor),
+  };
+}
+
+function averageProfileSymmetry(exercises) {
+  const valid = Object.values(exercises ?? {}).map((e) => e.initialSymmetry).filter((v) => v != null);
+  return valid.length ? roundMetric(valid.reduce((sum, value) => sum + value, 0) / valid.length) : null;
+}
+
+function mergeMovementProfileRetake(currentProfile, partialProfile) {
+  if (!currentProfile || !partialProfile?.exercises) return partialProfile;
+  const exercises = { ...(currentProfile.exercises ?? {}), ...partialProfile.exercises };
+  const retakenExerciseIds = Object.keys(partialProfile.exercises);
+  return {
+    ...currentProfile,
+    updatedAt: Date.now(),
+    lastPartialRetakeAt: Date.now(),
+    lastPartialRetakeExerciseIds: retakenExerciseIds,
+    lastPartialCalibrationQuality: partialProfile.calibrationQuality,
+    exercises,
+    initialAvgSymmetry: averageProfileSymmetry(exercises),
   };
 }
 
@@ -424,21 +467,78 @@ function normalizedFrameDelta(aLm, bLm) {
   return count ? total / count : Infinity;
 }
 
-function computeNoseSymmetry(lm, neutral) {
+function meanNoise(noiseFloor, idxs) {
+  if (!noiseFloor) return 0;
+  let s = 0, c = 0;
+  for (const i of idxs) {
+    const n = noiseFloor[i];
+    if (n == null) continue;
+    s += n; c++;
+  }
+  return c ? s / c : 0;
+}
+
+function averageBlendshapes(buffer) {
+  if (!buffer || buffer.length === 0) return null;
+  const sums = {};
+  const counts = {};
+  for (const bs of buffer) {
+    if (!bs) continue;
+    for (const k in bs) {
+      sums[k] = (sums[k] ?? 0) + bs[k];
+      counts[k] = (counts[k] ?? 0) + 1;
+    }
+  }
+  const avg = {};
+  for (const k in sums) avg[k] = counts[k] > 0 ? sums[k] / counts[k] : 0;
+  return avg;
+}
+
+// Weight that maps a 1.0 blendshape activation to a strong-flare mesh magnitude (~0.03).
+// Used so per-side blendshape activation can additively reinforce the mesh signal without
+// dominating it. The mesh stays primary because it lateralizes more honestly on asymmetric
+// faces; blendshapes regress toward bilaterally similar values.
+const NOSE_BS_WEIGHT = 0.03;
+
+function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs) {
   if (!lm || !neutral) return null;
   const lmN = faceFrameNormalize(lm), neuN = faceFrameNormalize(neutral);
   if (!lmN || !neuN) return null;
   const cur = noseShape(lmN), neu = noseShape(neuN);
   if (!cur || !neu) return null;
 
-  const lFlare = Math.max(0, cur.leftWidth - neu.leftWidth);
-  const rFlare = Math.max(0, cur.rightWidth - neu.rightWidth);
-  const lLift = Math.max(0, neu.leftY - cur.leftY);   // smaller y = lifted upward
-  const rLift = Math.max(0, neu.rightY - cur.rightY);
-  const lMag = Math.hypot(lFlare, lLift);
-  const rMag = Math.hypot(rFlare, rLift);
+  const lFlareRaw = Math.max(0, cur.leftWidth - neu.leftWidth);
+  const rFlareRaw = Math.max(0, cur.rightWidth - neu.rightWidth);
+  const lLiftRaw = Math.max(0, neu.leftY - cur.leftY);   // smaller y = lifted upward
+  const rLiftRaw = Math.max(0, neu.rightY - cur.rightY);
+
+  // Per-side centroid jitter: averaging N landmarks scales single-point noise by 1/sqrt(N),
+  // which is what the width/lift signals operate on. Subtracting this brings nose scoring
+  // in line with sumDisp's per-point denoising in the pairwise scorer.
+  const leftIdxs = [...NOSE_LANDMARKS.leftRim, ...NOSE_LANDMARKS.leftAla];
+  const rightIdxs = [...NOSE_LANDMARKS.rightRim, ...NOSE_LANDMARKS.rightAla];
+  const leftNoise = meanNoise(noiseFloor, leftIdxs) / Math.sqrt(leftIdxs.length);
+  const rightNoise = meanNoise(noiseFloor, rightIdxs) / Math.sqrt(rightIdxs.length);
+
+  const lFlare = Math.max(0, lFlareRaw - leftNoise);
+  const rFlare = Math.max(0, rFlareRaw - rightNoise);
+  const lLift = Math.max(0, lLiftRaw - leftNoise);
+  const rLift = Math.max(0, rLiftRaw - rightNoise);
+
+  // Per-side blendshape activation, with calibration-time neutral subtracted so a slightly
+  // raised resting `noseSneer*` doesn't masquerade as movement.
+  const lBs = bsMap ? Math.max(0, (bsMap.noseSneerLeft ?? 0) - (neutralBs?.noseSneerLeft ?? 0)) : 0;
+  const rBs = bsMap ? Math.max(0, (bsMap.noseSneerRight ?? 0) - (neutralBs?.noseSneerRight ?? 0)) : 0;
+
+  const lMesh = Math.hypot(lFlare, lLift);
+  const rMesh = Math.hypot(rFlare, rLift);
+  const lMag = lMesh + NOSE_BS_WEIGHT * lBs;
+  const rMag = rMesh + NOSE_BS_WEIGHT * rBs;
   const peak = Math.max(lMag, rMag);
-  if (peak < 0.004) return null; // nostril aperture changes are subtle
+  // Adaptive gate: small absolute floor for real flare signals, but rises with calibration
+  // jitter so a noisy session doesn't drift into "scored" territory after denoising.
+  const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
+  if (peak < Math.max(0.003, noiseGate)) return null;
   const symmetry = Math.min(lMag, rMag) / peak;
   return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
 }
@@ -460,15 +560,77 @@ function computeBrowSymmetry(lm, neutral) {
   return { symmetry, leftDisp: lLift, rightDisp: rLift, peak };
 }
 
-function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor) {
+function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs) {
   const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId] ?? null;
   const browResult = BROW_EXERCISES.has(exerciseId) ? computeBrowSymmetry(lm, neutral) : null;
-  const noseResult = NOSE_EXERCISES.has(exerciseId) ? computeNoseSymmetry(lm, neutral) : null;
+  const noseResult = NOSE_EXERCISES.has(exerciseId) ? computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs) : null;
   return browResult ?? noseResult ?? computePairwiseSymmetry(lm, neutral, mapping, noiseFloor) ?? computeSymmetry(lm, neutral);
 }
 
 function roundMetric(v, digits = 4) {
   return Number.isFinite(v) ? Number(v.toFixed(digits)) : null;
+}
+
+function percentile(values, pct) {
+  const valid = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (!valid.length) return null;
+  const idx = Math.min(valid.length - 1, Math.max(0, Math.ceil(valid.length * pct) - 1));
+  return valid[idx];
+}
+
+function averageSamples(samples) {
+  if (!samples?.length) return null;
+  const totals = samples.reduce((acc, item) => ({
+    left: acc.left + (item.left ?? 0),
+    right: acc.right + (item.right ?? 0),
+    symmetry: acc.symmetry + (item.symmetry ?? 0),
+    peak: acc.peak + (item.peak ?? 0),
+  }), { left: 0, right: 0, symmetry: 0, peak: 0 });
+  return {
+    count: samples.length,
+    left: totals.left / samples.length,
+    right: totals.right / samples.length,
+    symmetry: totals.symmetry / samples.length,
+    peak: totals.peak / samples.length,
+  };
+}
+
+function robustMovementWindow(samples, fraction = PROFILE_BASELINE_TOP_FRACTION) {
+  const valid = (samples ?? []).filter((item) => Number.isFinite(item?.peak) && item.peak > 0);
+  if (!valid.length) return null;
+  const count = Math.max(1, Math.ceil(valid.length * fraction));
+  return averageSamples([...valid].sort((a, b) => b.peak - a.peak).slice(0, count));
+}
+
+function exerciseBaselineQuality(stat) {
+  const holdFrames = stat.holdFrames ?? stat.frames ?? 0;
+  const scoredFrames = stat.frames ?? 0;
+  const alignedFrames = stat.alignedFrames ?? 0;
+  const scoredRatio = holdFrames > 0 ? scoredFrames / holdFrames : 0;
+  const alignmentRatio = holdFrames > 0 ? alignedFrames / holdFrames : 0;
+  const peak = Math.max(stat.leftPeak ?? 0, stat.rightPeak ?? 0);
+  const signalScore = clampNumber(peak / 0.04, 0, 1);
+  const neutralOk = (stat.neutralFrames ?? 0) >= PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES;
+  const frameScore = clampNumber(scoredFrames / PROFILE_MIN_SCORED_FRAMES, 0, 1);
+  const score = roundMetric(frameScore * 0.35 + alignmentRatio * 0.25 + signalScore * 0.25 + (neutralOk ? 0.15 : 0), 3);
+  const issues = [];
+  if (!neutralOk) issues.push("short neutral capture");
+  if (scoredFrames < PROFILE_MIN_SCORED_FRAMES) issues.push("low scored frames");
+  if (alignmentRatio < PROFILE_MIN_ALIGNMENT_RATIO) issues.push("face alignment drift");
+  if (peak < 0.006) issues.push("very low movement signal");
+  const key = score >= 0.8 && issues.length === 0 ? "strong" : score >= 0.55 ? "usable" : "retake";
+  const label = key === "strong" ? "Strong" : key === "usable" ? "Usable" : "Retake";
+  return {
+    key,
+    label,
+    score,
+    issues,
+    holdFrames,
+    scoredFrames,
+    scoredRatio: roundMetric(scoredRatio, 3),
+    alignmentRatio: roundMetric(alignmentRatio, 3),
+    peakMovement: roundMetric(peak),
+  };
 }
 
 function compactLandmarks(lm) {
@@ -492,6 +654,9 @@ function inferLimitedSide(left, right) {
 function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, comfortLevel }) {
   const exercises = {};
   for (const stat of exerciseStats) {
+    const leftBaseline = stat.leftRobustAvg ?? stat.leftAvg;
+    const rightBaseline = stat.rightRobustAvg ?? stat.rightAvg;
+    const symmetryBaseline = stat.symRobustAvg ?? stat.symAvg;
     const leftPeak = stat.leftPeak ?? 0;
     const rightPeak = stat.rightPeak ?? 0;
     const peak = Math.max(leftPeak, rightPeak);
@@ -500,11 +665,21 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
       name: stat.name,
       region: stat.region,
       frames: stat.frames,
-      leftBaselineMovement: roundMetric(stat.leftAvg),
-      rightBaselineMovement: roundMetric(stat.rightAvg),
+      holdFrames: stat.holdFrames ?? stat.frames,
+      alignedFrames: stat.alignedFrames ?? 0,
+      neutralFrames: stat.neutralFrames ?? 0,
+      neutralSource: stat.neutralSource ?? "global",
+      quality: stat.quality ?? null,
+      baselineMethod: stat.baselineMethod ?? "mean",
+      baselineFrames: stat.baselineFrames ?? stat.frames,
+      leftMeanMovement: roundMetric(stat.leftAvg),
+      rightMeanMovement: roundMetric(stat.rightAvg),
+      meanSymmetry: stat.symAvg == null ? null : roundMetric(stat.symAvg),
+      leftBaselineMovement: roundMetric(leftBaseline),
+      rightBaselineMovement: roundMetric(rightBaseline),
       leftPeakMovement: roundMetric(leftPeak),
       rightPeakMovement: roundMetric(rightPeak),
-      initialSymmetry: stat.symAvg == null ? null : roundMetric(stat.symAvg),
+      initialSymmetry: symmetryBaseline == null ? null : roundMetric(symmetryBaseline),
       activationThreshold: roundMetric(Math.max(peak * 0.35, 0.004)),
       limitedSide: inferLimitedSide(leftPeak, rightPeak),
     };
@@ -515,6 +690,9 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
     : null;
   const noiseValues = noise ? Array.from(noise).filter((v) => Number.isFinite(v)) : [];
   const avgNoise = noiseValues.length ? noiseValues.reduce((a, b) => a + b, 0) / noiseValues.length : null;
+  const coreNoiseValues = noise ? CALIBRATION_STABILITY_POINTS.map((idx) => noise[idx]).filter((v) => Number.isFinite(v)) : [];
+  const coreAvgNoise = coreNoiseValues.length ? coreNoiseValues.reduce((a, b) => a + b, 0) / coreNoiseValues.length : null;
+  const p90Noise = percentile(noiseValues, 0.9);
   return {
     version: PROFILE_VERSION,
     createdAt: Date.now(),
@@ -524,8 +702,14 @@ function buildMovementProfile({ neutral, noise, exerciseStats, affectedSide, com
     noiseFloor: compactNoiseFloor(noise),
     calibrationQuality: {
       frames: CALIBRATION_FRAMES,
+      exerciseNeutralMinFrames: PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES,
+      baselineTopFraction: PROFILE_BASELINE_TOP_FRACTION,
       avgNoise: roundMetric(avgNoise, 5),
+      coreAvgNoise: roundMetric(coreAvgNoise, 5),
+      p90Noise: roundMetric(p90Noise, 5),
       stabilityEps: CALIBRATION_STABILITY_EPS,
+      steadyNoiseMax: PROFILE_STEADY_NOISE_MAX,
+      usableNoiseMax: PROFILE_USABLE_NOISE_MAX,
     },
     initialAvgSymmetry: roundMetric(initialAvgSymmetry),
     exercises,
@@ -592,14 +776,18 @@ function summarizeBaselineProgress(items) {
   };
 }
 
-function summarizeSessionBaselineProgress(scores) {
-  return summarizeBaselineProgress((scores ?? []).map((s) => s.baselineProgress).filter(Boolean));
+function summarizeSessionBaselineProgress(scores, key = "baselineProgress") {
+  return summarizeBaselineProgress((scores ?? []).map((s) => s?.[key]).filter(Boolean));
 }
 
 function baselineProgressLabel(progress) {
   if (progress?.ratio == null) return null;
   if (progress.ratio >= 1) return `+${progress.deltaPct}% from baseline`;
   return `${Math.round(progress.ratio * 100)}% of baseline`;
+}
+
+function preferredBaselineProgress(record) {
+  return record?.initialBaselineProgress ?? record?.baselineProgress ?? null;
 }
 
 function buildPersonalizedDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length) {
@@ -609,14 +797,16 @@ function buildPersonalizedDailyPlan(profile, sessions = [], count = DAILY_ESSENT
 }
 
 function latestSessionBaselineProgress(sessions) {
-  return [...(sessions ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)).find((s) => s.baselineProgress)?.baselineProgress ?? null;
+  const latest = [...(sessions ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)).find((s) => preferredBaselineProgress(s));
+  return preferredBaselineProgress(latest);
 }
 
 function latestExerciseProgressById(sessions) {
   const out = {};
   for (const session of [...(sessions ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))) {
     for (const score of session.scores ?? []) {
-      if (!out[score.exerciseId] && score.baselineProgress) out[score.exerciseId] = score.baselineProgress;
+      const progress = preferredBaselineProgress(score);
+      if (!out[score.exerciseId] && progress) out[score.exerciseId] = progress;
     }
   }
   return out;
@@ -688,11 +878,11 @@ function profileAgeDays(profile) {
 }
 
 function profileQuality(profile) {
-  const avgNoise = profile?.calibrationQuality?.avgNoise;
-  if (avgNoise == null) return { key: "unknown", label: "Unknown", color: "#A8A29E" };
-  if (avgNoise <= 0.003) return { key: "steady", label: "Steady", color: "#7A8F73" };
-  if (avgNoise <= 0.007) return { key: "usable", label: "Usable", color: "#D4A574" };
-  return { key: "noisy", label: "Noisy", color: "#B8543A" };
+  const metric = profile?.calibrationQuality?.coreAvgNoise ?? profile?.calibrationQuality?.avgNoise;
+  if (metric == null) return { key: "unknown", label: "Unknown", color: "#A8A29E", metric: null };
+  if (metric <= PROFILE_STEADY_NOISE_MAX) return { key: "steady", label: "Steady", color: "#7A8F73", metric };
+  if (metric <= PROFILE_USABLE_NOISE_MAX) return { key: "usable", label: "Usable", color: "#D4A574", metric };
+  return { key: "noisy", label: "Noisy", color: "#B8543A", metric };
 }
 
 function profileStatus(profile) {
@@ -701,13 +891,16 @@ function profileStatus(profile) {
   const quality = profileQuality(profile);
   const stale = ageDays != null && ageDays >= PROFILE_RETAKE_DAYS;
   const noisy = quality.key === "noisy";
+  const exerciseEntries = Object.values(profile.exercises ?? {});
+  const retakeExercises = exerciseEntries.filter((ex) => ex.quality?.key === "retake");
   return {
     ageDays,
     quality,
     stale,
     noisy,
-    shouldRetake: stale || noisy,
-    reason: noisy ? "calibration was noisy" : stale ? `${ageDays} days old` : null,
+    retakeExercises,
+    shouldRetake: stale || noisy || retakeExercises.length > 0,
+    reason: noisy ? "calibration was noisy" : stale ? `${ageDays} days old` : retakeExercises.length > 0 ? `${retakeExercises.length} exercise baseline${retakeExercises.length === 1 ? "" : "s"} need review` : null,
   };
 }
 
@@ -860,27 +1053,49 @@ function drawOverlay(canvas, video, lm, { aligned, phase }) {
   }
 }
 
-// Posture: face roughly centered & level. Uses landmark 1 (nose tip) and the eye-line tilt.
-function isFaceAligned(lm) {
-  if (!lm || !lm[1] || !lm[33] || !lm[263]) return false;
+function faceAlignmentFeedback(lm) {
+  if (!lm || !lm[1] || !lm[33] || !lm[263]) {
+    return { aligned: false, label: "Find your face in the camera", issue: "missing" };
+  }
   const nose = lm[1];
   const centerOff = Math.hypot(nose.x - 0.5, nose.y - 0.5);
   const eyeDx = lm[263].x - lm[33].x;
   const eyeDy = lm[263].y - lm[33].y;
   const tiltRad = Math.atan2(eyeDy, eyeDx); // ~0 when level
-  return centerOff < 0.12 && Math.abs(tiltRad) < 0.12; // ~7° tilt tolerance
+  const centered = centerOff < FACE_CENTER_MAX_OFFSET;
+  const level = Math.abs(tiltRad) < FACE_TILT_MAX_RAD;
+  if (centered && level) return { aligned: true, label: "Posture · centered", issue: null, centerOff, tiltRad };
+  if (!centered && !level) return { aligned: false, label: "Center and level your face", issue: "center-tilt", centerOff, tiltRad };
+  if (!centered) return { aligned: false, label: "Center your face in the ring", issue: "center", centerOff, tiltRad };
+  return { aligned: false, label: "Keep your eyes level", issue: "tilt", centerOff, tiltRad };
 }
 
-function captureSnapshot(video, canvas) {
+// Posture: face roughly centered & level. Uses landmark 1 (nose tip) and the eye-line tilt.
+function isFaceAligned(lm) {
+  return faceAlignmentFeedback(lm).aligned;
+}
+
+function calibrationPrompt(progress, delta) {
+  if (delta > CALIBRATION_RESET_EPS) return "Too much movement. Relax your jaw, stop talking, and hold neutral.";
+  if (delta > CALIBRATION_STABILITY_EPS) return "Small movement detected. Keep the same resting expression.";
+  if (progress < 8) return "Good. Keep your face soft and neutral.";
+  if (progress < CALIBRATION_FRAMES - 6) return "Stay relaxed. Avoid blinking or smiling.";
+  return "Almost done. Hold this same neutral pose.";
+}
+
+function captureSnapshot(video, canvas, { width = REPORT_SNAPSHOT_WIDTH, quality = REPORT_SNAPSHOT_QUALITY } = {}) {
   if (!video || !canvas || !video.videoWidth) return null;
-  const W = 200, H = Math.round((video.videoHeight / video.videoWidth) * W);
+  const W = Math.min(width, video.videoWidth || width);
+  const H = Math.round((video.videoHeight / video.videoWidth) * W);
   if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H; }
   const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.save();
   ctx.translate(W, 0); ctx.scale(-1, 1); // mirror to match the on-screen video
   ctx.drawImage(video, 0, 0, W, H);
   ctx.restore();
-  try { return canvas.toDataURL("image/jpeg", 0.7); } catch { return null; }
+  try { return canvas.toDataURL("image/jpeg", quality); } catch { return null; }
 }
 
 function averageLandmarks(buffer) {
@@ -965,7 +1180,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showProfileAssessment, setShowProfileAssessment] = useState(false);
+  const [profileAssessment, setProfileAssessment] = useState(null);
   const [exerciseDetail, setExerciseDetail] = useState(null);
   const [viewingReport, setViewingReport] = useState(null);
 
@@ -999,19 +1214,30 @@ export default function App() {
   const finishOnboarding = (startProfile = false) => {
     persist({ ...data, prefs: { ...data.prefs, onboarded: true } });
     setShowOnboarding(false);
-    if (startProfile) setShowProfileAssessment(true);
+    if (startProfile) setProfileAssessment({});
   };
-  const saveMovementProfile = (profile) => {
+  const openProfileAssessment = (retakeExerciseIds = null) => {
+    setProfileAssessment(retakeExerciseIds?.length ? { retakeExerciseIds } : {});
+  };
+  const saveMovementProfile = (profile, options = {}) => {
+    if (options.retakeExerciseIds?.length && data.movementProfile) {
+      const movementProfile = mergeMovementProfileRetake(data.movementProfile, profile);
+      persist({ ...data, movementProfile, initialMovementProfile: data.initialMovementProfile ?? data.movementProfile, prefs: { ...data.prefs, onboarded: true } });
+      setProfileAssessment(null);
+      return;
+    }
     const archived = archiveMovementProfile(data.movementProfile);
     const movementProfileHistory = archived
       ? [archived, ...(data.movementProfileHistory ?? [])].slice(0, PROFILE_HISTORY_LIMIT)
       : (data.movementProfileHistory ?? []);
-    persist({ ...data, movementProfile: profile, movementProfileHistory, prefs: { ...data.prefs, onboarded: true } });
-    setShowProfileAssessment(false);
+    persist({ ...data, movementProfile: profile, initialMovementProfile: data.initialMovementProfile ?? profile, movementProfileHistory, prefs: { ...data.prefs, onboarded: true } });
+    setProfileAssessment(null);
   };
   const startSession = (ids) => {
+    primeSpeech(data.prefs.voiceEnabled);
     const exercises = buildSessionExercises(ids, data.movementProfile);
-    setSession({ exercises, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
+    const kind = ids.length > 1 ? "session" : "practice";
+    setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
   const completeSession = (rec) => { persist({ ...data, sessions: [...data.sessions, rec] }); setSession(null); };
   const saveJournal = (entry) => { const filtered = data.journal.filter((j) => j.date !== entry.date); persist({ ...data, journal: [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date)) }); };
@@ -1032,17 +1258,17 @@ export default function App() {
       <div className="relative max-w-2xl mx-auto px-5 pb-28 pt-8 lg:pb-12">
         <Header view={view} streak={streak} />
         <main className="mt-8 lg:mt-2">
-          {view === "home" && <HomeView data={data} streak={streak} onStartProfile={() => setShowProfileAssessment(true)} onStartSession={startSession} onGo={setView} />}
+          {view === "home" && <HomeView data={data} streak={streak} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} />}
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} onStartSession={startSession} onShowDetail={setExerciseDetail} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={setViewingReport} onStartProfile={() => setShowProfileAssessment(true)} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={setViewingReport} onStartProfile={openProfileAssessment} />}
         </main>
       </div>
       <BottomNav view={view} setView={setView} />
-      {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO()).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} />}
+      {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} initialMovementProfile={data.initialMovementProfile ?? data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO() && isCountedSession(s)).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} />}
       {exerciseDetail && <ExerciseDetail exercise={exerciseDetail} movementProfile={data.movementProfile} onClose={() => setExerciseDetail(null)} onStart={(id) => { setExerciseDetail(null); startSession([id]); }} />}
       {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} />}
-      {showProfileAssessment && <ProfileAssessment onComplete={saveMovementProfile} onSkip={() => setShowProfileAssessment(false)} />}
+      {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
       {viewingReport && <SessionSummary session={viewingReport} onClose={() => setViewingReport(null)} />}
     </div>
   );
@@ -1099,6 +1325,7 @@ function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
   // Home is a derived dashboard: it summarizes today's stored records and maps the
   // configured daily goal into the next practice prompt.
   const todaysSessions = data.sessions.filter((s) => s.date === todayISO());
+  const todaysCountedSessions = todaysSessions.filter(isCountedSession);
   const todaysJournal = data.journal.find((j) => j.date === todayISO());
   const dailyGoal = data.prefs.dailyGoal ?? 3;
   const todaysPlan = buildPersonalizedDailyPlan(data.movementProfile, data.sessions);
@@ -1106,7 +1333,8 @@ function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
   const planExercises = todaysPlan.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean);
   const latestBaseline = latestSessionBaselineProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
-  const completed = todaysSessions.length;
+  const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
+  const completed = todaysCountedSessions.length;
   const remaining = Math.max(0, dailyGoal - completed);
   const nextSlot = nextSessionAt(dailyGoal, completed);
   const todaysAvgSymmetry = (() => {
@@ -1189,7 +1417,7 @@ function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
           {baselineStatus?.shouldRetake && (
             <div className="mt-3 flex items-center gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(184,84,58,0.16)", color: "#FFD3C1" }}>
               <div className="flex-1 text-xs">Retake baseline: {baselineStatus.reason}</div>
-              <button onClick={onStartProfile} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake</button>
+              <button onClick={() => onStartProfile(weakBaselineIds.length ? weakBaselineIds : null)} className="rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap" style={{ background: "#B8543A", color: "#F4EFE6" }}>{weakBaselineIds.length ? "Retake weak" : "Retake"}</button>
             </div>
           )}
         </div>
@@ -1399,7 +1627,7 @@ function ExerciseDetail({ exercise, movementProfile, onClose, onStart }) {
   );
 }
 
-function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplete, onCancel, onTogglePref }) {
+function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref }) {
   // Phases: optional calibrate → rest (2s entry) → hold (4s) → rest (2s) → hold → ... → interstitial (10s) → next exercise → ... → summary
   // The single `rest` phase plays double-duty as exercise-entry settle AND between-rep recovery.
   const initialRestSec = exerciseRestSec(session.exercises[0]);
@@ -1419,14 +1647,17 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
   const videoRef = useRef(null);
   const overlayRef = useRef(null);
   const snapshotCanvasRef = useRef(null);
+  const baselineSnapshotRef = useRef(null);
 
   const symEnabled = prefs.symmetryEnabled && prefs.mirrorEnabled;
   const { faceLandmarker, latestRef, status: trackerStatus } = useFaceLandmarker(symEnabled);
 
   const calibBufferRef = useRef([]);
+  const calibBsBufferRef = useRef([]);
   const lastCalibLmRef = useRef(null);
   const neutralRef = useRef(null);
   const noiseRef = useRef(null);
+  const neutralBsRef = useRef(null);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationStatus, setCalibrationStatus] = useState("Preparing tracker");
   const peakRepScoreRef = useRef(null);
@@ -1437,6 +1668,7 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
   const [exerciseScores, setExerciseScores] = useState([]);
   const repScoresRef = useRef([]);
   const repBaselineProgressRef = useRef([]);
+  const repInitialBaselineProgressRef = useRef([]);
   const repSnapshotsRef = useRef([]);
   const peakSnapshotRef = useRef(null);
   const peakDispRef = useRef(0);
@@ -1480,9 +1712,12 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
   useEffect(() => {
     if (phase !== "calibrate") return;
     calibBufferRef.current = [];
+    calibBsBufferRef.current = [];
     lastCalibLmRef.current = null;
     neutralRef.current = null;
     noiseRef.current = null;
+    neutralBsRef.current = null;
+    baselineSnapshotRef.current = null;
     setCalibrationProgress(0);
     setCalibrationStatus("Preparing tracker");
     speak(prefs.voiceEnabled, "Calibration. Center your face and stay relaxed.");
@@ -1525,7 +1760,9 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
           const leftAvg = holdLeftSumRef.current / holdScoreCountRef.current;
           const rightAvg = holdRightSumRef.current / holdScoreCountRef.current;
           const progress = computeBaselineProgressFromDisplacements(current.id, leftAvg, rightAvg, movementProfile);
+          const initialProgress = computeBaselineProgressFromDisplacements(current.id, leftAvg, rightAvg, initialMovementProfile);
           if (progress) repBaselineProgressRef.current = [...repBaselineProgressRef.current, progress];
+          if (initialProgress) repInitialBaselineProgressRef.current = [...repInitialBaselineProgressRef.current, initialProgress];
         }
         const snap = peakSnapshotRef.current ?? captureSnapshot(videoRef.current, snapshotCanvasRef.current);
         if (snap) repSnapshotsRef.current = [...repSnapshotsRef.current, { ts: Date.now(), score: avgScore, dataUrl: snap }];
@@ -1557,11 +1794,13 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
           // End of exercise — finalize per-exercise scores
           const scores = repScoresRef.current;
           const baselineProgress = summarizeBaselineProgress(repBaselineProgressRef.current);
+          const initialBaselineProgress = summarizeBaselineProgress(repInitialBaselineProgressRef.current);
           const snapshots = repSnapshotsRef.current;
           const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, scores, avg, snapshots, baselineProgress }]);
+          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress }]);
           repScoresRef.current = [];
           repBaselineProgressRef.current = [];
+          repInitialBaselineProgressRef.current = [];
           repSnapshotsRef.current = [];
           if (exIdx + 1 < totalExercises) {
             setPhase("interstitial");
@@ -1610,30 +1849,38 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
           latestRef.current = { landmarks: lm, blendshapes: bsMap };
 
           if (phase === "calibrate") {
-            const aligned = isFaceAligned(lm);
+            const alignment = faceAlignmentFeedback(lm);
+            const aligned = alignment.aligned;
             setPostureAligned((prev) => (prev === aligned ? prev : aligned));
             if (!neutralRef.current) {
               if (!aligned) {
                 calibBufferRef.current = [];
+                calibBsBufferRef.current = [];
                 lastCalibLmRef.current = null;
                 setCalibrationProgress(0);
-                setCalibrationStatus("Center your face in the ring");
+                setCalibrationStatus(alignment.label);
               } else {
                 const delta = lastCalibLmRef.current ? normalizedFrameDelta(lm, lastCalibLmRef.current) : 0;
                 lastCalibLmRef.current = lm;
-                if (delta > CALIBRATION_STABILITY_EPS) {
+                if (delta > CALIBRATION_RESET_EPS) {
                   calibBufferRef.current = [lm];
+                  calibBsBufferRef.current = [bsMap];
                   setCalibrationProgress(1);
-                  setCalibrationStatus("Hold still in resting pose");
+                  setCalibrationStatus(calibrationPrompt(1, delta));
                 } else {
-                  if (calibBufferRef.current.length < CALIBRATION_FRAMES) calibBufferRef.current.push(lm);
+                  if (calibBufferRef.current.length < CALIBRATION_FRAMES) {
+                    calibBufferRef.current.push(lm);
+                    calibBsBufferRef.current.push(bsMap);
+                  }
                   const progress = calibBufferRef.current.length;
                   setCalibrationProgress((prev) => (prev === progress ? prev : progress));
-                  setCalibrationStatus("Stay relaxed");
+                  setCalibrationStatus(calibrationPrompt(progress, delta));
                   if (progress >= CALIBRATION_FRAMES) {
                     const neutral = averageLandmarks(calibBufferRef.current);
                     neutralRef.current = neutral;
                     noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral);
+                    neutralBsRef.current = averageBlendshapes(calibBsBufferRef.current);
+                    baselineSnapshotRef.current = captureSnapshot(v, snapshotCanvasRef.current);
                     restIsEntryRef.current = true;
                     setPhase("rest");
                     setSecondsLeft(currentRestSec);
@@ -1646,7 +1893,7 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
             // Nose exercises: aperture widening + upward ala lift (handles both wrinkle and flare).
             // Other exercises: face-local landmark-pair displacement with per-landmark noise
             // subtracted out. Fallback: generic 9-pair.
-            const symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current);
+            const symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current);
             if (symResult != null) {
               const profileThreshold = getProfileExercise(movementProfile, current.id)?.activationThreshold;
               const activated = !profileThreshold || symResult.peak >= profileThreshold;
@@ -1691,7 +1938,9 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
           latestRef.current = null;
           if (phase === "calibrate") {
             calibBufferRef.current = [];
+            calibBsBufferRef.current = [];
             lastCalibLmRef.current = null;
+            baselineSnapshotRef.current = null;
             setCalibrationProgress(0);
             setCalibrationStatus("Find your face in the camera");
           }
@@ -1710,11 +1959,13 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
     flushSpeech();
     const scores = repScoresRef.current;
     const baselineProgress = summarizeBaselineProgress(repBaselineProgressRef.current);
+    const initialBaselineProgress = summarizeBaselineProgress(repInitialBaselineProgressRef.current);
     const snapshots = repSnapshotsRef.current;
     const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, scores, avg, snapshots, baselineProgress }]);
+    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress }]);
     repScoresRef.current = [];
     repBaselineProgressRef.current = [];
+    repInitialBaselineProgressRef.current = [];
     repSnapshotsRef.current = [];
     if (exIdx + 1 < totalExercises) { setExIdx(exIdx + 1); setRepIdx(0); restIsEntryRef.current = true; setPhase("rest"); setSecondsLeft(nextRestSec); }
     else setPhase("summary");
@@ -1723,9 +1974,12 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
   const skipCalibration = () => {
     flushSpeech();
     calibBufferRef.current = [];
+    calibBsBufferRef.current = [];
     lastCalibLmRef.current = null;
     neutralRef.current = null;
     noiseRef.current = null;
+    neutralBsRef.current = null;
+    baselineSnapshotRef.current = captureSnapshot(videoRef.current, snapshotCanvasRef.current);
     restIsEntryRef.current = true;
     setCalibrationProgress(0);
     setCalibrationStatus("Scoring skipped");
@@ -1733,17 +1987,18 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
     setSecondsLeft(currentRestSec);
   };
 
-  const skipInterstitial = () => { flushSpeech(); setSecondsLeft(0); };
+  const nextInterstitial = () => { flushSpeech(); setSecondsLeft(0); };
 
   const handleFinish = () => {
     const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
     const validAvgs = exerciseScores.map((e) => e.avg).filter((v) => v != null);
     const sessionAvg = validAvgs.length > 0 ? validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length : null;
     const baselineProgress = summarizeSessionBaselineProgress(exerciseScores);
-    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, baselineProgress, comfortLevel: session.comfortLevel, ts: Date.now() });
+    const initialBaselineProgress = summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress");
+    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, baselineProgress, initialBaselineProgress, baselineSnapshot: baselineSnapshotRef.current, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
   };
 
-  if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} onFinish={handleFinish} />;
+  if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} onFinish={handleFinish} />;
   if (phase === "interstitial") {
     return (
       <InterstitialView
@@ -1752,7 +2007,7 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
         secondsLeft={secondsLeft}
         exIdx={exIdx + 1}
         totalExercises={totalExercises}
-        onSkip={skipInterstitial}
+        onNext={nextInterstitial}
         onCancel={onCancel}
       />
     );
@@ -1772,7 +2027,7 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
         <button onClick={onCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="End"><X className="w-5 h-5" /></button>
         <div className="text-xs opacity-70">Exercise {exIdx + 1} of {totalExercises}</div>
         <div className="flex gap-2">
-          <button onClick={() => onTogglePref("voiceEnabled")} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{prefs.voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+          <button onClick={() => { if (!prefs.voiceEnabled) primeSpeech(true); else flushSpeech(); onTogglePref("voiceEnabled"); }} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{prefs.voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
           <button onClick={() => onTogglePref("mirrorEnabled")} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle mirror">{prefs.mirrorEnabled ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}</button>
         </div>
       </div>
@@ -1846,27 +2101,43 @@ function SessionMode({ session, prefs, movementProfile, sessionsToday, onComplet
 }
 
 function emptyAssessmentFrameStats() {
-  return { frames: 0, leftSum: 0, rightSum: 0, symSum: 0, leftPeak: 0, rightPeak: 0, symPeak: null };
+  return { frames: 0, holdFrames: 0, alignedFrames: 0, leftSum: 0, rightSum: 0, symSum: 0, leftPeak: 0, rightPeak: 0, symPeak: null, samples: [] };
 }
 
 function finalizeAssessmentStats(stat, exercise) {
   const frames = stat.frames;
+  const robust = robustMovementWindow(stat.samples, PROFILE_BASELINE_TOP_FRACTION);
+  const quality = exerciseBaselineQuality(stat);
   return {
     exerciseId: exercise.id,
     name: exercise.name,
     region: exercise.region,
     frames,
+    holdFrames: stat.holdFrames ?? frames,
+    alignedFrames: stat.alignedFrames ?? 0,
+    neutralFrames: stat.neutralFrames ?? 0,
+    neutralSource: stat.neutralSource ?? "global",
+    quality,
     leftAvg: frames ? stat.leftSum / frames : null,
     rightAvg: frames ? stat.rightSum / frames : null,
     symAvg: frames ? stat.symSum / frames : null,
+    leftRobustAvg: robust?.left ?? null,
+    rightRobustAvg: robust?.right ?? null,
+    symRobustAvg: robust?.symmetry ?? null,
+    robustPeakAvg: robust?.peak ?? null,
+    baselineFrames: robust?.count ?? 0,
+    baselineMethod: robust ? `top-${Math.round(PROFILE_BASELINE_TOP_FRACTION * 100)}-movement-mean` : "mean",
     leftPeak: stat.leftPeak,
     rightPeak: stat.rightPeak,
     symPeak: stat.symPeak,
   };
 }
 
-function ProfileAssessment({ onComplete, onSkip }) {
-  const exercises = useMemo(() => PROFILE_ASSESSMENT_EXERCISES.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean), []);
+function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onSkip }) {
+  const retakeIds = [...new Set((retakeExerciseIds ?? []).filter((id) => EXERCISE_BY_ID.has(id)))];
+  const isPartialRetake = retakeIds.length > 0;
+  const exerciseIds = isPartialRetake ? retakeIds : PROFILE_ASSESSMENT_EXERCISES;
+  const exercises = exerciseIds.map((id) => EXERCISE_BY_ID.get(id)).filter(Boolean);
   const [phase, setPhase] = useState("intro");
   const [affectedSide, setAffectedSide] = useState("unsure");
   const [comfortLevel, setComfortLevel] = useState("gentle");
@@ -1877,6 +2148,7 @@ function ProfileAssessment({ onComplete, onSkip }) {
   const [postureAligned, setPostureAligned] = useState(false);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationStatus, setCalibrationStatus] = useState("Preparing tracker");
+  const [restStatus, setRestStatus] = useState("Relax your face before the movement.");
   const [liveScore, setLiveScore] = useState(null);
   const [liveBalance, setLiveBalance] = useState(null);
   const [exerciseStats, setExerciseStats] = useState([]);
@@ -1884,14 +2156,23 @@ function ProfileAssessment({ onComplete, onSkip }) {
   const overlayRef = useRef(null);
   const neutralRef = useRef(null);
   const noiseRef = useRef(null);
+  const neutralBsRef = useRef(null);
   const calibBufferRef = useRef([]);
+  const calibBsBufferRef = useRef([]);
   const lastCalibLmRef = useRef(null);
+  const exerciseNeutralRef = useRef(null);
+  const exerciseNoiseRef = useRef(null);
+  const exerciseNeutralBsRef = useRef(null);
+  const restBufferRef = useRef([]);
+  const restBsBufferRef = useRef([]);
+  const restRetryRef = useRef(0);
   const statRef = useRef(emptyAssessmentFrameStats());
   const activeCamera = phase !== "intro" && phase !== "summary";
   const { faceLandmarker, latestRef, status: trackerStatus } = useFaceLandmarker(activeCamera);
   const current = exercises[exIdx] ?? exercises[0];
   const scoredStats = exerciseStats.map((s) => s.symAvg).filter((v) => v != null);
   const summaryAvg = scoredStats.length ? scoredStats.reduce((sum, v) => sum + v, 0) / scoredStats.length : null;
+  const retakeCount = exerciseStats.filter((s) => s.quality?.key === "retake").length;
 
   useEffect(() => {
     if (!activeCamera) return;
@@ -1921,7 +2202,9 @@ function ProfileAssessment({ onComplete, onSkip }) {
     if (phase !== "calibrate") return;
     neutralRef.current = null;
     noiseRef.current = null;
+    neutralBsRef.current = null;
     calibBufferRef.current = [];
+    calibBsBufferRef.current = [];
     lastCalibLmRef.current = null;
     setCalibrationProgress(0);
     setCalibrationStatus("Preparing tracker");
@@ -1930,14 +2213,44 @@ function ProfileAssessment({ onComplete, onSkip }) {
   useEffect(() => {
     if (phase !== "hold") return;
     statRef.current = emptyAssessmentFrameStats();
+    statRef.current.neutralFrames = restBufferRef.current.length;
+    statRef.current.neutralSource = exerciseNeutralRef.current ? "exercise-rest" : "global";
     setLiveScore(null);
     setLiveBalance(null);
+  }, [phase, exIdx]);
+
+  useEffect(() => {
+    if (phase !== "rest") return;
+    restRetryRef.current = 0;
+    restBufferRef.current = [];
+    restBsBufferRef.current = [];
+    exerciseNeutralRef.current = null;
+    exerciseNoiseRef.current = null;
+    exerciseNeutralBsRef.current = null;
+    setRestStatus("Relax your face. Capturing a neutral baseline for this exercise.");
   }, [phase, exIdx]);
 
   useEffect(() => {
     if (phase !== "rest" && phase !== "hold") return;
     if (secondsLeft <= 0) {
       if (phase === "rest") {
+        const restFrames = restBufferRef.current;
+        if (restFrames.length < PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES && restRetryRef.current < PROFILE_REST_RETRY_LIMIT) {
+          restRetryRef.current += 1;
+          setRestStatus("Need a steadier neutral pose before this movement. Center your face and stay relaxed.");
+          setSecondsLeft(PROFILE_REST_SEC);
+          return;
+        }
+        if (restFrames.length >= PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES) {
+          const exerciseNeutral = averageLandmarks(restFrames);
+          exerciseNeutralRef.current = exerciseNeutral;
+          exerciseNoiseRef.current = computeNoiseFloor(restFrames, exerciseNeutral);
+          exerciseNeutralBsRef.current = averageBlendshapes(restBsBufferRef.current);
+        } else {
+          exerciseNeutralRef.current = null;
+          exerciseNoiseRef.current = null;
+          exerciseNeutralBsRef.current = null;
+        }
         setPhase("hold");
         setSecondsLeft(PROFILE_HOLD_SEC);
       } else {
@@ -1969,43 +2282,70 @@ function ProfileAssessment({ onComplete, onSkip }) {
         lastTs = ts;
         const result = faceLandmarker.detectForVideo(v, ts);
         const rawLm = result.faceLandmarks?.[0];
+        const bsArr = result.faceBlendshapes?.[0]?.categories;
         if (rawLm) {
           const lm = smoothLandmarks(latestRef.current?.landmarks, rawLm);
-          latestRef.current = { landmarks: lm, blendshapes: {} };
-          const aligned = isFaceAligned(lm);
+          const bsMap = {};
+          if (bsArr) for (const c of bsArr) bsMap[c.categoryName] = c.score;
+          latestRef.current = { landmarks: lm, blendshapes: bsMap };
+          const alignment = faceAlignmentFeedback(lm);
+          const aligned = alignment.aligned;
           setPostureAligned((prev) => (prev === aligned ? prev : aligned));
 
           if (phase === "calibrate") {
             if (!aligned) {
               calibBufferRef.current = [];
+              calibBsBufferRef.current = [];
               lastCalibLmRef.current = null;
               setCalibrationProgress(0);
-              setCalibrationStatus("Center your face in the ring");
+              setCalibrationStatus(alignment.label);
             } else {
               const delta = lastCalibLmRef.current ? normalizedFrameDelta(lm, lastCalibLmRef.current) : 0;
               lastCalibLmRef.current = lm;
-              if (delta > CALIBRATION_STABILITY_EPS) {
+              if (delta > CALIBRATION_RESET_EPS) {
                 calibBufferRef.current = [lm];
+                calibBsBufferRef.current = [bsMap];
                 setCalibrationProgress(1);
-                setCalibrationStatus("Hold still in resting pose");
+                setCalibrationStatus(calibrationPrompt(1, delta));
               } else {
-                if (calibBufferRef.current.length < CALIBRATION_FRAMES) calibBufferRef.current.push(lm);
+                if (calibBufferRef.current.length < CALIBRATION_FRAMES) {
+                  calibBufferRef.current.push(lm);
+                  calibBsBufferRef.current.push(bsMap);
+                }
                 const progress = calibBufferRef.current.length;
                 setCalibrationProgress((prev) => (prev === progress ? prev : progress));
-                setCalibrationStatus("Stay relaxed");
+                setCalibrationStatus(calibrationPrompt(progress, delta));
                 if (progress >= CALIBRATION_FRAMES) {
                   const neutral = averageLandmarks(calibBufferRef.current);
                   neutralRef.current = neutral;
                   noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral);
+                  neutralBsRef.current = averageBlendshapes(calibBsBufferRef.current);
                   setPhase("rest");
                   setSecondsLeft(PROFILE_REST_SEC);
                 }
               }
             }
+          } else if (phase === "rest") {
+            if (aligned) {
+              restBufferRef.current.push(lm);
+              restBsBufferRef.current.push(bsMap);
+              const count = restBufferRef.current.length;
+              const remaining = Math.max(0, PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES - count);
+              setRestStatus(remaining > 0
+                ? `Hold neutral for this exercise. ${remaining} more steady frame${remaining === 1 ? "" : "s"}.`
+                : "Exercise neutral captured. Keep relaxed until the movement starts.");
+            } else {
+              setRestStatus(`${alignment.label} so this exercise gets its own baseline.`);
+            }
           } else if (phase === "hold") {
-            const sym = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current);
+            const stat = statRef.current;
+            stat.holdFrames++;
+            if (aligned) stat.alignedFrames++;
+            const neutral = exerciseNeutralRef.current ?? neutralRef.current;
+            const noise = exerciseNoiseRef.current ?? noiseRef.current;
+            const neutralBs = exerciseNeutralBsRef.current ?? neutralBsRef.current;
+            const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs);
             if (sym) {
-              const stat = statRef.current;
               stat.frames++;
               stat.leftSum += sym.leftDisp;
               stat.rightSum += sym.rightDisp;
@@ -2013,6 +2353,7 @@ function ProfileAssessment({ onComplete, onSkip }) {
               stat.leftPeak = Math.max(stat.leftPeak, sym.leftDisp);
               stat.rightPeak = Math.max(stat.rightPeak, sym.rightDisp);
               stat.symPeak = stat.symPeak == null ? sym.symmetry : Math.max(stat.symPeak, sym.symmetry);
+              stat.samples.push({ left: sym.leftDisp, right: sym.rightDisp, symmetry: sym.symmetry, peak: sym.peak });
               setLiveScore(sym.symmetry);
               setLiveBalance({ left: sym.leftDisp, right: sym.rightDisp });
             }
@@ -2022,9 +2363,12 @@ function ProfileAssessment({ onComplete, onSkip }) {
           latestRef.current = null;
           if (phase === "calibrate") {
             calibBufferRef.current = [];
+            calibBsBufferRef.current = [];
             lastCalibLmRef.current = null;
             setCalibrationProgress(0);
             setCalibrationStatus("Find your face in the camera");
+          } else if (phase === "rest") {
+            setRestStatus("Find your face in the camera so this exercise gets its own baseline.");
           }
           drawOverlay(overlayRef.current, v, null, { aligned: false, phase });
         }
@@ -2041,6 +2385,11 @@ function ProfileAssessment({ onComplete, onSkip }) {
     setExerciseStats([]);
     setExIdx(0);
     setSecondsLeft(PROFILE_REST_SEC);
+    restBufferRef.current = [];
+    restBsBufferRef.current = [];
+    exerciseNeutralRef.current = null;
+    exerciseNoiseRef.current = null;
+    exerciseNeutralBsRef.current = null;
     setPhase("calibrate");
   };
 
@@ -2049,21 +2398,21 @@ function ProfileAssessment({ onComplete, onSkip }) {
       neutral: neutralRef.current,
       noise: noiseRef.current,
       exerciseStats,
-      affectedSide,
-      comfortLevel,
+      affectedSide: isPartialRetake ? existingProfile?.affectedSide ?? affectedSide : affectedSide,
+      comfortLevel: isPartialRetake ? existingProfile?.comfortLevel ?? comfortLevel : comfortLevel,
     });
-    onComplete(profile);
+    onComplete(profile, { retakeExerciseIds: isPartialRetake ? exerciseIds : null });
   };
 
   if (phase === "intro") {
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-5" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
-        <div className="max-w-md w-full">
+        <div className="max-w-md w-full max-h-[92vh] overflow-y-auto pr-1">
           <div className="text-xs uppercase tracking-widest opacity-60 mb-3">Personal baseline</div>
-          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>Let's understand your face first.</h2>
-          <p className="text-sm leading-relaxed opacity-75 mb-6">Mirror will capture a neutral pose and a few gentle movements. This creates a local movement profile for future personalization.</p>
+          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{isPartialRetake ? "Retake selected baselines." : "Let's understand your face first."}</h2>
+          <p className="text-sm leading-relaxed opacity-75 mb-6">{isPartialRetake ? "Mirror will recalibrate neutral and replace only the selected exercise baselines in your existing profile." : "Mirror will capture a neutral pose and every exercise movement. This creates a local movement profile for future personalization."}</p>
 
-          <div className="space-y-5 mb-7">
+          {!isPartialRetake && <div className="space-y-5 mb-7">
             <div>
               <div className="text-sm font-semibold mb-2">Affected side</div>
               <div className="grid grid-cols-4 gap-2">
@@ -2080,18 +2429,19 @@ function ProfileAssessment({ onComplete, onSkip }) {
                 ))}
               </div>
             </div>
-          </div>
+          </div>}
 
           <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
-            <div className="text-xs uppercase tracking-wider opacity-60 mb-3">Assessment set</div>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="text-xs uppercase tracking-wider opacity-60 mb-3">{isPartialRetake ? "Retake set" : "Assessment set"}</div>
+            <div className="grid grid-cols-6 gap-2">
               {exercises.map((ex) => <ExerciseGlyph key={ex.id} exercise={ex} size="xs" tone="dark" className="mx-auto" />)}
             </div>
+            <div className="text-xs opacity-55 mt-3">{exercises.length} movements · about {Math.ceil(exercises.length * (PROFILE_REST_SEC + PROFILE_HOLD_SEC) / 60)} minutes</div>
           </div>
 
           <div className="flex gap-3">
             <button onClick={onSkip} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip</button>
-            <button onClick={handleBegin} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Start baseline</button>
+            <button onClick={handleBegin} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isPartialRetake ? "Start retake" : "Start baseline"}</button>
           </div>
         </div>
       </div>
@@ -2101,14 +2451,19 @@ function ProfileAssessment({ onComplete, onSkip }) {
   if (phase === "summary") {
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-5" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
-        <div className="max-w-md w-full">
+        <div className="max-w-md w-full max-h-[92vh] overflow-y-auto pr-1">
           <div className="text-xs uppercase tracking-widest opacity-60 mb-3">Baseline complete</div>
-          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>Movement profile ready.</h2>
-          <p className="text-sm leading-relaxed opacity-75 mb-6">This profile is saved locally and can be used to personalize thresholds and track progress from your starting point.</p>
+          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{isPartialRetake ? "Selected baselines ready." : "Movement profile ready."}</h2>
+          <p className="text-sm leading-relaxed opacity-75 mb-6">{isPartialRetake ? "Only these exercise baselines will replace the matching movements in your current profile." : "This profile is saved locally and can be used to personalize thresholds and track progress from your starting point."}</p>
           {summaryAvg != null && (
             <div className="text-center mb-6">
               <div className="text-7xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(summaryAvg), letterSpacing: "-0.03em" }}>{displayPct(summaryAvg)}%</div>
               <div className="text-xs opacity-60 mt-1">initial average symmetry</div>
+            </div>
+          )}
+          {retakeCount > 0 && (
+            <div className="rounded-2xl p-3 mb-4 text-xs" style={{ background: "rgba(212,165,116,0.14)", color: "#F6D8B2", border: "1px solid rgba(212,165,116,0.2)" }}>
+              {retakeCount} baseline movement{retakeCount === 1 ? "" : "s"} had low-quality capture. You can still save this profile, but those exercises should be retaken later.
             </div>
           )}
           <div className="space-y-2 mb-6">
@@ -2117,7 +2472,12 @@ function ProfileAssessment({ onComplete, onSkip }) {
                 <ExerciseGlyph exerciseId={stat.exerciseId} region={stat.region} size="xs" tone="dark" />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium truncate">{stat.name}</div>
-                  <div className="text-xs opacity-55">{stat.frames} scored frame{stat.frames === 1 ? "" : "s"} · limited side: {inferLimitedSide(stat.leftPeak, stat.rightPeak)}</div>
+                  <div className="text-xs opacity-55">{stat.frames} scored frame{stat.frames === 1 ? "" : "s"} · baseline: {stat.baselineFrames || 0} robust frame{stat.baselineFrames === 1 ? "" : "s"} · neutral: {stat.neutralSource === "exercise-rest" ? `${stat.neutralFrames} rest frames` : "global"} · limited side: {inferLimitedSide(stat.leftPeak, stat.rightPeak)}</div>
+                  {stat.quality && (
+                    <div className="text-[11px] mt-0.5" style={{ color: stat.quality.key === "strong" ? "#A8C39F" : stat.quality.key === "usable" ? "#F6D8B2" : "#FFB48F" }}>
+                      {stat.quality.label}{stat.quality.issues?.length ? ` · ${stat.quality.issues.join(", ")}` : ""}
+                    </div>
+                  )}
                 </div>
                 {stat.symAvg != null ? <div className="text-lg tabular-nums" style={{ fontFamily: "Fraunces", color: scoreColor(stat.symAvg) }}>{displayPct(stat.symAvg)}%</div> : <div className="text-xs opacity-45">—</div>}
               </div>
@@ -2125,7 +2485,7 @@ function ProfileAssessment({ onComplete, onSkip }) {
           </div>
           <div className="flex gap-3">
             <button onClick={handleBegin} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Redo</button>
-            <button onClick={handleSave} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Save profile</button>
+            <button onClick={handleSave} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isPartialRetake ? "Save retake" : "Save profile"}</button>
           </div>
         </div>
       </div>
@@ -2137,7 +2497,7 @@ function ProfileAssessment({ onComplete, onSkip }) {
     ? { tag: "CALIBRATING", title: "Stay relaxed", prompt: calibrationStatus, color: "#D4A574" }
     : phase === "hold"
       ? { tag: "ASSESS", title: current.name, prompt: current.instruction, color: "#B8543A" }
-      : { tag: "REST", title: current.name, prompt: "Relax your face before the movement.", color: "#7A8F73" };
+      : { tag: "REST", title: current.name, prompt: restStatus, color: "#7A8F73" };
 
   return (
     <div className="fixed inset-0 z-[60] flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -2281,25 +2641,92 @@ function BalanceBar({ label, frac, highlight, color }) {
   );
 }
 
-function speak(enabled, text) {
-  if (!enabled || !("speechSynthesis" in window)) return;
+let speechTimer = null;
+let lastSpeechText = "";
+let lastSpeechAt = 0;
+let cachedSpeechVoice = null;
+
+function getSpeechSynth() {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return null;
+  return window.speechSynthesis;
+}
+
+function getSpeechVoice(synth) {
+  if (cachedSpeechVoice) return cachedSpeechVoice;
+  const voices = synth?.getVoices?.() ?? [];
+  cachedSpeechVoice = voices.find((v) => /^en(-|_)/i.test(v.lang) && v.localService) || voices.find((v) => /^en(-|_)/i.test(v.lang)) || voices[0] || null;
+  return cachedSpeechVoice;
+}
+
+function makeSpeechUtterance(text) {
+  const synth = getSpeechSynth();
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = getSpeechVoice(synth);
+  if (voice) utterance.voice = voice;
+  utterance.rate = 0.92;
+  utterance.pitch = 1.0;
+  utterance.volume = 1.0;
+  return utterance;
+}
+
+function primeSpeech(enabled) {
+  const synth = getSpeechSynth();
+  if (!enabled || !synth) return;
   try {
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.92;
-    u.pitch = 1.0;
-    u.volume = 1.0;
-    window.speechSynthesis.speak(u);
+    cachedSpeechVoice = null;
+    synth.getVoices?.();
+    synth.resume?.();
+    const u = makeSpeechUtterance("Voice guidance ready.");
+    u.volume = 0.35;
+    u.rate = 1;
+    synth.cancel();
+    synth.speak(u);
+    setTimeout(() => synth.resume?.(), 80);
+  } catch {
+    // Speech synthesis availability varies by browser and device.
+  }
+}
+
+function speak(enabled, text) {
+  const synth = getSpeechSynth();
+  if (!enabled || !synth || !text) return;
+  const now = Date.now();
+  if (text === lastSpeechText && now - lastSpeechAt < 900) return;
+  lastSpeechText = text;
+  lastSpeechAt = now;
+  try {
+    if (speechTimer) clearTimeout(speechTimer);
+    const u = makeSpeechUtterance(text);
+    u.onerror = () => {
+      try { synth.resume?.(); } catch { /* optional browser API */ }
+    };
+    if (synth.speaking || synth.pending) synth.cancel();
+    synth.resume?.();
+    speechTimer = setTimeout(() => {
+      try {
+        synth.resume?.();
+        synth.speak(u);
+        setTimeout(() => synth.resume?.(), 120);
+      } catch {
+        // Speech synthesis is optional and browser-dependent.
+      }
+    }, 60);
   } catch {
     // Speech synthesis is optional and browser-dependent.
   }
 }
 
 function flushSpeech() {
-  try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch { /* optional browser API */ }
+  const synth = getSpeechSynth();
+  try {
+    if (speechTimer) clearTimeout(speechTimer);
+    speechTimer = null;
+    synth?.cancel?.();
+    synth?.resume?.();
+  } catch { /* optional browser API */ }
 }
 
-function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercises, onSkip, onCancel }) {
+function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercises, onNext, onCancel }) {
   if (!just) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -2350,8 +2777,8 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
           <div className="text-5xl tabular-nums leading-none" style={{ fontFamily: "Fraunces", fontWeight: 600, color: "#D4A574" }}>{secondsLeft || "·"}</div>
           <div className="text-[10px] opacity-60 uppercase tracking-wider mt-0.5">break</div>
         </div>
-        <button onClick={onSkip} className="rounded-full px-6 py-3 font-semibold flex items-center gap-2" style={{ background: "#B8543A", color: "#F4EFE6" }}>
-          Skip<ChevronRight className="w-4 h-4" />
+        <button onClick={onNext} className="rounded-full px-6 py-3 font-semibold flex items-center gap-2" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+          Next<ChevronRight className="w-4 h-4" />
         </button>
       </div>
       <style>{`@keyframes fadeInRep { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
@@ -2377,12 +2804,192 @@ function formatDuration(secs) {
   return m > 0 ? `${m}m ${r}s` : `${r}s`;
 }
 
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+function buildSessionReportHtml(s) {
+  const ts = s.ts ? new Date(s.ts) : new Date();
+  const dateStr = ts.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const timeStr = formatClock(ts);
+  const dur = formatDuration(s.duration);
+  const overallPct = displayPct(s.sessionAvg);
+  const overallColor = scoreColor(s.sessionAvg);
+  const comfort = s.comfortLevel ? (COMFORT_DOSING[s.comfortLevel]?.label ?? s.comfortLevel) : null;
+  const sessionType = s.kind === "practice" ? "Practice run" : "Daily session";
+  const baseline = s.baselineProgress;
+  const initialBaseline = s.initialBaselineProgress;
+  const scoresArr = s.scores || [];
+  const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
+
+  const exerciseRows = scoresArr.map((e) => {
+    const pct = displayPct(e.avg);
+    const color = scoreColor(e.avg);
+    const repsArr = e.scores ?? [];
+    const repLabel = `${repsArr.length}${e.repsTarget ? `/${e.repsTarget}` : ""} rep${(e.repsTarget ?? repsArr.length) === 1 ? "" : "s"}`;
+    const doseBits = [
+      e.region,
+      repLabel,
+      e.holdSec ? `${e.holdSec}s hold` : null,
+      e.restSec ? `${e.restSec}s rest` : null,
+    ].filter(Boolean).join(" · ");
+    const repBreakdown = repsArr.length > 0
+      ? repsArr.map((r) => {
+          const rp = displayPct(r);
+          return `<span class="rep" style="background:${rp == null ? "#E7E5E4" : scoreColor(r)};color:#fff">${rp == null ? "—" : rp + "%"}</span>`;
+        }).join("")
+      : '<span class="muted">No symmetry data captured</span>';
+    const baselineLine = e.baselineProgress
+      ? `<div class="muted small">Current baseline: ${escapeHtml(e.baselineProgress.side)} side · ${escapeHtml(baselineProgressLabel(e.baselineProgress) ?? "")}</div>`
+      : "";
+    const initialBaselineLine = e.initialBaselineProgress
+      ? `<div class="muted small">First baseline: ${escapeHtml(e.initialBaselineProgress.side)} side · ${escapeHtml(baselineProgressLabel(e.initialBaselineProgress) ?? "")}</div>`
+      : "";
+    const allSnapshots = e.snapshots || [];
+    const movementSnap = allSnapshots.reduce((best, snap) => {
+      if (!best) return snap;
+      return (snap.score ?? -1) > (best.score ?? -1) ? snap : best;
+    }, null);
+    const baselineImage = e.baselineSnapshot || s.baselineSnapshot || null;
+    const movementPct = displayPct(movementSnap?.score);
+    const comparison = baselineImage || movementSnap ? `
+      <div class="comparison">
+        <figure class="compare-frame">
+          ${baselineImage ? `<img src="${baselineImage}" alt="Neutral baseline frame" />` : `<div class="missing-image">No baseline image</div>`}
+          <figcaption>Baseline neutral</figcaption>
+        </figure>
+        <figure class="compare-frame">
+          ${movementSnap ? `<img src="${movementSnap.dataUrl}" alt="Peak movement frame" />` : `<div class="missing-image">No movement image</div>`}
+          <figcaption>Movement${movementPct == null ? "" : ` · ${movementPct}%`}</figcaption>
+        </figure>
+      </div>`
+      : "";
+    const snapshots = allSnapshots.slice(0, 6).map((snap) => {
+      const sp = displayPct(snap.score);
+      return `<div class="snap"><img src="${snap.dataUrl}" alt="" /><div class="snap-label" style="background:${scoreColor(snap.score)}">${sp == null ? "—" : sp + "%"}</div></div>`;
+    }).join("");
+    return `
+      <section class="exercise">
+        <div class="ex-head">
+          <div>
+            <div class="ex-name">${escapeHtml(e.name)}</div>
+            <div class="muted small">${escapeHtml(doseBits)}</div>
+            ${baselineLine}
+            ${initialBaselineLine}
+          </div>
+          <div class="ex-score" style="color:${color}">${pct == null ? "—" : pct + "%"}</div>
+        </div>
+        <div class="reps">${repBreakdown}</div>
+        ${comparison}
+        ${snapshots ? `<div class="snaps">${snapshots}</div>` : ""}
+      </section>`;
+  }).join("");
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Facial Retraining Session — ${escapeHtml(dateStr)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1F1B16; margin: 0; padding: 32px; background: #F4EFE6; }
+  .page { max-width: 760px; margin: 0 auto; background: #fff; padding: 40px 44px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: #78716C; margin: 28px 0 12px; font-weight: 600; }
+  .meta { color: #57534E; font-size: 13px; margin-bottom: 24px; }
+  .summary { display: grid; grid-template-columns: auto 1fr; gap: 24px; align-items: center; padding: 20px; background: #FAF7F0; border-radius: 12px; margin-bottom: 12px; }
+  .big-score { font-size: 56px; font-weight: 700; line-height: 1; letter-spacing: -0.02em; color: ${overallColor}; }
+  .summary-meta { font-size: 13px; color: #57534E; line-height: 1.6; }
+  .summary-meta strong { color: #1F1B16; }
+  .baseline { padding: 12px 16px; background: rgba(122,143,115,0.12); border-radius: 8px; font-size: 13px; color: #4A6B47; margin-bottom: 12px; }
+  .exercise { padding: 16px 0; border-top: 1px solid #E7E5E4; }
+  .exercise:first-of-type { border-top: none; }
+  .ex-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .ex-name { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+  .ex-score { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .reps { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+  .rep { font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .compare-frame { margin: 0; border: 1px solid #E7E5E4; border-radius: 10px; overflow: hidden; background: #FAF7F0; }
+  .compare-frame img { width: 100%; height: 220px; object-fit: cover; object-position: center; display: block; image-rendering: auto; }
+  .compare-frame figcaption { font-size: 11px; color: #57534E; padding: 7px 9px; background: #FAF7F0; font-weight: 600; }
+  .missing-image { height: 220px; display: flex; align-items: center; justify-content: center; color: #A8A29E; font-size: 12px; background: #F5F2EC; }
+  .snaps { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .snap { position: relative; width: 72px; height: 104px; border-radius: 6px; overflow: hidden; border: 1px solid #E7E5E4; }
+  .snap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .snap-label { position: absolute; bottom: 0; inset-inline: 0; font-size: 9px; color: #fff; text-align: center; padding: 1px 0; font-weight: 600; }
+  .muted { color: #78716C; }
+  .small { font-size: 12px; margin-top: 2px; }
+  .footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #E7E5E4; font-size: 11px; color: #78716C; line-height: 1.6; }
+  @media print {
+    body { background: #fff; padding: 0; }
+    .page { box-shadow: none; border-radius: 0; padding: 24px; max-width: none; }
+    .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+    <h1>Facial Retraining Session Report</h1>
+    <div class="meta">${escapeHtml(dateStr)}${timeStr ? ` · ${escapeHtml(timeStr)}` : ""}</div>
+
+    <div class="summary">
+      <div class="big-score">${overallPct == null ? "—" : overallPct + "%"}</div>
+      <div class="summary-meta">
+        <div><strong>Average symmetry</strong> across the session</div>
+        <div>Type: <strong>${escapeHtml(sessionType)}</strong></div>
+        <div>Duration: <strong>${escapeHtml(dur)}</strong></div>
+        <div>Exercises: <strong>${scoresArr.length}</strong> · Reps captured: <strong>${totalReps}</strong></div>
+        ${comfort ? `<div>Comfort level: <strong>${escapeHtml(comfort)}</strong></div>` : ""}
+      </div>
+    </div>
+
+    ${baseline ? `<div class="baseline"><strong>Current baseline progress:</strong> ${escapeHtml(baseline.side)} side · ${escapeHtml(baselineProgressLabel(baseline) ?? "")}</div>` : ""}
+    ${initialBaseline ? `<div class="baseline"><strong>First baseline progress:</strong> ${escapeHtml(initialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(initialBaseline) ?? "")}</div>` : ""}
+
+    <h2>By Exercise</h2>
+    ${exerciseRows || '<div class="muted">No exercises recorded.</div>'}
+
+    <div class="footer">
+      Symmetry is auto-detected from facial landmarks captured during the session. Some movement variation is normal even in healthy faces.
+      Generated for clinical review by a physiotherapist or facial retraining specialist.
+    </div>
+  </div>
+  <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 250); });</script>
+</body>
+</html>`;
+}
+
+function shareSessionReport(sessionLike) {
+  const html = buildSessionReportHtml(sessionLike);
+  const win = window.open("", "_blank");
+  if (!win) {
+    const blob = new Blob([html], { type: "text/html" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `mirror-session-report-${sessionLike.date || todayISO()}.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+}
+
 // Dual-mode: live mode receives `scores` (in-progress array) + `onFinish`; view mode
 // receives a saved `session` record + `onClose`. Both render the same comprehensive report.
-function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, onFinish, session, onClose }) {
+function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
   const isView = !!session;
   const scoresArr = isView ? (session.scores || []) : scores;
   const sessionBaseline = isView ? session.baselineProgress : baselineProgress;
+  const sessionInitialBaseline = isView ? session.initialBaselineProgress : initialBaselineProgress;
+  const effectiveKind = isView ? session.kind : kind;
+  const isPractice = effectiveKind === "practice";
   const nextFocus = sessionFocusRecommendation(scoresArr);
   const overall = isView
     ? session.sessionAvg
@@ -2390,6 +2997,17 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, on
         const valid = scoresArr.map((e) => e.avg).filter((v) => v != null);
         return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
       })();
+  const reportSession = isView ? { ...session, sessionAvg: overall } : {
+    date: todayISO(),
+    ts: Date.now(),
+    duration: startedAt ? Math.round((Date.now() - startedAt) / 1000) : null,
+    sessionAvg: overall,
+    baselineProgress: sessionBaseline,
+    initialBaselineProgress: sessionInitialBaseline,
+    scores: scoresArr,
+    comfortLevel,
+    kind: effectiveKind,
+  };
   const overallPct = displayPct(overall);
   const [timelapse, setTimelapse] = useState(null); // { exerciseIdx, startIdx }
   const sessionN = (sessionsToday ?? 0) + 1;
@@ -2412,15 +3030,20 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, on
           <button onClick={onClose} className="self-start mb-4 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Close report"><X className="w-5 h-5" /></button>
         )}
         <div className="text-center mb-8">
-          <div className="text-xs uppercase tracking-widest opacity-60 mb-2">{isView ? formatSessionDate(session) : "Session complete"}</div>
+          <div className="text-xs uppercase tracking-widest opacity-60 mb-2">{isView ? formatSessionDate(session) : isPractice ? "Practice complete" : "Session complete"}</div>
           <h2 className="text-3xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>
             <em style={{ fontStyle: "italic", fontWeight: 400 }}>{message}</em>
           </h2>
-          {!isView && (
+          {!isView && !isPractice && (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)" }}>
               <span className="opacity-80">Session <span className="font-semibold" style={{ color: "#F4EFE6" }}>{sessionN}</span> of {goal} today</span>
               {nextSlot && <span className="opacity-60">· next at {formatClock(nextSlot)}</span>}
               {remainingAfter === 0 && <span className="opacity-60">· done for the day</span>}
+            </div>
+          )}
+          {!isView && isPractice && (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)" }}>
+              <span className="opacity-80">Practice run · doesn't count toward daily goal</span>
             </div>
           )}
           {isView && session.duration != null && (
@@ -2435,7 +3058,12 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, on
             <div className="text-sm opacity-70 mt-1">average symmetry</div>
             {sessionBaseline && (
               <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)", color: "#D4A574" }}>
-                <TrendingUp className="w-3 h-3" />{sessionBaseline.side} side · {baselineProgressLabel(sessionBaseline)}
+                <TrendingUp className="w-3 h-3" />current baseline · {sessionBaseline.side} side · {baselineProgressLabel(sessionBaseline)}
+              </div>
+            )}
+            {sessionInitialBaseline && (
+              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(122,143,115,0.12)", color: "#A8C39F" }}>
+                <TrendingUp className="w-3 h-3" />first baseline · {sessionInitialBaseline.side} side · {baselineProgressLabel(sessionInitialBaseline)}
               </div>
             )}
           </div>
@@ -2461,7 +3089,8 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, on
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium">{s.name}</div>
                   <div className="text-xs opacity-60 mt-0.5">{s.scores.length} rep{s.scores.length !== 1 ? "s" : ""} scored{s.snapshots?.length ? ` · ${s.snapshots.length} shot${s.snapshots.length !== 1 ? "s" : ""}` : ""}</div>
-                  {s.baselineProgress && <div className="text-xs mt-1" style={{ color: "#D4A574" }}>{s.baselineProgress.side} side · {baselineProgressLabel(s.baselineProgress)}</div>}
+                  {s.baselineProgress && <div className="text-xs mt-1" style={{ color: "#D4A574" }}>current · {s.baselineProgress.side} side · {baselineProgressLabel(s.baselineProgress)}</div>}
+                  {s.initialBaselineProgress && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · {s.initialBaselineProgress.side} side · {baselineProgressLabel(s.initialBaselineProgress)}</div>}
                 </div>
                 {s.avg != null ? <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(s.avg) }}>{displayPct(s.avg)}%</div> : <div className="text-xs opacity-50">—</div>}
               </div>
@@ -2484,7 +3113,16 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, on
           <TimelapseModal exercise={scoresArr[timelapse.exerciseIdx]} startIdx={timelapse.startIdx} onClose={() => setTimelapse(null)} />
         )}
         <div className="text-xs opacity-60 leading-relaxed mb-6 px-2 text-center">Symmetry is auto-detected from facial landmarks. Some movement variation is normal even in healthy faces.</div>
-        <button onClick={isView ? onClose : onFinish} className="w-full rounded-full py-3.5 font-semibold mt-auto" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isView ? "Close" : "Done"}</button>
+        <div className="mt-auto space-y-3">
+          <button
+            onClick={() => shareSessionReport(reportSession)}
+            className="w-full rounded-full py-3 font-medium flex items-center justify-center gap-2"
+            style={{ background: "rgba(244, 239, 230, 0.1)", color: "#F4EFE6", border: "1px solid rgba(244, 239, 230, 0.18)" }}
+          >
+            <Share2 className="w-4 h-4" /> Save PDF for physio
+          </button>
+          <button onClick={isView ? onClose : onFinish} className="w-full rounded-full py-3.5 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isView ? "Close" : "Done"}</button>
+        </div>
       </div>
       </div>
     </div>
@@ -2500,12 +3138,16 @@ function PastSessionsList({ sessions, onOpen }) {
       <div className="space-y-1.5">
         {sorted.map((s) => {
           const exCount = (s.exercises ?? s.scores ?? []).length;
+          const progress = preferredBaselineProgress(s);
           return (
             <button key={s.ts || `${s.date}-${exCount}`} onClick={() => onOpen(s)} className="w-full rounded-xl px-3 py-2.5 flex items-center gap-3 transition hover:bg-white text-left" style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}>
               <div className="text-xs text-stone-500 tabular-nums w-28 shrink-0">{formatSessionDate(s)}</div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm">{exCount} exercise{exCount !== 1 ? "s" : ""}</div>
-                <div className="text-xs text-stone-500 tabular-nums">{formatDuration(s.duration)}{s.baselineProgress ? ` · ${baselineProgressLabel(s.baselineProgress)}` : ""}</div>
+                <div className="text-sm flex items-center gap-2">
+                  <span>{exCount} exercise{exCount !== 1 ? "s" : ""}</span>
+                  {s.kind === "practice" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(184, 84, 58, 0.12)", color: "#B8543A" }}>Practice</span>}
+                </div>
+                <div className="text-xs text-stone-500 tabular-nums">{formatDuration(s.duration)}{progress ? ` · ${baselineProgressLabel(progress)}` : ""}</div>
               </div>
               {s.sessionAvg != null
                 ? <div className="tabular-nums font-semibold text-base" style={{ fontFamily: "Fraunces", color: scoreColor(s.sessionAvg) }}>{displayPct(s.sessionAvg)}%</div>
@@ -2622,13 +3264,16 @@ function PastEntryRow({ entry }) {
   );
 }
 
-function MovementProfileCard({ profile, history, sessions, progressByExercise, onStart }) {
+function MovementProfileCard({ profile, initialProfile, history, sessions, progressByExercise, onStart }) {
   const exercises = profileExerciseEntries(profile);
   const focusItems = getAdaptiveFocusItems(profile, sessions, 3);
   const created = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
   const status = profileStatus(profile);
+  const retakeExerciseIds = status?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
+  const firstProfile = initialProfile && initialProfile.createdAt !== profile?.createdAt ? initialProfile : null;
   const previousProfile = history?.[0] ?? null;
   const comparison = compareMovementProfiles(profile, previousProfile);
+  const firstComparison = compareMovementProfiles(profile, firstProfile);
   const historyRows = (history ?? []).slice(0, 3);
   if (!profile) {
     return (
@@ -2660,9 +3305,14 @@ function MovementProfileCard({ profile, history, sessions, progressByExercise, o
         </div>
       </div>
       {status?.shouldRetake && (
-        <div className="rounded-2xl p-3 mb-4 flex items-center gap-3" style={{ background: "rgba(184,84,58,0.16)", color: "#FFD3C1" }}>
+        <div className="rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3" style={{ background: "rgba(184,84,58,0.16)", color: "#FFD3C1" }}>
           <div className="flex-1 text-xs">Retake recommended: {status.reason}</div>
-          <button onClick={onStart} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake</button>
+          {retakeExerciseIds.length > 0 && (
+            <button onClick={() => onStart(retakeExerciseIds)} className="rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake weak only</button>
+          )}
+          {(status.noisy || status.stale || retakeExerciseIds.length === 0) && (
+            <button onClick={() => onStart()} className="rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.18)" }}>Full retake</button>
+          )}
         </div>
       )}
       <div className="grid grid-cols-3 gap-2 mb-4">
@@ -2672,13 +3322,26 @@ function MovementProfileCard({ profile, history, sessions, progressByExercise, o
         </div>
         <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
           <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Noise</div>
-          <div className="text-sm font-semibold tabular-nums">{profile.calibrationQuality?.avgNoise ?? "—"}</div>
+          <div className="text-sm font-semibold tabular-nums">{profile.calibrationQuality?.coreAvgNoise ?? profile.calibrationQuality?.avgNoise ?? "—"}</div>
         </div>
         <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
           <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Retakes</div>
           <div className="text-sm font-semibold tabular-nums">{history?.length ?? 0}</div>
         </div>
       </div>
+      {firstComparison && (
+        <div className="rounded-2xl p-3 mb-4" style={{ background: "rgba(212,165,116,0.12)", border: "1px solid rgba(212,165,116,0.18)" }}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-wider opacity-55">First vs current</div>
+              <div className="text-xs opacity-60 mt-0.5">First saved baseline {firstComparison.previousDate ?? "available"}</div>
+            </div>
+            {firstComparison.avgSymmetryDelta != null && (
+              <div className="text-sm font-semibold tabular-nums" style={{ color: firstComparison.avgSymmetryDelta >= 0 ? "#A8C39F" : "#FFB48F" }}>{signedPointDelta(firstComparison.avgSymmetryDelta)}</div>
+            )}
+          </div>
+        </div>
+      )}
       {comparison && (
         <div className="rounded-2xl p-3 mb-4" style={{ background: "rgba(122,143,115,0.14)", border: "1px solid rgba(122,143,115,0.2)" }}>
           <div className="flex items-start justify-between gap-3 mb-3">
@@ -2727,9 +3390,13 @@ function MovementProfileCard({ profile, history, sessions, progressByExercise, o
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{ex.name}</div>
               <div className="opacity-55">limited side: {ex.limitedSide} · threshold {ex.activationThreshold ?? "—"}</div>
+              {ex.quality && <div className="opacity-55">quality: {ex.quality.label}{ex.quality.issues?.length ? ` · ${ex.quality.issues.join(", ")}` : ""}</div>}
               {progressByExercise?.[ex.exerciseId] && <div className="mt-0.5" style={{ color: "#D4A574" }}>{baselineProgressLabel(progressByExercise[ex.exerciseId])}</div>}
             </div>
-            {ex.initialSymmetry != null && <div className="tabular-nums" style={{ color: scoreColor(ex.initialSymmetry) }}>{displayPct(ex.initialSymmetry)}%</div>}
+            {ex.quality?.key === "retake" && (
+              <button onClick={() => onStart([ex.exerciseId])} className="rounded-full px-2.5 py-1 text-[11px] font-semibold shrink-0" style={{ background: "rgba(184,84,58,0.2)", color: "#FFD3C1" }}>Retake</button>
+            )}
+            {ex.initialSymmetry != null && <div className="tabular-nums shrink-0" style={{ color: scoreColor(ex.initialSymmetry) }}>{displayPct(ex.initialSymmetry)}%</div>}
           </div>
         ))}
       </div>
@@ -2764,7 +3431,10 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
   const last7DaysSessions = data.sessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
   const journalChartData = useMemo(() => data.journal.length === 0 ? [] : data.journal.slice(-21).map((j) => ({ date: new Date(j.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), symmetry: j.symmetry })), [data.journal]);
   const aiSymmetryData = useMemo(() => data.sessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [data.sessions]);
-  const baselineProgressData = useMemo(() => data.sessions.filter((s) => s.baselineProgress?.ratio != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(s.baselineProgress.ratio * 100) })), [data.sessions]);
+  const baselineProgressData = useMemo(() => data.sessions.map((s) => {
+    const progress = preferredBaselineProgress(s);
+    return progress?.ratio == null ? null : { date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(progress.ratio * 100) };
+  }).filter(Boolean).slice(-21), [data.sessions]);
   const progressByExercise = useMemo(() => latestExerciseProgressById(data.sessions), [data.sessions]);
   const activityGrid = useMemo(() => {
     const today = new Date(); const grid = [];
@@ -2815,7 +3485,7 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
       {baselineProgressData.length > 0 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Progress from baseline</div></div>
-          <div className="text-xs text-stone-500 mb-4">Affected or limited side movement · 100% = onboarding baseline</div>
+          <div className="text-xs text-stone-500 mb-4">Affected or limited side movement · 100% = first saved baseline</div>
           <div style={{ width: "100%", height: 160 }}>
             <ResponsiveContainer>
               <AreaChart data={baselineProgressData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
@@ -2861,7 +3531,7 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
         </div>
       </div>
       <PastSessionsList sessions={data.sessions} onOpen={onOpenReport} />
-      <MovementProfileCard profile={data.movementProfile} history={data.movementProfileHistory} sessions={data.sessions} progressByExercise={progressByExercise} onStart={onStartProfile} />
+      <MovementProfileCard profile={data.movementProfile} initialProfile={data.initialMovementProfile} history={data.movementProfileHistory} sessions={data.sessions} progressByExercise={progressByExercise} onStart={onStartProfile} />
       {journalChartData.length > 1 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="text-sm font-semibold mb-1">Self-rated symmetry</div>

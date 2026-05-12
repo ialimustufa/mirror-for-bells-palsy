@@ -127,11 +127,14 @@ It checks:
 Current thresholds:
 
 ```text
-center offset < 0.12
-absolute eye-line tilt < 0.12 radians
+center offset < FACE_CENTER_MAX_OFFSET = 0.12
+absolute eye-line tilt < FACE_TILT_MAX_RAD = 0.12 radians
 ```
 
 This is not full head-pose estimation. It is a practical guardrail to prevent poor calibration.
+`faceAlignmentFeedback` returns the same boolean plus a user-facing reason such as
+"center your face" or "keep your eyes level" so calibration prompts explain what is
+blocking capture.
 
 ## Face-Local Normalization
 
@@ -276,8 +279,37 @@ Movement from neutral:
 ```text
 flare = max(0, current_width - neutral_width)
 lift = max(0, neutral_y - current_y)
-side_movement = hypot(flare, lift)
 ```
+
+Each axis has the per-side centroid noise floor subtracted before combining, mirroring the
+per-landmark denoising used by the generic pairwise scorer. The centroid jitter for an
+N-point average scales as the average single-point noise divided by `sqrt(N)`:
+
+```text
+side_noise = mean(noise_floor[side_indices]) / sqrt(N)
+flare_d    = max(0, flare - side_noise)
+lift_d     = max(0, lift  - side_noise)
+mesh_movement = hypot(flare_d, lift_d)
+```
+
+The mesh movement is then fused with a per-side blendshape activation. The MediaPipe
+`noseSneerLeft` / `noseSneerRight` coefficients are read from each frame and have their
+calibration-time neutral values subtracted so a slightly raised resting sneer doesn't
+masquerade as movement:
+
+```text
+bs_l = max(0, current.noseSneerLeft  - neutral.noseSneerLeft)
+bs_r = max(0, current.noseSneerRight - neutral.noseSneerRight)
+side_movement = mesh_movement + 0.03 * bs_side
+```
+
+The 0.03 weight maps a saturating blendshape activation (1.0) to a strong mesh flare
+(~0.03 in face-local units), so both signals contribute on roughly comparable scales. The
+mesh stays primary because it lateralizes more honestly on asymmetric faces; blendshapes
+provide supporting activation evidence so weak flares the mesh can't resolve still score.
+
+Neutral blendshape values are captured during the same calibration window that builds
+the neutral landmark mean and noise floor, so they share the user's at-rest baseline.
 
 Then symmetry is the standard ratio:
 
@@ -285,11 +317,16 @@ Then symmetry is the standard ratio:
 symmetry = min(left_movement, right_movement) / max(left_movement, right_movement)
 ```
 
-Current threshold:
+Current threshold is adaptive — it floors at a small absolute value but rises with calibration jitter so a noisy session does not slip into "scored" territory after denoising:
 
 ```js
-if (peak < 0.004) return null;
+const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
+if (peak < Math.max(0.003, noiseGate)) return null;
 ```
+
+Nostril flare is genuinely small in face-local units (typically 1–2% of inter-ocular
+distance), so the gate floor stays low. The noise-scaled term suppresses spurious scoring
+when calibration jitter is high.
 
 ## Fallback Generic Symmetry
 
@@ -362,27 +399,63 @@ The goal is to personalize the app around the user's own starting point while co
 
 1. Ask the user to select affected side: `left`, `right`, `both`, or `unsure`.
 2. Ask the user to select comfort level: `gentle`, `normal`, or `advanced`.
-3. Run the same neutral calibration used by sessions.
-4. Guide the user through a small movement set:
-   - Eyebrow Raise
-   - Soft Eye Closure
-   - Nostril Flare
-   - Closed Smile
-   - Lip Pucker
-5. Score each movement with `computeExerciseSymmetry`.
-6. Store per-exercise baseline movement metrics.
+3. Run the same global neutral calibration used by sessions.
+4. Before each exercise, capture a short exercise-specific rest neutral during the `REST` phase.
+5. Guide the user through the full exercise catalog.
+6. Score each movement with `computeExerciseSymmetry` against the exercise-specific neutral when enough rest frames were captured, otherwise against the global neutral.
+7. Build the persisted baseline from the top movement window instead of a single peak frame.
+8. Compute a per-exercise quality label.
+9. Store per-exercise baseline movement metrics.
 
 The assessment exercise set is defined as:
 
 ```js
-const PROFILE_ASSESSMENT_EXERCISES = [
-  "eyebrow-raise",
-  "eye-close",
-  "nose-wrinkle",
-  "closed-smile",
-  "pucker",
-];
+const PROFILE_ASSESSMENT_EXERCISES = EXERCISES.map((exercise) => exercise.id);
 ```
+
+The profile uses one global neutral calibration pass, then captures a fresh rest-neutral
+buffer before every exercise. That gives each baseline movement a local starting point,
+which reduces drift from blinking, mouth tension, jaw settling, and fatigue during the
+longer full-catalog assessment. If the rest buffer has fewer than
+`PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES`, the scorer falls back to the global neutral.
+The rest window can extend once when too few steady rest frames were captured, and the
+prompt reports whether the blocker is face alignment, missing face detection, or simply
+needing a few more steady frames.
+
+Global calibration also distinguishes small movement from large movement:
+
+```text
+delta <= CALIBRATION_STABILITY_EPS -> keep collecting stable frames
+delta <= CALIBRATION_RESET_EPS     -> keep collecting, coach the user to hold steadier
+delta >  CALIBRATION_RESET_EPS     -> restart the stability window
+```
+
+This avoids restarting calibration for tiny webcam jitter while still rejecting clear
+talking, smiling, jaw movement, or head motion.
+
+The per-exercise baseline is robust rather than peak-based:
+
+```text
+baseline frames = top 20% movement frames during the hold
+baseline movement = mean(left/right movement across those frames)
+initial symmetry = mean(symmetry across those frames)
+```
+
+That value is stored as `leftBaselineMovement`, `rightBaselineMovement`, and
+`initialSymmetry`. Raw mean values are also retained as `leftMeanMovement`,
+`rightMeanMovement`, and `meanSymmetry` for debugging. This prevents a single shaky
+frame from becoming the user's baseline.
+
+Each exercise also stores a `quality` object derived from:
+
+- exercise-rest neutral frames
+- hold frames
+- scored frames
+- face alignment ratio during hold
+- peak movement signal
+
+Quality labels are `Strong`, `Usable`, or `Retake`. A low-quality exercise no longer
+means the entire profile is bad; it identifies the specific movement that needs review.
 
 ### Stored Profile Shape
 
@@ -460,6 +533,7 @@ The profile is used in normal app behavior after it is saved:
 - `buildSessionExercises` applies comfort-level dosing before a session starts.
 - Live feedback can show the focused side's current movement relative to baseline.
 - Exercise summaries and saved sessions store `baselineProgress`.
+- Session summaries can open a printable report intended to be saved as a PDF for a physiotherapist.
 - The Progress screen charts movement from baseline over time.
 - `MovementProfileCard` shows the current focus list and latest per-exercise progress from saved sessions.
 - Retaking a profile archives the previous profile as a compact history record for comparison.
@@ -469,12 +543,16 @@ The profile is used in normal app behavior after it is saved:
 
 Movement profiles are treated as a living baseline rather than a permanent record.
 
-The profile status layer uses:
+The profile status layer uses the stable core-landmark noise metric
+(`calibrationQuality.coreAvgNoise`) when available, falling back to the legacy
+full-face `avgNoise` for older saved profiles. Core landmarks are less affected by
+normal blinks, lip relaxation, and jaw drift, so this avoids falsely labelling most
+normal webcam calibrations as noisy.
 
 ```text
-avgNoise <= 0.003 -> Steady
-avgNoise <= 0.007 -> Usable
-otherwise         -> Noisy
+coreAvgNoise <= 0.006 -> Steady
+coreAvgNoise <= 0.018 -> Usable
+otherwise             -> Noisy
 ```
 
 Profiles are also considered stale after:
@@ -487,10 +565,37 @@ Home and Progress show retake prompts when:
 
 - The baseline calibration was noisy.
 - The saved profile is older than the retake window.
+- One or more exercise baselines have `quality.key === "retake"`.
 
 When a new baseline is saved, `saveMovementProfile` moves the previous `movementProfile` into `movementProfileHistory`.
 The archive strips `neutralLandmarks` and `noiseFloor` before storage because history is only used for trend comparison, not for live scoring.
-The current profile remains the only profile used by `SessionMode` for activation thresholds and progress-vs-baseline calculations.
+
+The app now separates the first saved baseline from the current working baseline:
+
+- `initialMovementProfile` is the first available baseline. It is kept stable as the
+  long-term recovery reference.
+- `movementProfile` is the current working baseline. It drives exercise selection,
+  activation thresholds, comfort dosing, and current progress calculations.
+
+For existing installs, `normalizeAppData` infers `initialMovementProfile` from the
+oldest archived profile when available, otherwise from the current `movementProfile`.
+
+If only specific exercises are weak, the app opens `ProfileAssessment` with
+`retakeExerciseIds`. That flow recalibrates neutral pose, reruns only the requested
+movements, and merges the resulting exercise entries back into the current
+`movementProfile`. A partial retake updates `updatedAt`, `lastPartialRetakeAt`,
+`lastPartialRetakeExerciseIds`, `lastPartialCalibrationQuality`, the affected
+exercise baselines, and `initialAvgSymmetry`. It does not archive or replace the
+whole profile.
+
+`SessionMode` stores both:
+
+- `baselineProgress`: current movement compared with the current working baseline.
+- `initialBaselineProgress`: current movement compared with the first saved baseline.
+
+The current profile remains the only profile used by `SessionMode` for activation thresholds.
+Progress charts and reports prefer `initialBaselineProgress` when available so recovery
+trend remains anchored to the first baseline even after later calibration updates.
 
 ### Comfort-Level Dosing
 
@@ -516,6 +621,28 @@ advanced -> 115% reps, catalog holds, 2s rest
 
 Hold durations are clamped so advanced mode does not push longer sustained contractions by default.
 `SessionMode` reads `current.reps`, `current.holdSec`, and `current.restSec`, so scoring and timers follow the same session-specific dose shown in the UI.
+
+### Session Report Export
+
+`buildSessionReportHtml` converts a saved or just-completed session into a printable clinical review report.
+
+The report includes:
+
+- Session date, time, duration, type, and comfort level.
+- Average session symmetry.
+- Progress from the user's saved baseline, when available.
+- Per-exercise average symmetry.
+- Per-rep symmetry chips.
+- Target reps, hold seconds, and rest seconds used for each exercise.
+- A side-by-side image comparison with the neutral baseline frame on the left and the strongest movement frame on the right.
+- Higher-resolution captured rep snapshots when they were available.
+
+`shareSessionReport` opens that report in a new window and triggers the browser print flow.
+The intended user action is saving the print output as a PDF and sending that PDF to a physiotherapist.
+
+The neutral baseline image is captured at the end of session calibration. Each exercise
+record stores that same `baselineSnapshot` alongside peak-movement rep snapshots so the
+report remains self-contained after the session is saved.
 
 ### Progress-Vs-Baseline
 

@@ -13,6 +13,7 @@ The app is not a medical diagnostic tool and does not replace a clinician, neuro
 - Normalizes landmarks to reduce the effect of camera distance, face position, and small head roll.
 - Computes exercise-specific left/right movement symmetry.
 - Stores session scores, snapshots, journal entries, streaks, and trends.
+- Creates a printable session report that can be saved as a PDF for a physiotherapist.
 
 ## Tech Stack
 
@@ -72,20 +73,25 @@ During onboarding, users can create a local movement profile. This is not a sepa
 The profile captures:
 
 - A neutral landmark baseline.
+- A short rest-neutral capture before each baseline exercise.
 - Per-landmark calibration noise.
 - User-reported affected side and comfort level.
-- Initial movement metrics for eyebrow raise, eye close, nostril flare, closed smile, and pucker.
-- Per-exercise baseline movement ranges, initial symmetry, estimated limited side, and activation thresholds.
+- Initial movement metrics for every exercise in the practice library.
+- Per-exercise robust baseline movement ranges, initial symmetry, estimated limited side, and activation thresholds.
+- Per-exercise baseline quality labels so weak captures can be retaken without treating the whole profile as bad.
 
-The profile is stored as `movementProfile` in the app data and used in three places:
+The first saved profile is preserved as `initialMovementProfile`, while the current working profile is stored as `movementProfile`:
 
 - Today's default session is prioritized from lower baseline symmetry movements.
 - The Practice library preselects the profile-derived focus plan.
 - Normal session scoring uses per-exercise activation thresholds from the profile.
-- Session reports and Progress show movement from baseline, where `100%` means the user's onboarding movement level.
+- Session reports store both current-baseline progress and first-baseline progress, where `100%` means the matched baseline movement level.
+- Session reports include score summaries, per-exercise rep scores, dose settings, baseline progress, high-resolution rep snapshots, and neutral-baseline comparison images.
 - Home and Progress show focus recommendations from the baseline profile.
 - The selected comfort level adjusts session reps, hold time, and rest time through local dosing rules.
-- Baseline quality and age are tracked, with retake prompts for noisy or stale profiles.
+- Baseline quality and age are tracked, using stable core-landmark jitter to avoid false noisy-calibration prompts.
+- Exercises marked `Retake` can be recalibrated individually; partial retakes merge only those movements into the current profile.
+- Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.
 
 ## Project Structure
 
@@ -148,7 +154,9 @@ If the model or camera is unavailable, the app still allows unscored guided prac
 - Camera frames are processed in the browser by the MediaPipe model.
 - Session records include exercise scores, timestamps, and small captured rep snapshots.
 - Movement profiles include neutral landmark data, noise floor data, and per-exercise baseline metrics.
-- When a profile is retaken, the previous profile is kept as a compact history record for comparison. Raw neutral landmarks and noise-floor arrays are not duplicated into history.
+- The first saved profile is kept as `initialMovementProfile` for long-term recovery comparison; the current `movementProfile` can be updated through full or partial retakes.
+- When the full profile is retaken, the previous profile is kept as a compact history record for comparison. Raw neutral landmarks and noise-floor arrays are not duplicated into history.
+- When only weak exercise baselines are retaken, those exercise entries are merged into the current profile without archiving or replacing the rest of the baseline.
 - App state is persisted under the `mirror-app-data` storage key through the app's browser storage abstraction.
 - There is no backend service in this codebase.
 
