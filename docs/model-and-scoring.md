@@ -115,6 +115,15 @@ This produces:
 - `neutralRef`: the user's neutral resting landmark positions.
 - `noiseRef`: a per-landmark noise floor used to subtract calibration jitter from later displacement measurements.
 
+`normalizedFrameDelta` uses `CALIBRATION_DELTA_POINTS`:
+
+```js
+const CALIBRATION_DELTA_POINTS = [1, 4, 10, 33, 61, 152, 199, 263, 291];
+```
+
+This set intentionally includes mouth corners and chin points so talking, jaw motion,
+and facial expression changes are treated as unstable calibration frames.
+
 ## Face Alignment
 
 `isFaceAligned` is a lightweight posture gate used during calibration and display.
@@ -206,8 +215,9 @@ Examples:
 - Eyebrow raise and frown: brow ridge and forehead-side landmarks.
 - Eye close and wink: full upper/lower eyelid contours.
 - Cheek exercises: cheek, zygomatic, and nasolabial landmarks.
-- Smile and pucker: mouth corners, outer lip ring, inner lip ring, and nearby chin/lip landmarks.
+- Smile, pucker, and separate vowel shapes: mouth corners, outer lip ring, inner lip ring, and nearby chin/lip landmarks. Vowels are modeled as individual `vowel-a`, `vowel-e`, `vowel-i`, `vowel-o`, and `vowel-u` exercises so each shape gets its own hold time, baseline, and progress history.
 - Nose wrinkle / nostril flare: nostril rim, ala wing, and nasalis insertion landmarks.
+- Emoji reactions: practical expression combinations such as smile, big smile, surprise, wink, kiss, sad frown, and nose scrunch. These reuse the same region-specific landmark families but are exposed as separate exercises so real-world expressions can have their own baselines and progress history.
 
 The mapping is defined in `EXERCISE_LANDMARK_PAIRS`.
 
@@ -321,12 +331,16 @@ Current threshold is adaptive — it floors at a small absolute value but rises 
 
 ```js
 const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
-if (peak < Math.max(0.003, noiseGate)) return null;
+if (peak < Math.max(NOSE_MIN_SIGNAL, noiseGate)) return null;
 ```
 
 Nostril flare is genuinely small in face-local units (typically 1–2% of inter-ocular
 distance), so the gate floor stays low. The noise-scaled term suppresses spurious scoring
 when calibration jitter is high.
+
+Nose snapshots and rep scoring use the mesh-derived `symResult.peak` rather than the
+`noseSneer*` blendshape gate. That matters because a true nostril flare can be visible in
+the rim/ala mesh while the sneer blendshape remains weak.
 
 ## Fallback Generic Symmetry
 
@@ -507,6 +521,16 @@ The activation threshold is currently heuristic:
 activationThreshold = max(max(left_peak, right_peak) * 0.35, 0.004)
 ```
 
+Nostril flare uses a lower nose-specific threshold because its face-local movement is
+much smaller than smile, brow, or cheek exercises. New nose baselines use:
+
+```text
+activationThreshold = max(max(left_peak, right_peak) * 0.25, NOSE_PROFILE_THRESHOLD_FLOOR)
+```
+
+During sessions, existing saved nose profiles are capped at `NOSE_PROFILE_THRESHOLD_MAX`
+so older generic `0.004` thresholds do not block real nostril-flare frames.
+
 This gives future sessions a user-specific movement scale instead of relying only on global constants.
 
 ### Limited Side Estimation
@@ -543,17 +567,27 @@ The profile is used in normal app behavior after it is saved:
 
 Movement profiles are treated as a living baseline rather than a permanent record.
 
-The profile status layer uses the stable core-landmark noise metric
-(`calibrationQuality.coreAvgNoise`) when available, falling back to the legacy
-full-face `avgNoise` for older saved profiles. Core landmarks are less affected by
-normal blinks, lip relaxation, and jaw drift, so this avoids falsely labelling most
-normal webcam calibrations as noisy.
+The profile status layer uses `calibrationQuality.coreAvgNoise` when available,
+falling back to the legacy full-face `avgNoise` for older saved profiles. New
+profiles compute `coreAvgNoise` from a stricter `CORE_QUALITY_POINTS` subset:
+
+```js
+const CORE_QUALITY_POINTS = [1, 4, 10, 33, 263];
+```
+
+This subset avoids mouth and chin landmarks, so normal lip relaxation and jaw drift
+do not directly inflate the profile-quality metric. The current thresholds are
+compatibility defaults carried forward from earlier calibration behavior, not a
+fully retuned model against a new captured calibration dataset.
 
 ```text
 coreAvgNoise <= 0.006 -> Steady
 coreAvgNoise <= 0.018 -> Usable
 otherwise             -> Noisy
 ```
+
+`calibrationQuality.coreQualityPoints` is persisted with new profiles so reports and
+future threshold tuning can identify which landmark subset produced `coreAvgNoise`.
 
 Profiles are also considered stale after:
 
@@ -640,9 +674,13 @@ The report includes:
 `shareSessionReport` opens that report in a new window and triggers the browser print flow.
 The intended user action is saving the print output as a PDF and sending that PDF to a physiotherapist.
 
-The neutral baseline image is captured at the end of session calibration. Each exercise
-record stores that same `baselineSnapshot` alongside peak-movement rep snapshots so the
-report remains self-contained after the session is saved.
+The neutral baseline image is captured at the end of session calibration. During the
+just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside
+peak-movement rep snapshots so the immediate PDF can show a side-by-side comparison.
+When the session is saved, those base64 camera images are converted into IndexedDB
+`sessionImages` blob records keyed by session, exercise, and role. The compact session
+record keeps image references/counts, while past reports hydrate the images on demand.
+The data remains local to the browser and is not uploaded.
 
 ### Progress-Vs-Baseline
 

@@ -6,13 +6,13 @@ The app is not a medical diagnostic tool and does not replace a clinician, neuro
 
 ## What It Does
 
-- Guides exercises for the forehead, eyes, nose, cheeks, and mouth.
+- Guides exercises for the forehead, eyes, nose, cheeks, mouth, and practical emoji-style facial reactions.
 - Uses the camera feed to track facial landmarks during each rep.
 - Calibrates a neutral resting face before scoring.
 - Offers an optional first-use movement baseline assessment.
 - Normalizes landmarks to reduce the effect of camera distance, face position, and small head roll.
 - Computes exercise-specific left/right movement symmetry.
-- Stores session scores, snapshots, journal entries, streaks, and trends.
+- Stores session scores, local report images, journal entries, streaks, and trends.
 - Creates a printable session report that can be saved as a PDF for a physiotherapist.
 
 ## Tech Stack
@@ -89,7 +89,7 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - Session reports include score summaries, per-exercise rep scores, dose settings, baseline progress, high-resolution rep snapshots, and neutral-baseline comparison images.
 - Home and Progress show focus recommendations from the baseline profile.
 - The selected comfort level adjusts session reps, hold time, and rest time through local dosing rules.
-- Baseline quality and age are tracked, using stable core-landmark jitter to avoid false noisy-calibration prompts.
+- Baseline quality and age are tracked using a stricter core-quality landmark subset; current thresholds are compatibility defaults until calibration samples are used for retuning.
 - Exercises marked `Retake` can be recalibrated individually; partial retakes merge only those movements into the current profile.
 - Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.
 
@@ -152,12 +152,12 @@ If the model or camera is unavailable, the app still allows unscored guided prac
 ## Data And Privacy Notes
 
 - Camera frames are processed in the browser by the MediaPipe model.
-- Session records include exercise scores, timestamps, and small captured rep snapshots.
+- Session records persist exercise scores, timestamps, dose settings, and snapshot counts. Report images are stored locally in IndexedDB as separate image blobs so past physiotherapy PDFs can be regenerated without bloating session JSON.
 - Movement profiles include neutral landmark data, noise floor data, and per-exercise baseline metrics.
 - The first saved profile is kept as `initialMovementProfile` for long-term recovery comparison; the current `movementProfile` can be updated through full or partial retakes.
 - When the full profile is retaken, the previous profile is kept as a compact history record for comparison. Raw neutral landmarks and noise-floor arrays are not duplicated into history.
 - When only weak exercise baselines are retaken, those exercise entries are merged into the current profile without archiving or replacing the rest of the baseline.
-- App state is persisted under the `mirror-app-data` storage key through the app's browser storage abstraction.
+- App state is persisted locally in IndexedDB under `mirror-db`, with `appState`, `sessions`, and `sessionImages` stores. The legacy `mirror-app-data` localStorage record is migrated once and removed after a successful migration.
 - There is no backend service in this codebase.
 
 ## Medical Disclaimer
