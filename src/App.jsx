@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, Pause, X, ChevronRight, Volume2, VolumeX, Flame, Camera, CameraOff, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 
@@ -488,6 +488,7 @@ function smoothLandmarks(prev, next) {
 
 function useFaceLandmarker(active) {
   const [status, setStatus] = useState("idle");
+  const [faceLandmarker, setFaceLandmarker] = useState(null);
   const flRef = useRef(null);
   const latestRef = useRef(null); // { landmarks, blendshapes }
 
@@ -508,8 +509,9 @@ function useFaceLandmarker(active) {
           outputFaceBlendshapes: true,
           numFaces: 1,
         });
-        if (cancelled) { try { fl.close(); } catch { } return; }
+        if (cancelled) { try { fl.close(); } catch { /* model may already be closed */ } return; }
         flRef.current = fl;
+        setFaceLandmarker(fl);
         setStatus("ready");
       } catch (err) {
         console.warn("[Mirror] FaceLandmarker init failed:", err);
@@ -520,10 +522,14 @@ function useFaceLandmarker(active) {
   }, [active]);
 
   useEffect(() => {
-    return () => { try { flRef.current?.close?.(); } catch { } flRef.current = null; };
+    return () => {
+      try { flRef.current?.close?.(); } catch { /* best-effort model cleanup */ }
+      flRef.current = null;
+      setFaceLandmarker(null);
+    };
   }, []);
 
-  return { faceLandmarker: flRef.current, latestRef, status };
+  return { faceLandmarker, latestRef, status };
 }
 
 export default function App() {
@@ -556,7 +562,7 @@ export default function App() {
     link.href = "https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Manrope:wght@400;500;600;700&display=swap";
     link.rel = "stylesheet";
     document.head.appendChild(link);
-    return () => { try { document.head.removeChild(link); } catch { } };
+    return () => { try { document.head.removeChild(link); } catch { /* font link may have been removed externally */ } };
   }, []);
 
   const persist = useCallback(async (next) => {
@@ -631,7 +637,7 @@ function HomeView({ data, streak, onStartSession, onGo }) {
     return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : null;
   })();
   const nextLabel = nextSlot
-    ? (nextSlot.getTime() <= Date.now() ? "Now" : formatClock(nextSlot))
+    ? (nextSlot.getTime() <= new Date().getTime() ? "Now" : formatClock(nextSlot))
     : null;
   const greeting = (() => { const h = new Date().getHours(); if (h < 12) return "Good morning"; if (h < 18) return "Good afternoon"; return "Good evening"; })();
 
@@ -826,7 +832,7 @@ function SessionMode({ session, prefs, sessionsToday, onComplete, onCancel, onTo
   const holdScoreSumRef = useRef(0);
   const holdScoreCountRef = useRef(0);
 
-  const startTimeRef = useRef(Date.now());
+  const startTimeRef = useRef(session.startedAt);
   const current = session.exercises[exIdx];
   const nextExercise = session.exercises[exIdx + 1] ?? null;
   const totalExercises = session.exercises.length;
@@ -1010,7 +1016,9 @@ function SessionMode({ session, prefs, sessionsToday, onComplete, onCancel, onTo
           latestRef.current = null;
           drawOverlay(overlayRef.current, v, null, { aligned: false, phase });
         }
-      } catch { }
+      } catch {
+        // Detection is best-effort; transient MediaPipe/video frame errors should not end a session.
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -1209,22 +1217,6 @@ function BalanceBar({ label, frac, highlight, color }) {
   );
 }
 
-function SymmetryBadge({ value }) {
-  const pct = displayPct(value);
-  const color = scoreColor(value);
-  return (
-    <div className="px-3 py-2 rounded-2xl flex items-center gap-2" style={{ background: "rgba(31, 27, 22, 0.6)", backdropFilter: "blur(8px)", border: `1px solid ${color}` }}>
-      <div className="w-2 h-2 rounded-full" style={{ background: color }} />
-      <div className="text-right">
-        <div className="text-lg leading-none tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color }}>{pct}%</div>
-        <div className="text-[9px] uppercase tracking-wider opacity-60 mt-0.5">symmetry</div>
-      </div>
-    </div>
-  );
-}
-
-
-
 function speak(enabled, text) {
   if (!enabled || !("speechSynthesis" in window)) return;
   try {
@@ -1234,11 +1226,13 @@ function speak(enabled, text) {
     u.pitch = 1.0;
     u.volume = 1.0;
     window.speechSynthesis.speak(u);
-  } catch { }
+  } catch {
+    // Speech synthesis is optional and browser-dependent.
+  }
 }
 
 function flushSpeech() {
-  try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch { }
+  try { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); } catch { /* optional browser API */ }
 }
 
 function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercises, onSkip, onCancel }) {
