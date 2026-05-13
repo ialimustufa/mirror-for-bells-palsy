@@ -1,0 +1,325 @@
+// Generated from public/audio/cues/manifest.json. Do not edit by hand.
+const audioCueManifest = {
+  "version": 2,
+  "generatedAt": "2026-05-13T22:34:03.958Z",
+  "cues": {
+    "17dm1rl": {
+      "path": "/audio/cues/17dm1rl.m4a",
+      "text": "Calibration. Center your face and stay relaxed."
+    },
+    "1mo6f6x": {
+      "path": "/audio/cues/1mo6f6x.m4a",
+      "text": "Cheek Puff. Resting pose."
+    },
+    "1ps2q1": {
+      "path": "/audio/cues/1ps2q1.m4a",
+      "text": "Cheek Puff. Resting pose. Stay relaxed."
+    },
+    "crohha": {
+      "path": "/audio/cues/crohha.m4a",
+      "text": "Cheek Suck. Resting pose."
+    },
+    "1g3yqra": {
+      "path": "/audio/cues/1g3yqra.m4a",
+      "text": "Cheek Suck. Resting pose. Stay relaxed."
+    },
+    "1udo9ni": {
+      "path": "/audio/cues/1udo9ni.m4a",
+      "text": "Closed Smile. Resting pose."
+    },
+    "gy10ra": {
+      "path": "/audio/cues/gy10ra.m4a",
+      "text": "Closed Smile. Resting pose. Stay relaxed."
+    },
+    "1vo1uu1": {
+      "path": "/audio/cues/1vo1uu1.m4a",
+      "text": "Emoji Big Smile 😄. Resting pose."
+    },
+    "156cx95": {
+      "path": "/audio/cues/156cx95.m4a",
+      "text": "Emoji Big Smile 😄. Resting pose. Stay relaxed."
+    },
+    "1jpvt23": {
+      "path": "/audio/cues/1jpvt23.m4a",
+      "text": "Emoji Kiss 😘. Resting pose."
+    },
+    "1900l27": {
+      "path": "/audio/cues/1900l27.m4a",
+      "text": "Emoji Kiss 😘. Resting pose. Stay relaxed."
+    },
+    "1dleea0": {
+      "path": "/audio/cues/1dleea0.m4a",
+      "text": "Emoji Nose Scrunch 😖. Resting pose."
+    },
+    "183tjqc": {
+      "path": "/audio/cues/183tjqc.m4a",
+      "text": "Emoji Nose Scrunch 😖. Resting pose. Stay relaxed."
+    },
+    "1yy2uqs": {
+      "path": "/audio/cues/1yy2uqs.m4a",
+      "text": "Emoji Sad Frown ☹️. Resting pose."
+    },
+    "1u9sza8": {
+      "path": "/audio/cues/1u9sza8.m4a",
+      "text": "Emoji Sad Frown ☹️. Resting pose. Stay relaxed."
+    },
+    "rtfiyl": {
+      "path": "/audio/cues/rtfiyl.m4a",
+      "text": "Emoji Smile 🙂. Resting pose."
+    },
+    "4ir4jh": {
+      "path": "/audio/cues/4ir4jh.m4a",
+      "text": "Emoji Smile 🙂. Resting pose. Stay relaxed."
+    },
+    "5w73g0": {
+      "path": "/audio/cues/5w73g0.m4a",
+      "text": "Emoji Surprise 😮. Resting pose."
+    },
+    "1v4stfw": {
+      "path": "/audio/cues/1v4stfw.m4a",
+      "text": "Emoji Surprise 😮. Resting pose. Stay relaxed."
+    },
+    "42knc7": {
+      "path": "/audio/cues/42knc7.m4a",
+      "text": "Emoji Wink 😉. Resting pose."
+    },
+    "p6e6cr": {
+      "path": "/audio/cues/p6e6cr.m4a",
+      "text": "Emoji Wink 😉. Resting pose. Stay relaxed."
+    },
+    "t2hv15": {
+      "path": "/audio/cues/t2hv15.m4a",
+      "text": "Eyebrow Raise. Resting pose."
+    },
+    "9dhsnt": {
+      "path": "/audio/cues/9dhsnt.m4a",
+      "text": "Eyebrow Raise. Resting pose. Stay relaxed."
+    },
+    "dxfr39": {
+      "path": "/audio/cues/dxfr39.m4a",
+      "text": "Gentle Frown. Resting pose."
+    },
+    "1982rr9": {
+      "path": "/audio/cues/1982rr9.m4a",
+      "text": "Gentle Frown. Resting pose. Stay relaxed."
+    },
+    "cqyh94": {
+      "path": "/audio/cues/cqyh94.m4a",
+      "text": "Hold"
+    },
+    "r7icnd": {
+      "path": "/audio/cues/r7icnd.m4a",
+      "text": "Independent Wink. Resting pose."
+    },
+    "1cwb7zd": {
+      "path": "/audio/cues/1cwb7zd.m4a",
+      "text": "Independent Wink. Resting pose. Stay relaxed."
+    },
+    "6clh22": {
+      "path": "/audio/cues/6clh22.m4a",
+      "text": "Lip Press. Resting pose."
+    },
+    "m90f76": {
+      "path": "/audio/cues/m90f76.m4a",
+      "text": "Lip Press. Resting pose. Stay relaxed."
+    },
+    "1gusubp": {
+      "path": "/audio/cues/1gusubp.m4a",
+      "text": "Lip Pucker. Resting pose."
+    },
+    "v64oyt": {
+      "path": "/audio/cues/v64oyt.m4a",
+      "text": "Lip Pucker. Resting pose. Stay relaxed."
+    },
+    "1t3vprq": {
+      "path": "/audio/cues/1t3vprq.m4a",
+      "text": "Mirror voice test."
+    },
+    "gszr0e": {
+      "path": "/audio/cues/gszr0e.m4a",
+      "text": "Mirror voice test. If you hear this, instruction sound is working."
+    },
+    "1divuij": {
+      "path": "/audio/cues/1divuij.m4a",
+      "text": "Nice work. Take a breath."
+    },
+    "gqaag9": {
+      "path": "/audio/cues/gqaag9.m4a",
+      "text": "Nostril Flare. Resting pose."
+    },
+    "qnyxft": {
+      "path": "/audio/cues/qnyxft.m4a",
+      "text": "Nostril Flare. Resting pose. Stay relaxed."
+    },
+    "4yjpea": {
+      "path": "/audio/cues/4yjpea.m4a",
+      "text": "Open Smile. Resting pose."
+    },
+    "q1raju": {
+      "path": "/audio/cues/q1raju.m4a",
+      "text": "Open Smile. Resting pose. Stay relaxed."
+    },
+    "isey3f": {
+      "path": "/audio/cues/isey3f.m4a",
+      "text": "Raw browser speech test. If you hear this, Web Speech works."
+    },
+    "17h7zrm": {
+      "path": "/audio/cues/17h7zrm.m4a",
+      "text": "Resting pose"
+    },
+    "11kdvbq": {
+      "path": "/audio/cues/11kdvbq.m4a",
+      "text": "Session complete. Well done."
+    },
+    "1yg4w4q": {
+      "path": "/audio/cues/1yg4w4q.m4a",
+      "text": "Soft Eye Closure. Resting pose."
+    },
+    "msyfmq": {
+      "path": "/audio/cues/msyfmq.m4a",
+      "text": "Soft Eye Closure. Resting pose. Stay relaxed."
+    },
+    "107uq6o": {
+      "path": "/audio/cues/107uq6o.m4a",
+      "text": "Up next: Cheek Puff. Take a breath, puff air into both cheeks, hold, then move air slowly from one cheek to the other."
+    },
+    "1edbmkh": {
+      "path": "/audio/cues/1edbmkh.m4a",
+      "text": "Up next: Cheek Suck. Suck your cheeks inward against your teeth, like making a 'fish face'. Hold, then release."
+    },
+    "1cqzyr": {
+      "path": "/audio/cues/1cqzyr.m4a",
+      "text": "Up next: Closed Smile. Smile with lips closed, lifting both corners of your mouth gently. Hold, then relax."
+    },
+    "1bah7wn": {
+      "path": "/audio/cues/1bah7wn.m4a",
+      "text": "Up next: Emoji Big Smile 😄. Make a bright open smile, showing teeth only as much as feels comfortable. Hold, then release slowly."
+    },
+    "y4bxc4": {
+      "path": "/audio/cues/y4bxc4.m4a",
+      "text": "Up next: Emoji Kiss 😘. Pucker your lips forward like sending a kiss. Hold the center line steady, then relax."
+    },
+    "coby5": {
+      "path": "/audio/cues/coby5.m4a",
+      "text": "Up next: Emoji Nose Scrunch 😖. Scrunch your nose lightly as if reacting to a strong smell. Hold the expression, then relax fully."
+    },
+    "1imilo1": {
+      "path": "/audio/cues/1imilo1.m4a",
+      "text": "Up next: Emoji Sad Frown ☹️. Make a gentle sad face by lowering the mouth corners and lightly drawing the brows together. Hold, then release."
+    },
+    "1nnybsw": {
+      "path": "/audio/cues/1nnybsw.m4a",
+      "text": "Up next: Emoji Smile 🙂. Make a gentle happy face with lips closed. Hold the smile softly, then relax back to neutral."
+    },
+    "1vyr1fp": {
+      "path": "/audio/cues/1vyr1fp.m4a",
+      "text": "Up next: Emoji Surprise 😮. Raise your eyebrows and make a soft O shape with your mouth, like a surprised face. Hold gently, then relax."
+    },
+    "ci80l0": {
+      "path": "/audio/cues/ci80l0.m4a",
+      "text": "Up next: Emoji Wink 😉. Make a playful wink expression. Close one eye gently while the mouth stays lightly lifted, then relax."
+    },
+    "63n431": {
+      "path": "/audio/cues/63n431.m4a",
+      "text": "Up next: Eyebrow Raise. Raise both eyebrows as if surprised. Hold gently for 5 seconds, then relax slowly."
+    },
+    "qonli0": {
+      "path": "/audio/cues/qonli0.m4a",
+      "text": "Up next: Eyebrow raise. Raise both eyebrows as if surprised, hold gently, then relax."
+    },
+    "oxgmq4": {
+      "path": "/audio/cues/oxgmq4.m4a",
+      "text": "Up next: Gentle Frown. Pull your eyebrows down and inward, as if concentrating. Hold, then relax."
+    },
+    "166wc46": {
+      "path": "/audio/cues/166wc46.m4a",
+      "text": "Up next: Independent Wink. Try to close one eye while keeping the other open. Switch sides each rep."
+    },
+    "varop9": {
+      "path": "/audio/cues/varop9.m4a",
+      "text": "Up next: Lip Press. Press your lips firmly but gently together. Hold, then release."
+    },
+    "55cx3w": {
+      "path": "/audio/cues/55cx3w.m4a",
+      "text": "Up next: Lip Pucker. Purse your lips forward as if blowing a kiss. Hold for 5 seconds, then relax."
+    },
+    "1a6ijqz": {
+      "path": "/audio/cues/1a6ijqz.m4a",
+      "text": "Up next: Nostril Flare. Flare your nostrils outward, as if taking a deep breath through your nose. Hold gently, then relax."
+    },
+    "kq8206": {
+      "path": "/audio/cues/kq8206.m4a",
+      "text": "Up next: Open Smile. Smile widely, showing your teeth. Hold for 5 seconds, then relax slowly."
+    },
+    "10cm7o6": {
+      "path": "/audio/cues/10cm7o6.m4a",
+      "text": "Up next: Soft Eye Closure. Slowly close your eyes — don't squeeze. Hold softly for 5 seconds, then open slowly."
+    },
+    "uspv67": {
+      "path": "/audio/cues/uspv67.m4a",
+      "text": "Up next: Vowel A Shape. Say or silently mouth a slow, open A shape. Hold the jaw open gently, then relax fully."
+    },
+    "wo8jo7": {
+      "path": "/audio/cues/wo8jo7.m4a",
+      "text": "Up next: Vowel E Shape. Say or silently mouth a slow E shape. Stretch the lips sideways gently, hold, then relax."
+    },
+    "aekvzd": {
+      "path": "/audio/cues/aekvzd.m4a",
+      "text": "Up next: Vowel I Shape. Say or silently mouth a slow I shape. Lift the corners lightly and keep the lips controlled."
+    },
+    "fd15vw": {
+      "path": "/audio/cues/fd15vw.m4a",
+      "text": "Up next: Vowel O Shape. Say or silently mouth a rounded O shape. Hold the lips in a soft circle, then relax."
+    },
+    "1w3rae8": {
+      "path": "/audio/cues/1w3rae8.m4a",
+      "text": "Up next: Vowel U Shape. Say or silently mouth a rounded U shape. Bring the lips forward gently, hold, then relax."
+    },
+    "1r88mxe": {
+      "path": "/audio/cues/1r88mxe.m4a",
+      "text": "Voice cues on."
+    },
+    "865uh": {
+      "path": "/audio/cues/865uh.m4a",
+      "text": "Vowel A Shape. Resting pose."
+    },
+    "5ar1jt": {
+      "path": "/audio/cues/5ar1jt.m4a",
+      "text": "Vowel A Shape. Resting pose. Stay relaxed."
+    },
+    "1x2s7dh": {
+      "path": "/audio/cues/1x2s7dh.m4a",
+      "text": "Vowel E Shape. Resting pose."
+    },
+    "104fnf9": {
+      "path": "/audio/cues/104fnf9.m4a",
+      "text": "Vowel E Shape. Resting pose. Stay relaxed."
+    },
+    "1igevnl": {
+      "path": "/audio/cues/1igevnl.m4a",
+      "text": "Vowel I Shape. Resting pose."
+    },
+    "129zyox": {
+      "path": "/audio/cues/129zyox.m4a",
+      "text": "Vowel I Shape. Resting pose. Stay relaxed."
+    },
+    "18f6n07": {
+      "path": "/audio/cues/18f6n07.m4a",
+      "text": "Vowel O Shape. Resting pose."
+    },
+    "m31jvf": {
+      "path": "/audio/cues/m31jvf.m4a",
+      "text": "Vowel O Shape. Resting pose. Stay relaxed."
+    },
+    "mc8xid": {
+      "path": "/audio/cues/mc8xid.m4a",
+      "text": "Vowel U Shape. Resting pose."
+    },
+    "13991l1": {
+      "path": "/audio/cues/13991l1.m4a",
+      "text": "Vowel U Shape. Resting pose. Stay relaxed."
+    }
+  }
+};
+
+export default audioCueManifest;
