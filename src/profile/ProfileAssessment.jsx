@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { X, CameraOff, ChevronRight, Info } from "lucide-react";
+import { X, CameraOff, ChevronRight, Info, Volume2, VolumeX } from "lucide-react";
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, PROFILE_BASELINE_TOP_FRACTION, PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES, PROFILE_HOLD_SEC, PROFILE_REST_RETRY_LIMIT, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISE_BY_ID, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES } from "../domain/exercises";
+import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { ExerciseAnimation, ExerciseGlyph, LiveExercisePreview, RealtimeFeedback, TrackerStatusPill } from "../components/appViews";
@@ -54,7 +55,8 @@ function finalizeAssessmentStats(stat, exercise) {
   };
 }
 
-function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onSkip }) {
+function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onTogglePref, onComplete, onSkip }) {
+  const voiceEnabled = prefs?.voiceEnabled ?? false;
   const retakeIds = [...new Set((retakeExerciseIds ?? []).filter((id) => EXERCISE_BY_ID.has(id)))];
   const isPartialRetake = retakeIds.length > 0;
   const isCompletionRetake = isPartialRetake && retakeIds.some((id) => !existingProfile?.exercises?.[id]);
@@ -148,6 +150,22 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
   const autoPaused = trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
 
   useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
+
+  useEffect(() => () => { flushSpeech(); }, []);
+
+  useEffect(() => {
+    if (phase === "calibrate") {
+      speak(voiceEnabled, "Calibration. Center your face and stay relaxed.");
+    } else if (phase === "preview") {
+      speak(voiceEnabled, `Up next: ${current.name}. ${current.instruction}`);
+    } else if (phase === "rest") {
+      speak(voiceEnabled, `${current.name}. Resting pose. Stay relaxed.`);
+    } else if (phase === "hold") {
+      speak(voiceEnabled, "Hold");
+    } else if (phase === "summary") {
+      speak(voiceEnabled, "Session complete. Well done.");
+    }
+  }, [phase, exIdx, voiceEnabled, current?.name, current?.instruction]);
 
   useEffect(() => {
     if (phase !== "calibrate") return;
@@ -371,10 +389,21 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     exerciseNoiseRef.current = null;
     exerciseNeutralBsRef.current = null;
     exerciseNeutralMatrixRef.current = null;
+    primeSpeech(voiceEnabled, { text: "Calibration. Center your face and stay relaxed.", volume: 1 });
     setPhase("calibrate");
   };
 
+  const handleToggleVoice = () => {
+    if (!onTogglePref) return;
+    if (!voiceEnabled) primeSpeech(true, { text: "Voice cues on." });
+    else flushSpeech();
+    onTogglePref("voiceEnabled");
+  };
+
+  const handleCancel = () => { flushSpeech(); onSkip(); };
+
   const handleSave = () => {
+    flushSpeech();
     const profile = buildMovementProfile({
       neutral: neutralRef.current,
       noise: noiseRef.current,
@@ -511,9 +540,14 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
       <div className="fixed inset-0 z-[60] flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
         <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
           <div className="flex items-center justify-between p-4 shrink-0">
-            <button onClick={onSkip} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Cancel baseline"><X className="w-5 h-5" /></button>
+            <button onClick={handleCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Cancel baseline"><X className="w-5 h-5" /></button>
             <div className="text-xs opacity-70">Exercise {exIdx + 1} of {exercises.length}</div>
-            <button onClick={() => setShowHelp(true)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Show baseline instructions"><Info className="w-5 h-5" /></button>
+            <div className="flex gap-2">
+              {onTogglePref && (
+                <button onClick={handleToggleVoice} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+              )}
+              <button onClick={() => setShowHelp(true)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Show baseline instructions"><Info className="w-5 h-5" /></button>
+            </div>
           </div>
           <div className="flex-1 overflow-y-auto px-6 pb-2 flex flex-col items-center text-center">
             <div className="text-xs uppercase tracking-widest opacity-60 mt-2 mb-4">Up next</div>
@@ -572,9 +606,14 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
     <div className="fixed inset-0 z-[60] flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
       <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
         <div className="flex items-center justify-between p-4 shrink-0">
-          <button onClick={onSkip} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Skip baseline"><X className="w-5 h-5" /></button>
+          <button onClick={handleCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Skip baseline"><X className="w-5 h-5" /></button>
           <div className="text-xs opacity-70">{phase === "calibrate" ? "Neutral baseline" : `Exercise ${exIdx + 1} of ${exercises.length}`}</div>
-          <button onClick={() => setShowHelp(true)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Show baseline instructions"><Info className="w-5 h-5" /></button>
+          <div className="flex gap-2">
+            {onTogglePref && (
+              <button onClick={handleToggleVoice} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+            )}
+            <button onClick={() => setShowHelp(true)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Show baseline instructions"><Info className="w-5 h-5" /></button>
+          </div>
         </div>
 
         <div className="px-4 pb-2 shrink-0">

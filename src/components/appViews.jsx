@@ -7,7 +7,7 @@ import { applySessionDose, daysBetween, exerciseHoldSec, formatClock, getComfort
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { baselineProgressLabel, buildPersonalizedDailyPlan, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionBaselineProgress, objectCoverTransform, preferredBaselineProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
-import { flushSpeech, primeSpeech, speak } from "../lib/speech";
+import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
 
 function Header({ view, streak }) {
   const titles = { home: "Today", practice: "Practice", journal: "Journal", progress: "Progress" };
@@ -1481,7 +1481,7 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
         <div className="space-y-2">
           <DailyGoalSelector value={prefs.dailyGoal ?? 3} onChange={(v) => onSetPref("dailyGoal", v)} />
           <ToggleRow label="Symmetry tracking" description="Auto-measure symmetry during exercises" value={prefs.symmetryEnabled} onToggle={() => onTogglePref("symmetryEnabled")} />
-          <ToggleRow label="Voice cues during practice" description="Spoken prompts for each rep" value={prefs.voiceEnabled} onToggle={() => onTogglePref("voiceEnabled")} />
+          <ToggleRow label="Voice cues during practice" description="Spoken prompts for each rep" value={prefs.voiceEnabled} onToggle={() => { if (prefs.voiceEnabled) flushSpeech(); else primeSpeech(true, { text: "Voice cues on." }); onTogglePref("voiceEnabled"); }} />
           <ToggleRow label="Mirror camera" description="Front camera during sessions" value={prefs.mirrorEnabled} onToggle={() => onTogglePref("mirrorEnabled")} />
         </div>
       </div>
@@ -1638,39 +1638,25 @@ function Onboarding({ onDone, dailyGoal, onSetDailyGoal, voiceEnabled, onToggleV
   const v = dailyGoal ?? 3;
   const isFirst = step === 0;
   const isLast = step === ONBOARDING_STEPS.length - 1;
-  const speechReadyRef = useRef(false);
 
-  // Warm up the voice list early so the first utterance picks the right voice.
-  // getVoices() does not require a user gesture; it just triggers async voice loading.
   useEffect(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.getVoices();
-    }
+    warmSpeechVoices();
   }, []);
 
-  const ensurePrimedThenSpeak = (text) => {
-    if (speechReadyRef.current) {
-      speak(true, text);
-      return;
-    }
-    // First interaction: prime within this user gesture, then wait for the
-    // prime utterance to clear before queueing the real sample (Chrome chokes
-    // on rapid cancel+speak in the same tick).
-    primeSpeech(true);
-    speechReadyRef.current = true;
-    setTimeout(() => speak(true, text), 400);
+  const playInstructionSound = (text) => {
+    primeSpeech(true, { text, volume: 1, preferAudioCue: true });
   };
 
   const handleVoiceToggle = () => {
     if (voiceEnabled) {
       flushSpeech();
     } else {
-      ensurePrimedThenSpeak("Voice cues are on.");
+      playInstructionSound("Voice cues are on.");
     }
     onToggleVoice?.();
   };
   const handleVoicePreview = () => {
-    ensurePrimedThenSpeak("Up next: Eyebrow raise. Raise both eyebrows as if surprised, hold gently, then relax.");
+    playInstructionSound("Up next: Eyebrow raise. Raise both eyebrows as if surprised, hold gently, then relax.");
   };
 
   return (

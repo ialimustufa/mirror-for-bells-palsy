@@ -75,7 +75,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
   useEffect(() => {
     return () => {
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      flushSpeech();
     };
   }, []);
 
@@ -443,7 +443,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         <button onClick={onCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="End"><X className="w-5 h-5" /></button>
         <div className="text-xs opacity-70">Exercise {exIdx + 1} of {totalExercises}</div>
         <div className="flex gap-2">
-          <button onClick={() => { if (!prefs.voiceEnabled) primeSpeech(true); else flushSpeech(); onTogglePref("voiceEnabled"); }} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{prefs.voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
+          <button onClick={() => { if (!prefs.voiceEnabled) primeSpeech(true, { text: "Voice cues on." }); else flushSpeech(); onTogglePref("voiceEnabled"); }} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{prefs.voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
           <button onClick={() => onTogglePref("mirrorEnabled")} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle mirror">{prefs.mirrorEnabled ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}</button>
         </div>
       </div>

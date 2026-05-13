@@ -108,8 +108,14 @@ export default function App() {
     setProfileAssessment(null);
   };
   const startSession = (ids) => {
-    primeSpeech(data.prefs.voiceEnabled);
     const exercises = buildSessionExercises(ids, data.movementProfile);
+    const firstExercise = exercises[0];
+    const openingCue = data.prefs.symmetryEnabled && data.prefs.mirrorEnabled
+      ? "Calibration. Center your face and stay relaxed."
+      : firstExercise
+        ? `Up next: ${firstExercise.name}. ${firstExercise.instruction}`
+        : "Voice guidance ready.";
+    primeSpeech(data.prefs.voiceEnabled, { text: openingCue, volume: 1 });
     const kind = ids.length > 1 ? "session" : "practice";
     setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
@@ -160,7 +166,7 @@ export default function App() {
       {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} initialMovementProfile={data.initialMovementProfile ?? data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO() && isCountedSession(s)).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} />}
       {exerciseDetail && <ExerciseDetail exercise={exerciseDetail} movementProfile={data.movementProfile} onClose={() => setExerciseDetail(null)} onStart={(id) => { setExerciseDetail(null); startSession([id]); }} />}
       {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} voiceEnabled={data.prefs.voiceEnabled} onToggleVoice={() => togglePref("voiceEnabled")} />}
-      {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
+      {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} prefs={data.prefs} onTogglePref={togglePref} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
       {viewingReport && <SessionSummary session={viewingReport} onClose={() => setViewingReport(null)} />}
     </div>
   );
