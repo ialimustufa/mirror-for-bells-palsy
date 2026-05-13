@@ -53,3 +53,20 @@ export function mergeMovementProfileRetake(currentProfile, partialProfile) {
     initialAvgSymmetry: averageProfileSymmetry(exercises),
   };
 }
+
+export function mergeMissingMovementProfileBaselines(currentProfile, partialProfile, exerciseIds = []) {
+  if (!currentProfile || !partialProfile?.exercises) return currentProfile;
+  const additions = {};
+  for (const exerciseId of exerciseIds) {
+    if (!currentProfile.exercises?.[exerciseId] && partialProfile.exercises[exerciseId]) {
+      additions[exerciseId] = partialProfile.exercises[exerciseId];
+    }
+  }
+  if (Object.keys(additions).length === 0) return currentProfile;
+  const exercises = { ...(currentProfile.exercises ?? {}), ...additions };
+  return {
+    ...currentProfile,
+    exercises,
+    initialAvgSymmetry: averageProfileSymmetry(exercises),
+  };
+}

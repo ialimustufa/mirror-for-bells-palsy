@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronRight, Flame, Check, Heart, Info, ArrowRight, Loader2, Zap, AlertCircle, Share2, Trash2 } from "lucide-react";
+import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { DAY_END_HOUR, DAY_START_HOUR } from "../domain/config";
-import { EXERCISES, MOOD_OPTIONS, REGIONS } from "../domain/exercises";
+import { DAY_END_HOUR, DAY_START_HOUR, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
+import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { applySessionDose, daysBetween, exerciseHoldSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { baselineProgressLabel, buildPersonalizedDailyPlan, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionBaselineProgress, objectCoverTransform, preferredBaselineProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
+import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 
 function Header({ view, streak }) {
   const titles = { home: "Today", practice: "Practice", journal: "Journal", progress: "Progress" };
@@ -68,6 +69,9 @@ function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
   const latestBaseline = latestSessionBaselineProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
+  const missingBaselineIds = data.movementProfile
+    ? PROFILE_ASSESSMENT_EXERCISES.filter((id) => !data.movementProfile.exercises?.[id])
+    : [];
   const completed = todaysCountedSessions.length;
   const remaining = Math.max(0, dailyGoal - completed);
   const nextSlot = nextSessionAt(dailyGoal, completed);
@@ -146,6 +150,12 @@ function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
           {latestBaseline && (
             <div className="mt-3 text-xs rounded-xl px-3 py-2" style={{ background: "rgba(122,143,115,0.18)", color: "#D9E5D2" }}>
               Latest baseline progress: {latestBaseline.side} side · {baselineProgressLabel(latestBaseline)}
+            </div>
+          )}
+          {missingBaselineIds.length > 0 && (
+            <div className="mt-3 flex items-center gap-3 rounded-xl px-3 py-2" style={{ background: "rgba(212,165,116,0.14)", color: "#F6D8B2" }}>
+              <div className="flex-1 text-xs">{missingBaselineIds.length} movement baseline{missingBaselineIds.length === 1 ? "" : "s"} left to add.</div>
+              <button onClick={() => onStartProfile(missingBaselineIds)} className="rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap" style={{ background: "#D4A574", color: "#1F1B16" }}>Add remaining</button>
             </div>
           )}
           {baselineStatus?.shouldRetake && (
@@ -1178,6 +1188,9 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
   const created = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
   const status = profileStatus(profile);
   const retakeExerciseIds = status?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
+  const missingBaselineIds = profile
+    ? PROFILE_ASSESSMENT_EXERCISES.filter((id) => !profile.exercises?.[id])
+    : [];
   const firstProfile = initialProfile && initialProfile.createdAt !== profile?.createdAt ? initialProfile : null;
   const previousProfile = history?.[0] ?? null;
   const comparison = compareMovementProfiles(profile, previousProfile);
@@ -1203,7 +1216,7 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="min-w-0">
           <div className="text-sm font-semibold">Personal movement baseline</div>
-          <div className="text-xs opacity-60 mt-0.5 leading-relaxed">Created {created ?? "unknown"} · affected side: {formatProfileSide(profile.affectedSide)} · {getComfortDosing(profile).label.toLowerCase()} dose</div>
+          <div className="text-xs opacity-60 mt-0.5 leading-relaxed">Created {created ?? "unknown"} · affected side: {formatProfileSide(profile.affectedSide)} · {getComfortDosing(profile).label.toLowerCase()} dose · {exercises.length}/{PROFILE_ASSESSMENT_EXERCISES.length} baselines</div>
         </div>
         <div className="text-right">
           {profile.initialAvgSymmetry != null && (
@@ -1212,6 +1225,12 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
           {status && <div className="inline-flex mt-1 text-[10px] rounded-full px-2 py-0.5" style={{ background: `${status.quality.color}26`, color: status.quality.color }}>{status.quality.label}</div>}
         </div>
       </div>
+      {missingBaselineIds.length > 0 && (
+        <div className="rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3" style={{ background: "rgba(212,165,116,0.14)", color: "#F6D8B2", border: "1px solid rgba(212,165,116,0.2)" }}>
+          <div className="flex-1 text-xs">Starter baseline saved. Add the remaining {missingBaselineIds.length} movement baseline{missingBaselineIds.length === 1 ? "" : "s"} when you have a few minutes.</div>
+          <button onClick={() => onStart(missingBaselineIds)} className="rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap" style={{ background: "#D4A574", color: "#1F1B16" }}>Add remaining</button>
+        </div>
+      )}
       {status?.shouldRetake && (
         <div className="rounded-2xl p-3 mb-4 flex flex-wrap items-center gap-3" style={{ background: "rgba(184,84,58,0.16)", color: "#FFD3C1" }}>
           <div className="flex-1 text-xs">Retake recommended: {status.reason}</div>
@@ -1528,50 +1547,328 @@ function BottomNav({ view, setView }) {
   );
 }
 
-function Onboarding({ onDone, dailyGoal, onSetDailyGoal }) {
+const ONBOARDING_BASELINE_STEPS = [
+  { title: "Allow camera access", body: "Mirror uses your front camera to read facial landmarks. The baseline stays on this device." },
+  { title: "Sit centered", body: "Use steady light, keep your full face visible, and start with a natural resting expression." },
+  { title: "Capture neutral first", body: "Keep still while the neutral baseline reaches 100%. This is the reference for later movement." },
+  { title: "Move softly", body: "Follow each cue with a gentle hold, then relax fully before the next exercise begins." },
+];
+const ONBOARDING_STARTER_EXERCISES = PROFILE_STARTER_ASSESSMENT_EXERCISES.map((id) => EXERCISES.find((exercise) => exercise.id === id)).filter(Boolean);
+
+const ONBOARDING_STEPS = [
+  {
+    type: "points",
+    tag: "WELCOME",
+    title: "Welcome to Mirror",
+    body: "A gentle daily companion for facial retraining after Bell's Palsy.",
+    accent: "#D4A574",
+    points: [
+      { icon: Heart, text: "Guided exercises tuned to your symmetry" },
+      { icon: BookOpen, text: "Daily mood and recovery journal" },
+      { icon: TrendingUp, text: "Progress charts and milestones over time" },
+    ],
+    author: {
+      name: "Ali Mustufa",
+      label: "Built by",
+      image: "https://iali.in/og-cover.jpg",
+      storyUrl: "https://x.com/ialimustufa/status/2052044810173993039?s=20",
+      storyLabel: "Read the story",
+    },
+  },
+  {
+    type: "points",
+    tag: "AI TRACKING",
+    title: "Symmetry, measured live",
+    body: "Your front camera reads dense facial landmarks on both sides of your face.",
+    accent: "#7A8F73",
+    points: [
+      { icon: Zap, text: "Real-time symmetry score during every movement" },
+      { icon: Eye, text: "All processing stays on this device" },
+      { icon: Sparkles, text: "Personalized to the baseline you capture" },
+    ],
+  },
+  {
+    type: "voice",
+    tag: "VOICE CUES",
+    title: "Hear every cue",
+    body: "Mirror calls out each phase so you can keep your eyes on the camera, not the screen.",
+    accent: "#D4A574",
+  },
+  {
+    type: "contrast",
+    tag: "APPROACH",
+    title: "Slow and intentional wins",
+    body: "Forceful contractions can train nerves to fire incorrectly (synkinesis).",
+    accent: "#B8543A",
+    dont: { label: "Don't", text: "Push for the biggest movement possible — it can reinforce uneven firing." },
+    do: { label: "Do", text: "Make small, even movements you can hold without strain. Mirror rewards balance, not size." },
+  },
+  {
+    type: "goal",
+    tag: "DAILY GOAL",
+    title: "How many sessions a day?",
+    body: "Retraining works best with frequent short sessions spread across the day.",
+    accent: "#D4A574",
+    helper: "You can change this anytime in Progress → Preferences.",
+  },
+  {
+    type: "points",
+    tag: "SAFETY",
+    title: "Mirror supports, not replaces",
+    body: "Mirror is a practice companion — it does not replace medical care.",
+    accent: "#7A8F73",
+    points: [
+      { icon: Heart, text: "Follow your neurologist and physical therapist on your specific protocol" },
+      { icon: AlertCircle, text: "Stop any exercise that causes pain or unusual sensation" },
+      { icon: Check, text: "Use Mirror to practice between professional sessions" },
+    ],
+  },
+  {
+    type: "baseline",
+    tag: "BASELINE",
+    title: "Capture your starting point",
+    body: "Optional but recommended. Mirror uses this to personalize your progress tracking.",
+    accent: "#B8543A",
+  },
+];
+
+function Onboarding({ onDone, dailyGoal, onSetDailyGoal, voiceEnabled, onToggleVoice }) {
   const [step, setStep] = useState(0);
-  const steps = [
-    { type: "intro", title: "Welcome to Mirror", body: "A gentle daily companion for facial retraining after Bell's Palsy. We'll guide you through exercises, log how you feel, and show your progress over time.", emoji: "🌿" },
-    { type: "intro", title: "AI symmetry tracking", body: "Your front camera measures movement on both sides of your face using dense facial landmarks, and gives you a real-time symmetry score so you can see exactly where the affected side needs attention.", emoji: "🪞" },
-    { type: "intro", title: "Practice with intention", body: "Forceful contractions can train nerves to fire incorrectly (synkinesis). Mirror keeps things slow and controlled, and rewards even movement over big movement.", emoji: "🌸" },
-    { type: "goal",  title: "How many times a day?", body: "Bell's palsy retraining works best with frequent short sessions spread across the day. Pick a count that feels sustainable — you can change it anytime.", emoji: "📅" },
-    { type: "intro", title: "One important note", body: "Mirror supports your practice but doesn't replace medical care. Please work with your neurologist and physical therapist on your specific protocol. Stop any exercise that causes pain.", emoji: "🌱" },
-    { type: "profile", title: "Build your baseline", body: "Optional: capture a short local movement profile now so Mirror can understand your starting point and personalize future progress tracking.", emoji: "🧭" },
-  ];
-  const s = steps[step];
+  const s = ONBOARDING_STEPS[step];
   const v = dailyGoal ?? 3;
+  const isFirst = step === 0;
+  const isLast = step === ONBOARDING_STEPS.length - 1;
+  const speechReadyRef = useRef(false);
+
+  // Warm up the voice list early so the first utterance picks the right voice.
+  // getVoices() does not require a user gesture; it just triggers async voice loading.
+  useEffect(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+    }
+  }, []);
+
+  const ensurePrimedThenSpeak = (text) => {
+    if (speechReadyRef.current) {
+      speak(true, text);
+      return;
+    }
+    // First interaction: prime within this user gesture, then wait for the
+    // prime utterance to clear before queueing the real sample (Chrome chokes
+    // on rapid cancel+speak in the same tick).
+    primeSpeech(true);
+    speechReadyRef.current = true;
+    setTimeout(() => speak(true, text), 400);
+  };
+
+  const handleVoiceToggle = () => {
+    if (voiceEnabled) {
+      flushSpeech();
+    } else {
+      ensurePrimedThenSpeak("Voice cues are on.");
+    }
+    onToggleVoice?.();
+  };
+  const handleVoicePreview = () => {
+    ensurePrimedThenSpeak("Up next: Eyebrow raise. Raise both eyebrows as if surprised, hold gently, then relax.");
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-5" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
-      <div className="max-w-md w-full text-center">
-        <div className="text-6xl mb-6">{s.emoji}</div>
-        <h2 className="text-3xl mb-4" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{s.title}</h2>
-        <p className="text-base leading-relaxed opacity-80 mb-6">{s.body}</p>
-        {s.type === "goal" && (
-          <div className="mb-8">
-            <div className="flex gap-2 justify-center mb-3">
-              {[1, 2, 3, 4, 5, 6].map((n) => {
-                const active = v === n;
+    <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
+      <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+        <div className="flex items-center justify-between p-4 shrink-0">
+          <button
+            onClick={() => setStep((n) => Math.max(0, n - 1))}
+            disabled={isFirst}
+            className="w-10 h-10 rounded-full flex items-center justify-center disabled:opacity-30"
+            style={{ background: "rgba(244, 239, 230, 0.1)" }}
+            aria-label="Back"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <div className="text-xs opacity-70">Step {step + 1} of {ONBOARDING_STEPS.length}</div>
+          <div className="w-10" />
+        </div>
+
+        <div className="px-4 pb-3 shrink-0">
+          <div className="flex gap-1.5">
+            {ONBOARDING_STEPS.map((_, i) => (
+              <div key={i} className="h-1 flex-1 rounded-full transition-all duration-300" style={{ background: i <= step ? s.accent : "rgba(244, 239, 230, 0.18)" }} />
+            ))}
+          </div>
+        </div>
+
+        <div className="px-4 pb-3 shrink-0">
+          <div className="rounded-2xl p-4 transition-colors duration-300" style={{ background: "rgba(244,239,230,0.06)", borderLeft: `3px solid ${s.accent}` }}>
+            <div className="text-[10px] font-bold uppercase tracking-[0.18em] mb-2 inline-block px-2 py-0.5 rounded-full" style={{ background: s.accent, color: "#1F1B16" }}>{s.tag}</div>
+            <div className="text-2xl mb-1.5" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{s.title}</div>
+            <div className="text-sm leading-relaxed opacity-80">{s.body}</div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          {s.type === "points" && (
+            <div className="space-y-2.5">
+              {s.points.map((p, i) => {
+                const Icon = p.icon;
                 return (
-                  <button key={n} onClick={() => onSetDailyGoal(n)} className="w-12 h-12 rounded-full text-lg font-semibold tabular-nums transition-all" style={{ background: active ? "#B8543A" : "rgba(244, 239, 230, 0.08)", color: "#F4EFE6", border: active ? "none" : "1px solid rgba(244, 239, 230, 0.2)" }}>
-                    {n}
-                  </button>
+                  <div key={i} className="rounded-2xl p-3.5 flex items-start gap-3" style={{ background: "rgba(244,239,230,0.04)", border: "1px solid rgba(244,239,230,0.06)" }}>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0" style={{ background: `${s.accent}26`, color: s.accent }}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="text-sm leading-relaxed opacity-90 self-center">{p.text}</div>
+                  </div>
                 );
               })}
+              {s.author && (
+                <a
+                  href={s.author.storyUrl}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="flex items-center gap-3 rounded-2xl p-3 group"
+                  style={{ background: "rgba(244,239,230,0.04)", border: "1px solid rgba(244,239,230,0.08)" }}
+                >
+                  <img
+                    src={s.author.image}
+                    alt={s.author.name}
+                    loading="lazy"
+                    className="w-10 h-10 rounded-full object-cover shrink-0"
+                    style={{ border: "1px solid rgba(244,239,230,0.15)" }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-55 leading-none mb-0.5">{s.author.label}</div>
+                    <div className="text-sm font-semibold truncate">{s.author.name}</div>
+                  </div>
+                  <div className="text-xs flex items-center gap-1 shrink-0" style={{ color: s.accent }}>
+                    {s.author.storyLabel}<ArrowRight className="w-3 h-3" />
+                  </div>
+                </a>
+              )}
             </div>
-            <div className="text-xs opacity-60">{v} session{v === 1 ? "" : "s"} per day · spread between 9 AM and 9 PM</div>
-          </div>
-        )}
-        <div className="flex justify-center gap-1.5 mb-8">
-          {steps.map((_, i) => <div key={i} className="h-1 rounded-full" style={{ width: i === step ? 24 : 6, background: i === step ? "#F4EFE6" : "rgba(244, 239, 230, 0.3)", transition: "all 0.2s" }} />)}
+          )}
+
+          {s.type === "voice" && (
+            <div className="space-y-3">
+              <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: "rgba(244,239,230,0.06)", border: `1px solid ${voiceEnabled ? s.accent + "55" : "rgba(244,239,230,0.08)"}` }}>
+                <div className="w-11 h-11 rounded-full flex items-center justify-center shrink-0" style={{ background: voiceEnabled ? `${s.accent}33` : "rgba(244,239,230,0.08)", color: voiceEnabled ? s.accent : "#F4EFE6" }}>
+                  {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold">Voice cues</div>
+                  <div className="text-xs opacity-65 mt-0.5">{voiceEnabled ? "Mirror will speak during exercises." : "Mirror will stay silent."}</div>
+                </div>
+                <button
+                  onClick={handleVoiceToggle}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold shrink-0"
+                  style={{ background: voiceEnabled ? s.accent : "rgba(244,239,230,0.12)", color: voiceEnabled ? "#1F1B16" : "#F4EFE6" }}
+                  aria-pressed={voiceEnabled}
+                >
+                  {voiceEnabled ? "On" : "Off"}
+                </button>
+              </div>
+
+              {voiceEnabled && (
+                <button onClick={handleVoicePreview} className="w-full rounded-2xl p-3.5 flex items-center justify-center gap-2 text-sm" style={{ background: "rgba(244,239,230,0.04)", border: "1px solid rgba(244,239,230,0.08)", color: "#F4EFE6" }}>
+                  <Play className="w-3.5 h-3.5" style={{ color: s.accent }} />
+                  Play a sample cue
+                </button>
+              )}
+
+              <div className="rounded-2xl p-3.5 flex items-start gap-3" style={{ background: "rgba(244,239,230,0.04)", border: "1px solid rgba(244,239,230,0.06)" }}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(244,239,230,0.08)" }}>
+                  <Info className="w-3.5 h-3.5 opacity-70" />
+                </div>
+                <div className="text-xs leading-relaxed opacity-75 pt-0.5">
+                  You can toggle voice anytime — tap the <Volume2 className="inline w-3 h-3 mx-0.5 align-text-bottom" style={{ color: s.accent }} /> icon in the exercise header.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {s.type === "contrast" && (
+            <div className="space-y-3">
+              <div className="rounded-2xl p-4" style={{ background: "rgba(184,84,58,0.1)", border: "1px solid rgba(184,84,58,0.25)" }}>
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] mb-1.5" style={{ color: "#FFB48F" }}>{s.dont.label}</div>
+                <div className="text-sm leading-relaxed opacity-90">{s.dont.text}</div>
+              </div>
+              <div className="rounded-2xl p-4" style={{ background: "rgba(168,195,159,0.12)", border: "1px solid rgba(168,195,159,0.3)" }}>
+                <div className="text-[10px] font-bold uppercase tracking-[0.18em] mb-1.5" style={{ color: "#A8C39F" }}>{s.do.label}</div>
+                <div className="text-sm leading-relaxed opacity-90">{s.do.text}</div>
+              </div>
+            </div>
+          )}
+
+          {s.type === "goal" && (
+            <div>
+              <div className="rounded-2xl p-5 mb-3" style={{ background: "rgba(244,239,230,0.04)", border: "1px solid rgba(244,239,230,0.06)" }}>
+                <div className="flex flex-wrap justify-center gap-2 mb-3">
+                  {[1, 2, 3, 4, 5, 6].map((n) => {
+                    const active = v === n;
+                    return (
+                      <button key={n} onClick={() => onSetDailyGoal(n)} className="w-12 h-12 rounded-full text-lg font-semibold tabular-nums transition-all" style={{ background: active ? s.accent : "rgba(244, 239, 230, 0.08)", color: active ? "#1F1B16" : "#F4EFE6", border: active ? "none" : "1px solid rgba(244, 239, 230, 0.2)" }}>
+                        {n}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="text-center text-xs opacity-65">{v} session{v === 1 ? "" : "s"} per day · spread between 9 AM and 9 PM</div>
+              </div>
+              <div className="text-xs opacity-55 text-center leading-relaxed">{s.helper}</div>
+            </div>
+          )}
+
+          {s.type === "baseline" && (
+            <div className="space-y-3">
+              <div className="rounded-2xl p-4" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
+                <div className="flex items-center gap-1.5 mb-3">
+                  <div className="text-xs uppercase tracking-wider opacity-60">Starter assessment set</div>
+                  <div className="relative group flex items-center" tabIndex={0} aria-label="Starter assessment set explanation">
+                    <Info className="w-3.5 h-3.5 opacity-60" />
+                    <div className="absolute left-0 bottom-full z-10 mb-2 hidden w-64 rounded-2xl px-3 py-2 text-left text-xs leading-relaxed normal-case tracking-normal shadow-xl group-hover:block group-focus:block" style={{ background: "#F4EFE6", color: "#1F1B16" }}>
+                      Mirror captures a shorter starter set now, then prompts for the remaining movement baselines later.
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 gap-2">
+                  {ONBOARDING_STARTER_EXERCISES.map((exercise) => <ExerciseGlyph key={exercise.id} exercise={exercise} size="xs" tone="dark" className="mx-auto" />)}
+                </div>
+                <div className="text-xs opacity-55 mt-3">{ONBOARDING_STARTER_EXERCISES.length} movements · about {Math.ceil(ONBOARDING_STARTER_EXERCISES.length * (PROFILE_REST_SEC + PROFILE_HOLD_SEC) / 60)} minutes</div>
+              </div>
+
+              <div className="rounded-2xl p-4" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Info className="w-4 h-4" style={{ color: s.accent }} />
+                  <div className="text-xs uppercase tracking-wider opacity-60">What to expect</div>
+                </div>
+                <div className="space-y-3">
+                  {ONBOARDING_BASELINE_STEPS.map((item, index) => (
+                    <div key={item.title} className="flex items-start gap-3">
+                      <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-semibold mt-0.5" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6" }}>{index + 1}</div>
+                      <div>
+                        <div className="text-sm font-semibold">{item.title}</div>
+                        <div className="text-xs leading-relaxed opacity-65 mt-0.5">{item.body}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-        {s.type === "profile" ? (
-          <div className="flex gap-3">
-            <button onClick={() => onDone(false)} className="flex-1 rounded-full py-3.5 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip for now</button>
-            <button onClick={() => onDone(true)} className="flex-1 rounded-full py-3.5 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Create baseline</button>
-          </div>
-        ) : (
-          <button onClick={() => setStep(step + 1)} className="w-full rounded-full py-3.5 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Continue</button>
-        )}
+
+        <div className="p-4 shrink-0">
+          {isLast ? (
+            <div className="flex gap-3">
+              <button onClick={() => onDone(false)} className="flex-1 rounded-full py-3.5 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip for now</button>
+              <button onClick={() => onDone(true)} className="flex-1 rounded-full py-3.5 font-semibold" style={{ background: s.accent, color: "#1F1B16" }}>Create baseline</button>
+            </div>
+          ) : (
+            <button onClick={() => setStep((n) => n + 1)} className="w-full rounded-full py-3.5 font-semibold flex items-center justify-center gap-2" style={{ background: s.accent, color: "#1F1B16" }}>
+              Continue
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -1579,12 +1876,14 @@ function Onboarding({ onDone, dailyGoal, onSetDailyGoal }) {
 
 export {
   BottomNav,
+  ExerciseAnimation,
   ExerciseDetail,
   ExerciseGlyph,
   Header,
   HomeView,
   InterstitialView,
   JournalView,
+  LiveExercisePreview,
   Onboarding,
   PracticeView,
   PreviewView,

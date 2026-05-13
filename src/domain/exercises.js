@@ -27,6 +27,22 @@ export const EXERCISES = [
 ];
 
 export const EXERCISE_BY_ID = new Map(EXERCISES.map((exercise) => [exercise.id, exercise]));
+export const PROFILE_STARTER_ASSESSMENT_EXERCISES = [
+  "eyebrow-raise",
+  "gentle-frown",
+  "eye-close",
+  "wink",
+  "nose-wrinkle",
+  "cheek-puff",
+  "cheek-suck",
+  "closed-smile",
+  "open-smile",
+  "pucker",
+  "lip-press",
+  "vowel-a",
+  "vowel-e",
+  "vowel-o",
+];
 export const PROFILE_ASSESSMENT_EXERCISES = EXERCISES.map((exercise) => exercise.id);
 
 export const REGIONS = [

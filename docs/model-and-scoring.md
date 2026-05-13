@@ -463,22 +463,42 @@ The goal is to personalize the app around the user's own starting point while co
 2. Ask the user to select comfort level: `gentle`, `normal`, or `advanced`.
 3. Run the same global neutral calibration used by sessions.
 4. Before each exercise, capture a short exercise-specific rest neutral during the `REST` phase.
-5. Guide the user through the full exercise catalog.
+5. Guide first-time users through the starter baseline set; full retakes and later add-on captures can cover the full exercise catalog.
 6. Score each movement with `computeExerciseSymmetry` against the exercise-specific neutral when enough rest frames were captured, otherwise against the global neutral.
 7. Build the persisted baseline from the top movement window instead of a single peak frame.
 8. Compute a per-exercise quality label.
 9. Store per-exercise baseline movement metrics.
 
-The assessment exercise set is defined as:
+The first-use assessment starts with a shorter starter set, while the full target set still follows the exercise catalog:
 
 ```js
+const PROFILE_STARTER_ASSESSMENT_EXERCISES = [
+  "eyebrow-raise",
+  "gentle-frown",
+  "eye-close",
+  "wink",
+  "nose-wrinkle",
+  "cheek-puff",
+  "cheek-suck",
+  "closed-smile",
+  "open-smile",
+  "pucker",
+  "lip-press",
+  "vowel-a",
+  "vowel-e",
+  "vowel-o",
+];
 const PROFILE_ASSESSMENT_EXERCISES = EXERCISES.map((exercise) => exercise.id);
 ```
 
+If a saved profile is missing catalog baselines, Home and Progress can prompt the user
+to add only the remaining movements. Those add-on captures use the partial baseline
+merge path rather than replacing the starter profile.
+
 The profile uses one global neutral calibration pass, then captures a fresh rest-neutral
 buffer before every exercise. That gives each baseline movement a local starting point,
-which reduces drift from blinking, mouth tension, jaw settling, and fatigue during the
-longer full-catalog assessment. If the rest buffer has fewer than
+which reduces drift from blinking, mouth tension, jaw settling, and fatigue during
+starter, full-retake, and add-on assessments. If the rest buffer has fewer than
 `PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES`, the scorer falls back to the global neutral.
 The rest window can extend once when too few steady rest frames were captured, and the
 prompt reports whether the blocker is face alignment, missing face detection, or simply

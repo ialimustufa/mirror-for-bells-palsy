@@ -1,12 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { X, CameraOff } from "lucide-react";
+import { X, CameraOff, ChevronRight, Info } from "lucide-react";
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, PROFILE_BASELINE_TOP_FRACTION, PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES, PROFILE_HOLD_SEC, PROFILE_REST_RETRY_LIMIT, PROFILE_REST_SEC } from "../domain/config";
-import { EXERCISE_BY_ID, PROFILE_ASSESSMENT_EXERCISES } from "../domain/exercises";
+import { EXERCISE_BY_ID, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES } from "../domain/exercises";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
-import { ExerciseGlyph, RealtimeFeedback, TrackerStatusPill } from "../components/appViews";
+import { ExerciseAnimation, ExerciseGlyph, LiveExercisePreview, RealtimeFeedback, TrackerStatusPill } from "../components/appViews";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, buildMovementProfile, calibrationPrompt, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, exerciseBaselineQuality, faceAlignmentFeedback, firstFacialTransformationMatrix, inferLimitedSide, normalizedFrameDelta, robustMovementWindow, smoothFacialTransformationMatrix, smoothLandmarks } from "../ml/faceMetrics";
+
+const BASELINE_SETUP_STEPS = [
+  { title: "Set up the camera", body: "Use steady light, keep your whole face visible, and sit close enough that the ring can track your brows, eyes, nose, and mouth." },
+  { title: "Start fully relaxed", body: "Let your forehead, jaw, lips, and cheeks rest naturally. Mirror records this still pose before it measures movement." },
+  { title: "Move gently", body: "During each exercise, make a small clean movement you can hold without strain. Do not chase maximum range." },
+  { title: "Return to neutral", body: "After every hold, relax back to your resting face so the next movement gets its own fair baseline." },
+];
+
+const BASELINE_PHASE_INSTRUCTIONS = {
+  calibrate: "Relax your face and keep your head still while Mirror records your neutral baseline.",
+  rest: "Return to a resting face. This short reset becomes the starting point for the next movement.",
+  hold: "Follow the movement cue gently, hold steady, then let the timer guide you back to rest.",
+};
 
 function emptyAssessmentFrameStats() {
   return { frames: 0, holdFrames: 0, alignedFrames: 0, leftSum: 0, rightSum: 0, symSum: 0, leftPeak: 0, rightPeak: 0, symPeak: null, samples: [] };
@@ -44,9 +57,56 @@ function finalizeAssessmentStats(stat, exercise) {
 function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onSkip }) {
   const retakeIds = [...new Set((retakeExerciseIds ?? []).filter((id) => EXERCISE_BY_ID.has(id)))];
   const isPartialRetake = retakeIds.length > 0;
-  const exerciseIds = isPartialRetake ? retakeIds : PROFILE_ASSESSMENT_EXERCISES;
+  const isCompletionRetake = isPartialRetake && retakeIds.some((id) => !existingProfile?.exercises?.[id]);
+  const isFullRetake = !isPartialRetake && Boolean(existingProfile);
+  const exerciseIds = isPartialRetake
+    ? retakeIds
+    : isFullRetake
+      ? PROFILE_ASSESSMENT_EXERCISES
+      : PROFILE_STARTER_ASSESSMENT_EXERCISES;
   const exercises = exerciseIds.map((id) => EXERCISE_BY_ID.get(id)).filter(Boolean);
+  const introTitle = isCompletionRetake
+    ? "Add remaining baselines."
+    : isPartialRetake
+      ? "Retake selected baselines."
+      : isFullRetake
+        ? "Redo your full baseline."
+        : "Let's understand your face first.";
+  const introBody = isCompletionRetake
+    ? "Mirror will capture the movements that are not in your profile yet and merge them with your starter baseline."
+    : isPartialRetake
+      ? "Mirror will recalibrate neutral and replace only the selected exercise baselines in your existing profile."
+      : isFullRetake
+        ? "Mirror will recalibrate neutral and rebuild the full movement profile."
+        : "Mirror starts with a shorter set of key movements. You can add the remaining baselines later when you have more time.";
+  const setLabel = isCompletionRetake
+    ? "Remaining set"
+    : isPartialRetake
+      ? "Retake set"
+      : isFullRetake
+        ? "Full assessment set"
+        : "Starter assessment set";
+  const setExplanation = isCompletionRetake
+    ? "Mirror will capture only the missing movement baselines and merge them into your current profile."
+    : isPartialRetake
+      ? "Mirror will only recapture the selected low-quality movement baselines and merge them into your current profile."
+      : isFullRetake
+        ? "Mirror captures the full movement catalog to replace your current profile with a fresh baseline."
+        : "Mirror captures a shorter starter set now, then prompts for the remaining movement baselines later.";
+  const startLabel = isCompletionRetake ? "Start remaining" : isPartialRetake ? "Start retake" : "Start baseline";
+  const summaryTitle = isCompletionRetake
+    ? "Remaining baselines ready."
+    : isPartialRetake
+      ? "Selected baselines ready."
+      : "Movement profile ready.";
+  const summaryBody = isCompletionRetake
+    ? "These additional movements will be added to your current profile without replacing the starter baselines."
+    : isPartialRetake
+      ? "Only these exercise baselines will replace the matching movements in your current profile."
+      : "This profile is saved locally and can be used to personalize thresholds and track progress from your starting point.";
+  const saveLabel = isCompletionRetake ? "Save additions" : isPartialRetake ? "Save retake" : "Save profile";
   const [phase, setPhase] = useState("intro");
+  const [showHelp, setShowHelp] = useState(false);
   const [affectedSide, setAffectedSide] = useState("unsure");
   const [comfortLevel, setComfortLevel] = useState("gentle");
   const [exIdx, setExIdx] = useState(0);
@@ -87,7 +147,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
   const retakeCount = exerciseStats.filter((s) => s.quality?.key === "retake").length;
   const autoPaused = trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
 
-  useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx]);
+  useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
 
   useEffect(() => {
     if (phase !== "calibrate") return;
@@ -158,8 +218,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
         setExerciseStats((prev) => [...prev, stat]);
         if (exIdx + 1 < exercises.length) {
           setExIdx((idx) => idx + 1);
-          setPhase("rest");
-          setSecondsLeft(PROFILE_REST_SEC);
+          setPhase("preview");
         } else {
           setPhase("summary");
         }
@@ -229,8 +288,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
                   neutralMatrixRef.current = neutralMatrix;
                   noiseRef.current = computeNoiseFloor(calibBufferRef.current, neutral, calibMatrixBufferRef.current, neutralMatrix);
                   neutralBsRef.current = averageBlendshapes(calibBsBufferRef.current);
-                  setPhase("rest");
-                  setSecondsLeft(PROFILE_REST_SEC);
+                  setPhase("preview");
                 }
               }
             }
@@ -333,8 +391,23 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-5" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
         <div className="max-w-md w-full max-h-[92vh] overflow-y-auto pr-1">
           <div className="text-xs uppercase tracking-widest opacity-60 mb-3">Personal baseline</div>
-          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{isPartialRetake ? "Retake selected baselines." : "Let's understand your face first."}</h2>
-          <p className="text-sm leading-relaxed opacity-75 mb-6">{isPartialRetake ? "Mirror will recalibrate neutral and replace only the selected exercise baselines in your existing profile." : "Mirror will capture a neutral pose and every exercise movement. This creates a local movement profile for future personalization."}</p>
+          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{introTitle}</h2>
+          <p className="text-sm leading-relaxed opacity-75 mb-6">{introBody}</p>
+
+          <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
+            <div className="text-xs uppercase tracking-wider opacity-60 mb-3">How to set a good baseline</div>
+            <div className="space-y-3">
+              {BASELINE_SETUP_STEPS.map((item, index) => (
+                <div key={item.title} className="flex gap-3 text-left">
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold" style={{ background: index === 0 ? "#D4A574" : "rgba(244,239,230,0.1)", color: index === 0 ? "#1F1B16" : "#F4EFE6" }}>{index + 1}</div>
+                  <div>
+                    <div className="text-sm font-semibold">{item.title}</div>
+                    <div className="text-xs leading-relaxed opacity-65 mt-0.5">{item.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {!isPartialRetake && <div className="space-y-5 mb-7">
             <div>
@@ -346,7 +419,15 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
               </div>
             </div>
             <div>
-              <div className="text-sm font-semibold mb-2">Comfort level</div>
+              <div className="flex items-center gap-1.5 mb-2">
+                <div className="text-sm font-semibold">Comfort level</div>
+                <div className="relative group flex items-center" tabIndex={0} aria-label="Comfort level explanation">
+                  <Info className="w-3.5 h-3.5 opacity-60" />
+                  <div className="absolute left-0 bottom-full z-10 mb-2 hidden w-64 rounded-2xl px-3 py-2 text-left text-xs leading-relaxed shadow-xl group-hover:block group-focus:block" style={{ background: "#F4EFE6", color: "#1F1B16" }}>
+                    Gentle uses shorter holds, fewer reps, and more rest. Normal follows the standard plan. Advanced adds a little more volume when practice feels easy.
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 {["gentle", "normal", "advanced"].map((level) => (
                   <button key={level} onClick={() => setComfortLevel(level)} className="rounded-full py-2 text-xs font-semibold capitalize" style={{ background: comfortLevel === level ? "#7A8F73" : "rgba(244,239,230,0.08)", color: "#F4EFE6", border: comfortLevel === level ? "none" : "1px solid rgba(244,239,230,0.14)" }}>{level}</button>
@@ -356,7 +437,15 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
           </div>}
 
           <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
-            <div className="text-xs uppercase tracking-wider opacity-60 mb-3">{isPartialRetake ? "Retake set" : "Assessment set"}</div>
+            <div className="flex items-center gap-1.5 mb-3">
+              <div className="text-xs uppercase tracking-wider opacity-60">{setLabel}</div>
+              <div className="relative group flex items-center" tabIndex={0} aria-label={`${setLabel} explanation`}>
+                <Info className="w-3.5 h-3.5 opacity-60" />
+                <div className="absolute left-0 bottom-full z-10 mb-2 hidden w-64 rounded-2xl px-3 py-2 text-left text-xs leading-relaxed normal-case tracking-normal shadow-xl group-hover:block group-focus:block" style={{ background: "#F4EFE6", color: "#1F1B16" }}>
+                  {setExplanation}
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-6 gap-2">
               {exercises.map((ex) => <ExerciseGlyph key={ex.id} exercise={ex} size="xs" tone="dark" className="mx-auto" />)}
             </div>
@@ -365,7 +454,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
 
           <div className="flex gap-3">
             <button onClick={onSkip} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip</button>
-            <button onClick={handleBegin} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isPartialRetake ? "Start retake" : "Start baseline"}</button>
+            <button onClick={handleBegin} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{startLabel}</button>
           </div>
         </div>
       </div>
@@ -377,8 +466,8 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-5" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
         <div className="max-w-md w-full max-h-[92vh] overflow-y-auto pr-1">
           <div className="text-xs uppercase tracking-widest opacity-60 mb-3">Baseline complete</div>
-          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{isPartialRetake ? "Selected baselines ready." : "Movement profile ready."}</h2>
-          <p className="text-sm leading-relaxed opacity-75 mb-6">{isPartialRetake ? "Only these exercise baselines will replace the matching movements in your current profile." : "This profile is saved locally and can be used to personalize thresholds and track progress from your starting point."}</p>
+          <h2 className="text-4xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{summaryTitle}</h2>
+          <p className="text-sm leading-relaxed opacity-75 mb-6">{summaryBody}</p>
           {summaryAvg != null && (
             <div className="text-center mb-6">
               <div className="text-7xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(summaryAvg), letterSpacing: "-0.03em" }}>{displayPct(summaryAvg)}%</div>
@@ -409,9 +498,63 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
           </div>
           <div className="flex gap-3">
             <button onClick={handleBegin} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Redo</button>
-            <button onClick={handleSave} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{isPartialRetake ? "Save retake" : "Save profile"}</button>
+            <button onClick={handleSave} className="flex-1 rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{saveLabel}</button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (phase === "preview") {
+    const useLivePreview = stream && faceLandmarker && !cameraError;
+    return (
+      <div className="fixed inset-0 z-[60] flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
+        <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+          <div className="flex items-center justify-between p-4 shrink-0">
+            <button onClick={onSkip} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Cancel baseline"><X className="w-5 h-5" /></button>
+            <div className="text-xs opacity-70">Exercise {exIdx + 1} of {exercises.length}</div>
+            <button onClick={() => setShowHelp(true)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Show baseline instructions"><Info className="w-5 h-5" /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto px-6 pb-2 flex flex-col items-center text-center">
+            <div className="text-xs uppercase tracking-widest opacity-60 mt-2 mb-4">Up next</div>
+            {useLivePreview
+              ? <LiveExercisePreview exerciseId={current.id} stream={stream} faceLandmarker={faceLandmarker} mirrorEnabled className="mb-5" />
+              : <ExerciseAnimation region={current.region} size="lg" className="mb-5" />}
+            <div className="text-3xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.01em" }}>{current.name}</div>
+            <div className="text-xs opacity-60 mb-5 tracking-wide">{current.region} · {PROFILE_HOLD_SEC}s hold · {PROFILE_REST_SEC}s rest before</div>
+            <div className="text-sm leading-relaxed mb-4 max-w-xs" style={{ color: "#F4EFE6" }}>{current.instruction}</div>
+            {current.tip && (
+              <div className="text-xs leading-relaxed opacity-60 max-w-xs mb-4" style={{ fontStyle: "italic" }}>{current.tip}</div>
+            )}
+          </div>
+          <div className="p-4 shrink-0" style={{ borderTop: "1px solid rgba(244,239,230,0.08)" }}>
+            <button onClick={() => { setPhase("rest"); setSecondsLeft(PROFILE_REST_SEC); }} className="w-full rounded-full px-6 py-4 font-semibold flex items-center justify-center gap-2 text-base" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+              I'm ready<ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        {showHelp && (
+          <div className="fixed inset-0 z-[70] flex items-end lg:items-center justify-center" style={{ background: "rgba(12,10,8,0.7)" }} onClick={() => setShowHelp(false)}>
+            <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-3xl lg:rounded-3xl p-6" style={{ background: "#1F1B16", color: "#F4EFE6" }} onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs uppercase tracking-widest opacity-60">Baseline guide</div>
+                <button onClick={() => setShowHelp(false)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Close"><X className="w-4 h-4" /></button>
+              </div>
+              <h3 className="text-2xl mb-4" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>How to set a good baseline</h3>
+              <div className="space-y-3">
+                {BASELINE_SETUP_STEPS.map((item, index) => (
+                  <div key={item.title} className="flex gap-3">
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6" }}>{index + 1}</div>
+                    <div>
+                      <div className="text-sm font-semibold">{item.title}</div>
+                      <div className="text-xs leading-relaxed opacity-65 mt-0.5">{item.body}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -423,6 +566,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
       ? { tag: "ASSESS", title: current.name, prompt: current.instruction, color: "#B8543A" }
       : { tag: "REST", title: current.name, prompt: restStatus, color: "#7A8F73" };
   const displayPrompt = autoPaused ? "Paused. Center your face inside the ring to continue." : phaseTone.prompt;
+  const instruction = autoPaused ? "The timer pauses automatically when your face moves out of alignment." : BASELINE_PHASE_INSTRUCTIONS[phase];
 
   return (
     <div className="fixed inset-0 z-[60] flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -430,11 +574,22 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
         <div className="flex items-center justify-between p-4 shrink-0">
           <button onClick={onSkip} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Skip baseline"><X className="w-5 h-5" /></button>
           <div className="text-xs opacity-70">{phase === "calibrate" ? "Neutral baseline" : `Exercise ${exIdx + 1} of ${exercises.length}`}</div>
-          <div className="w-10" />
+          <button onClick={() => setShowHelp(true)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Show baseline instructions"><Info className="w-5 h-5" /></button>
         </div>
 
         <div className="px-4 pb-2 shrink-0">
           <TrackerStatusPill status={cameraError ? "error" : trackerStatus} liveScore={liveScore} phase={phase} />
+        </div>
+
+        <div className="px-4 pb-3 shrink-0">
+          <div className="rounded-2xl p-3.5 transition-colors duration-300" style={{ background: "rgba(244,239,230,0.06)", borderLeft: `3px solid ${phaseTone.color}` }}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>{phaseTone.tag}</div>
+              {phase !== "calibrate" && <div className="text-[11px] opacity-70">{current.region}</div>}
+            </div>
+            <div className="text-2xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{phaseTone.title}</div>
+            <div className="text-xs leading-relaxed min-h-[2.5em]" style={{ color: phaseTone.color }}>{displayPrompt}</div>
+          </div>
         </div>
 
         <div className="flex-1 relative overflow-hidden">
@@ -468,26 +623,44 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, onComplete, onS
             </div>
           )}
 
-          <div className="absolute inset-x-0 top-0 h-1.5 transition-colors duration-300" style={{ background: phaseTone.color }} />
-          <div className="absolute inset-0 flex flex-col justify-end pointer-events-none">
-            <div className="p-6 pb-4" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.95) 0%, rgba(31,27,22,0.7) 60%, transparent 100%)" }}>
-              <div className="flex items-center gap-2 mb-1">
-                <div className="text-[11px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>{phaseTone.tag}</div>
-                {phase !== "calibrate" && <div className="text-xs opacity-70">{current.region}</div>}
-              </div>
-              <div className="text-5xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{phaseTone.title}</div>
-              <div className="text-7xl tabular-nums transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color }}>
+          <div className="absolute inset-x-0 top-0 h-1 transition-colors duration-300" style={{ background: phaseTone.color }} />
+          <div className="absolute inset-x-0 bottom-0 flex justify-center pointer-events-none">
+            <div className="p-6 w-full flex justify-center" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.85) 0%, rgba(31,27,22,0.4) 55%, transparent 100%)" }}>
+              <div className="text-7xl tabular-nums transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color, letterSpacing: "-0.03em" }}>
                 {phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-4 shrink-0" style={{ borderTop: `2px solid ${phaseTone.color}` }}>
-          <div className="text-sm mb-4 leading-relaxed min-h-[2.5em]" style={{ color: phaseTone.color }}>{displayPrompt}</div>
-          <button onClick={onSkip} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip baseline</button>
-        </div>
       </div>
+
+      {showHelp && (
+        <div className="fixed inset-0 z-[70] flex items-end lg:items-center justify-center" style={{ background: "rgba(12,10,8,0.7)" }} onClick={() => setShowHelp(false)}>
+          <div className="w-full max-w-md max-h-[85vh] overflow-y-auto rounded-t-3xl lg:rounded-3xl p-6" style={{ background: "#1F1B16", color: "#F4EFE6" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-xs uppercase tracking-widest opacity-60">Baseline guide</div>
+              <button onClick={() => setShowHelp(false)} className="w-8 h-8 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Close"><X className="w-4 h-4" /></button>
+            </div>
+            <h3 className="text-2xl mb-4" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>How to set a good baseline</h3>
+            <div className="space-y-3 mb-5">
+              {BASELINE_SETUP_STEPS.map((item, index) => (
+                <div key={item.title} className="flex gap-3">
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6" }}>{index + 1}</div>
+                  <div>
+                    <div className="text-sm font-semibold">{item.title}</div>
+                    <div className="text-xs leading-relaxed opacity-65 mt-0.5">{item.body}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-2xl p-3.5" style={{ background: "rgba(244,239,230,0.06)", borderLeft: `3px solid ${phaseTone.color}` }}>
+              <div className="text-[10px] font-bold uppercase tracking-[0.18em] mb-1.5" style={{ color: phaseTone.color }}>{phaseTone.tag} phase</div>
+              <div className="text-sm leading-relaxed opacity-85">{instruction}</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

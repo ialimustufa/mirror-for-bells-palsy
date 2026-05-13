@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { archiveMovementProfile, mergeMovementProfileRetake, normalizeAppData } from "./domain/appData";
+import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, normalizeAppData } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
 import {
   DEFAULT_DATA,
@@ -95,7 +95,8 @@ export default function App() {
   const saveMovementProfile = (profile, options = {}) => {
     if (options.retakeExerciseIds?.length && data.movementProfile) {
       const movementProfile = mergeMovementProfileRetake(data.movementProfile, profile);
-      persist({ ...data, movementProfile, initialMovementProfile: data.initialMovementProfile ?? data.movementProfile, prefs: { ...data.prefs, onboarded: true } });
+      const initialMovementProfile = mergeMissingMovementProfileBaselines(data.initialMovementProfile ?? data.movementProfile, profile, options.retakeExerciseIds);
+      persist({ ...data, movementProfile, initialMovementProfile, prefs: { ...data.prefs, onboarded: true } });
       setProfileAssessment(null);
       return;
     }
@@ -158,7 +159,7 @@ export default function App() {
       <BottomNav view={view} setView={setView} />
       {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} initialMovementProfile={data.initialMovementProfile ?? data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO() && isCountedSession(s)).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} />}
       {exerciseDetail && <ExerciseDetail exercise={exerciseDetail} movementProfile={data.movementProfile} onClose={() => setExerciseDetail(null)} onStart={(id) => { setExerciseDetail(null); startSession([id]); }} />}
-      {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} />}
+      {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} voiceEnabled={data.prefs.voiceEnabled} onToggleVoice={() => togglePref("voiceEnabled")} />}
       {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
       {viewingReport && <SessionSummary session={viewingReport} onClose={() => setViewingReport(null)} />}
     </div>
