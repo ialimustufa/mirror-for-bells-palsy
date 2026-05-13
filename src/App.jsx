@@ -92,6 +92,10 @@ export default function App() {
   const openProfileAssessment = (retakeExerciseIds = null) => {
     setProfileAssessment(retakeExerciseIds?.length ? { retakeExerciseIds } : {});
   };
+  const requestProfileRetake = useCallback((retakeExerciseIds, context = {}) => {
+    setSession(null);
+    setProfileAssessment(retakeExerciseIds?.length ? { retakeExerciseIds, context } : {});
+  }, []);
   const saveMovementProfile = (profile, options = {}) => {
     if (options.retakeExerciseIds?.length && data.movementProfile) {
       const movementProfile = mergeMovementProfileRetake(data.movementProfile, profile);
@@ -163,7 +167,7 @@ export default function App() {
         </footer>
       </div>
       <BottomNav view={view} setView={setView} />
-      {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} initialMovementProfile={data.initialMovementProfile ?? data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO() && isCountedSession(s)).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} />}
+      {session && <SessionMode session={session} prefs={data.prefs} movementProfile={data.movementProfile} initialMovementProfile={data.initialMovementProfile ?? data.movementProfile} sessionsToday={data.sessions.filter((s) => s.date === todayISO() && isCountedSession(s)).length} onComplete={completeSession} onCancel={() => setSession(null)} onTogglePref={togglePref} onRequestProfileRetake={requestProfileRetake} />}
       {exerciseDetail && <ExerciseDetail exercise={exerciseDetail} movementProfile={data.movementProfile} onClose={() => setExerciseDetail(null)} onStart={(id) => { setExerciseDetail(null); startSession([id]); }} />}
       {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} voiceEnabled={data.prefs.voiceEnabled} onToggleVoice={() => togglePref("voiceEnabled")} />}
       {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} prefs={data.prefs} onTogglePref={togglePref} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}

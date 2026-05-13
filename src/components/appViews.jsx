@@ -711,7 +711,7 @@ function ExerciseDetail({ exercise, movementProfile, onClose, onStart }) {
   );
 }
 
-function TrackerStatusPill({ status, liveScore, phase }) {
+function TrackerStatusPill({ status, liveScore, phase, trackingIssue }) {
   let icon, label, color;
   if (status === "loading") { icon = <Loader2 className="w-3 h-3 animate-spin" />; label = "Loading symmetry tracker…"; color = "#D4A574"; }
   else if (status === "error") { icon = <AlertCircle className="w-3 h-3" />; label = "Tracker unavailable — session continues without scoring"; color = "#A8A29E"; }
@@ -721,9 +721,15 @@ function TrackerStatusPill({ status, liveScore, phase }) {
     color = "#D4A574";
   }
   else if (status === "ready" && phase === "hold") {
-    icon = <div className="w-2 h-2 rounded-full" style={{ background: "#7A8F73", boxShadow: "0 0 8px #7A8F73" }} />;
-    label = liveScore != null ? "Tracking" : "Tracking · waiting for movement";
-    color = "#7A8F73";
+    if (trackingIssue) {
+      icon = <AlertCircle className="w-3 h-3" />;
+      label = trackingIssue;
+      color = "#D4A574";
+    } else {
+      icon = <div className="w-2 h-2 rounded-full" style={{ background: "#7A8F73", boxShadow: "0 0 8px #7A8F73" }} />;
+      label = liveScore != null ? "Tracking" : "Tracking · waiting for movement";
+      color = "#7A8F73";
+    }
   }
   else if (status === "ready") { icon = <div className="w-2 h-2 rounded-full" style={{ background: "#7A8F73" }} />; label = "Tracker ready"; color = "#7A8F73"; }
   else { icon = <Loader2 className="w-3 h-3 animate-spin" />; label = "Initializing…"; color = "#D4A574"; }

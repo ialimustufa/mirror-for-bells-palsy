@@ -8,7 +8,30 @@ import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
 import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeSessionBaselineProgress } from "../ml/faceMetrics";
 
-function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref }) {
+const EYEBROW_RAISE_ID = "eyebrow-raise";
+const TRACKING_ISSUES = {
+  faceMissing: "Find your face in the camera.",
+  alignment: "Center your face so Mirror can read your brows.",
+  lowSignal: "Eyebrow raise is below your saved baseline.",
+};
+
+function createHoldTracking(exerciseId = null, threshold = null) {
+  return {
+    exerciseId,
+    faceFrames: 0,
+    alignedFrames: 0,
+    signalFrames: 0,
+    activatedFrames: 0,
+    maxPeak: 0,
+    threshold,
+  };
+}
+
+function profileActivationThreshold(profile, exerciseId) {
+  return effectiveProfileThreshold(exerciseId, getProfileExercise(profile, exerciseId)?.activationThreshold) ?? null;
+}
+
+function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref, onRequestProfileRetake }) {
   // Phases: optional calibrate → rest (2s entry) → hold (4s) → rest (2s) → hold → ... → interstitial (10s) → next exercise → ... → summary
   // The single `rest` phase plays double-duty as exercise-entry settle AND between-rep recovery.
   const [phase, setPhase] = useState(() => (prefs.symmetryEnabled && prefs.mirrorEnabled ? "calibrate" : "preview"));
@@ -60,6 +83,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const holdScoreCountRef = useRef(0);
   const holdLeftSumRef = useRef(0);
   const holdRightSumRef = useRef(0);
+  const holdTrackingRef = useRef(createHoldTracking());
+  const [trackingIssue, setTrackingIssue] = useState(null);
+  const [retakePrompt, setRetakePrompt] = useState(null);
 
   const startTimeRef = useRef(session.startedAt);
   const current = session.exercises[exIdx];
@@ -69,7 +95,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const currentRestSec = exerciseRestSec(current);
   const currentHoldSec = exerciseHoldSec(current);
   const autoPaused = symEnabled && trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
-  const timerPaused = paused || autoPaused;
+  const timerPaused = paused || autoPaused || Boolean(retakePrompt);
 
   useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
 
@@ -115,11 +141,14 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       holdScoreCountRef.current = 0;
       holdLeftSumRef.current = 0;
       holdRightSumRef.current = 0;
+      holdTrackingRef.current = createHoldTracking(current.id, profileActivationThreshold(movementProfile, current.id));
+      setTrackingIssue(null);
       setLiveScore(null);
       setLiveBalance(null);
       setLiveBaselineProgress(null);
       speak(prefs.voiceEnabled, "Hold");
     } else if (phase === "rest") {
+      setTrackingIssue(null);
       if (restIsEntryRef.current) {
         // Entry rest: settle into the exercise before the first hold.
         speak(prefs.voiceEnabled, repIdx === 0 && exIdx === 0
@@ -142,8 +171,10 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         speak(prefs.voiceEnabled, "Resting pose");
       }
     } else if (phase === "interstitial") {
+      setTrackingIssue(null);
       speak(prefs.voiceEnabled, "Nice work. Take a breath.");
     } else if (phase === "preview") {
+      setTrackingIssue(null);
       speak(prefs.voiceEnabled, `Up next: ${current.name}. ${current.instruction}`);
     }
   }, [phase, exIdx, repIdx]);
@@ -154,6 +185,24 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       // Each branch sets BOTH the new phase and the new timer in one batch — otherwise the advance
       // effect would re-fire with stale secondsLeft = 0 and skip past the just-entered phase.
       if (phase === "hold") {
+        const holdTracking = holdTrackingRef.current;
+        const shouldRetakeEyebrowBaseline =
+          current.id === EYEBROW_RAISE_ID &&
+          holdTracking.exerciseId === EYEBROW_RAISE_ID &&
+          holdTracking.threshold != null &&
+          holdTracking.alignedFrames > 0 &&
+          holdTracking.activatedFrames === 0;
+
+        if (shouldRetakeEyebrowBaseline) {
+          setPaused(true);
+          setTrackingIssue(TRACKING_ISSUES.lowSignal);
+          setRetakePrompt({
+            exerciseId: EYEBROW_RAISE_ID,
+            reason: "low-eyebrow-signal",
+            stats: { ...holdTracking },
+          });
+          return;
+        }
         setPhase("rest");
         setSecondsLeft(currentRestSec);
       } else if (phase === "rest") {
@@ -219,6 +268,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         const rawMatrix = firstFacialTransformationMatrix(taskResult);
 
         if (rawLm) {
+          if (phase === "hold" && current.id === EYEBROW_RAISE_ID) {
+            holdTrackingRef.current.faceFrames++;
+          }
           const prevLm = latestRef.current?.landmarks;
           const prevMatrix = latestRef.current?.facialTransformationMatrix;
           const lm = smoothLandmarks(prevLm, rawLm);
@@ -279,7 +331,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               setLiveScore(null);
               setLiveBalance(null);
               setLiveBaselineProgress(null);
+              if (current.id === EYEBROW_RAISE_ID) {
+                setTrackingIssue((prev) => (prev === TRACKING_ISSUES.alignment ? prev : TRACKING_ISSUES.alignment));
+              }
             } else {
+              if (current.id === EYEBROW_RAISE_ID) {
+                holdTrackingRef.current.alignedFrames++;
+              }
               let symResult = null;
               // Brow exercises: pitch-invariant brow-to-eye gap delta.
               // Nose exercises: aperture widening + upward ala lift (handles both wrinkle and flare).
@@ -289,6 +347,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               if (symResult != null) {
                 const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
+                if (current.id === EYEBROW_RAISE_ID) {
+                  const tracker = holdTrackingRef.current;
+                  tracker.signalFrames++;
+                  tracker.maxPeak = Math.max(tracker.maxPeak, symResult.peak ?? 0);
+                  tracker.threshold = profileThreshold ?? tracker.threshold;
+                  if (activated) tracker.activatedFrames++;
+                }
                 if (activated) {
                   setLiveScore(symResult.symmetry);
                   setLiveBalance({ left: symResult.leftDisp, right: symResult.rightDisp });
@@ -302,10 +367,22 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                   if (peakRepScoreRef.current == null || symResult.symmetry > peakRepScoreRef.current) {
                     peakRepScoreRef.current = symResult.symmetry;
                   }
+                  if (current.id === EYEBROW_RAISE_ID) {
+                    setTrackingIssue((prev) => (prev == null ? prev : null));
+                  }
                 } else {
                   setLiveScore(null);
                   setLiveBalance(null);
                   setLiveBaselineProgress(null);
+                  if (current.id === EYEBROW_RAISE_ID && profileThreshold != null) {
+                    setTrackingIssue((prev) => (prev === TRACKING_ISSUES.lowSignal ? prev : TRACKING_ISSUES.lowSignal));
+                  }
+                }
+              } else if (current.id === EYEBROW_RAISE_ID) {
+                if (holdTrackingRef.current.threshold != null) {
+                  setTrackingIssue((prev) => (prev === TRACKING_ISSUES.lowSignal ? prev : TRACKING_ISSUES.lowSignal));
+                } else {
+                  setTrackingIssue((prev) => (prev == null ? prev : null));
                 }
               }
               // Auto-advance gate AND snapshot trigger. For brow exercises, the brow-lift magnitude is more
@@ -331,6 +408,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           setLiveScore(null);
           setLiveBalance(null);
           setLiveBaselineProgress(null);
+          if (phase === "hold" && current.id === EYEBROW_RAISE_ID) {
+            setTrackingIssue((prev) => (prev === TRACKING_ISSUES.faceMissing ? prev : TRACKING_ISSUES.faceMissing));
+          }
           if (phase === "calibrate") {
             calibBufferRef.current = [];
             calibBsBufferRef.current = [];
@@ -388,6 +468,20 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   };
 
   const nextInterstitial = () => { flushSpeech(); setSecondsLeft(0); };
+
+  const handleRetakeEyebrowBaseline = () => {
+    flushSpeech();
+    if (onRequestProfileRetake) {
+      onRequestProfileRetake([EYEBROW_RAISE_ID], { source: "session", reason: retakePrompt?.reason ?? "low-eyebrow-signal" });
+    } else {
+      onCancel();
+    }
+  };
+
+  const handleEndFromRetakePrompt = () => {
+    flushSpeech();
+    onCancel();
+  };
 
   const handleFinish = () => {
     const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
@@ -450,7 +544,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
       {symEnabled && (
         <div className="px-4 pb-2 shrink-0">
-          <TrackerStatusPill status={trackerStatus} liveScore={liveScore} phase={phase} />
+          <TrackerStatusPill status={trackerStatus} liveScore={liveScore} phase={phase} trackingIssue={trackingIssue} />
         </div>
       )}
 
@@ -498,7 +592,6 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           </div>
         )}
 
-
         {(phase === "hold" || phase === "rest" || phase === "calibrate") && (
           <div className="absolute inset-x-0 top-0 h-1.5 transition-colors duration-300" style={{ background: phaseTone.color }} />
         )}
@@ -530,6 +623,18 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         </div>
       </div>
       </div>
+      {retakePrompt && (
+        <div className="absolute inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(12,10,8,0.72)" }} role="dialog" aria-modal="true" aria-labelledby="eyebrow-retake-title">
+          <div className="w-full max-w-sm rounded-2xl p-5 shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6", border: "1px solid rgba(212,165,116,0.5)" }}>
+            <div id="eyebrow-retake-title" className="text-xl mb-2" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>Retake Eyebrow Raise baseline</div>
+            <p className="text-sm leading-relaxed opacity-80 mb-5">Your current eyebrow raise is below the saved baseline, so Mirror is not scoring reps.</p>
+            <div className="space-y-2">
+              <button onClick={handleRetakeEyebrowBaseline} className="w-full rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake Eyebrow Raise</button>
+              <button onClick={handleEndFromRetakePrompt} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>End practice</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
