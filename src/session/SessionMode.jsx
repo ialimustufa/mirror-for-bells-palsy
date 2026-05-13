@@ -8,11 +8,9 @@ import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
 import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeSessionBaselineProgress } from "../ml/faceMetrics";
 
-const EYEBROW_RAISE_ID = "eyebrow-raise";
 const TRACKING_ISSUES = {
   faceMissing: "Find your face in the camera.",
-  alignment: "Center your face so Mirror can read your brows.",
-  lowSignal: "Eyebrow raise is below your saved baseline.",
+  alignment: "Center your face so Mirror can read this movement.",
 };
 
 function createHoldTracking(exerciseId = null, threshold = null) {
@@ -29,6 +27,14 @@ function createHoldTracking(exerciseId = null, threshold = null) {
 
 function profileActivationThreshold(profile, exerciseId) {
   return effectiveProfileThreshold(exerciseId, getProfileExercise(profile, exerciseId)?.activationThreshold) ?? null;
+}
+
+function hasRetakeGate(tracking, exerciseId) {
+  return tracking.exerciseId === exerciseId && tracking.threshold != null;
+}
+
+function lowSignalIssue(exercise) {
+  return `${exercise?.name ?? "This exercise"} is below your saved baseline.`;
 }
 
 function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref, onRequestProfileRetake }) {
@@ -186,19 +192,18 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       // effect would re-fire with stale secondsLeft = 0 and skip past the just-entered phase.
       if (phase === "hold") {
         const holdTracking = holdTrackingRef.current;
-        const shouldRetakeEyebrowBaseline =
-          current.id === EYEBROW_RAISE_ID &&
-          holdTracking.exerciseId === EYEBROW_RAISE_ID &&
-          holdTracking.threshold != null &&
+        const shouldRetakeBaseline =
+          hasRetakeGate(holdTracking, current.id) &&
           holdTracking.alignedFrames > 0 &&
           holdTracking.activatedFrames === 0;
 
-        if (shouldRetakeEyebrowBaseline) {
+        if (shouldRetakeBaseline) {
           setPaused(true);
-          setTrackingIssue(TRACKING_ISSUES.lowSignal);
+          setTrackingIssue(lowSignalIssue(current));
           setRetakePrompt({
-            exerciseId: EYEBROW_RAISE_ID,
-            reason: "low-eyebrow-signal",
+            exerciseId: current.id,
+            name: current.name,
+            reason: "low-baseline-signal",
             stats: { ...holdTracking },
           });
           return;
@@ -268,7 +273,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         const rawMatrix = firstFacialTransformationMatrix(taskResult);
 
         if (rawLm) {
-          if (phase === "hold" && current.id === EYEBROW_RAISE_ID) {
+          if (phase === "hold" && hasRetakeGate(holdTrackingRef.current, current.id)) {
             holdTrackingRef.current.faceFrames++;
           }
           const prevLm = latestRef.current?.landmarks;
@@ -331,11 +336,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               setLiveScore(null);
               setLiveBalance(null);
               setLiveBaselineProgress(null);
-              if (current.id === EYEBROW_RAISE_ID) {
+              if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                 setTrackingIssue((prev) => (prev === TRACKING_ISSUES.alignment ? prev : TRACKING_ISSUES.alignment));
               }
             } else {
-              if (current.id === EYEBROW_RAISE_ID) {
+              if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                 holdTrackingRef.current.alignedFrames++;
               }
               let symResult = null;
@@ -347,7 +352,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               if (symResult != null) {
                 const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
-                if (current.id === EYEBROW_RAISE_ID) {
+                if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                   const tracker = holdTrackingRef.current;
                   tracker.signalFrames++;
                   tracker.maxPeak = Math.max(tracker.maxPeak, symResult.peak ?? 0);
@@ -367,20 +372,22 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                   if (peakRepScoreRef.current == null || symResult.symmetry > peakRepScoreRef.current) {
                     peakRepScoreRef.current = symResult.symmetry;
                   }
-                  if (current.id === EYEBROW_RAISE_ID) {
+                  if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                     setTrackingIssue((prev) => (prev == null ? prev : null));
                   }
                 } else {
                   setLiveScore(null);
                   setLiveBalance(null);
                   setLiveBaselineProgress(null);
-                  if (current.id === EYEBROW_RAISE_ID && profileThreshold != null) {
-                    setTrackingIssue((prev) => (prev === TRACKING_ISSUES.lowSignal ? prev : TRACKING_ISSUES.lowSignal));
+                  if (hasRetakeGate(holdTrackingRef.current, current.id) && profileThreshold != null) {
+                    const issue = lowSignalIssue(current);
+                    setTrackingIssue((prev) => (prev === issue ? prev : issue));
                   }
                 }
-              } else if (current.id === EYEBROW_RAISE_ID) {
+              } else if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                 if (holdTrackingRef.current.threshold != null) {
-                  setTrackingIssue((prev) => (prev === TRACKING_ISSUES.lowSignal ? prev : TRACKING_ISSUES.lowSignal));
+                  const issue = lowSignalIssue(current);
+                  setTrackingIssue((prev) => (prev === issue ? prev : issue));
                 } else {
                   setTrackingIssue((prev) => (prev == null ? prev : null));
                 }
@@ -408,7 +415,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           setLiveScore(null);
           setLiveBalance(null);
           setLiveBaselineProgress(null);
-          if (phase === "hold" && current.id === EYEBROW_RAISE_ID) {
+          if (phase === "hold" && hasRetakeGate(holdTrackingRef.current, current.id)) {
             setTrackingIssue((prev) => (prev === TRACKING_ISSUES.faceMissing ? prev : TRACKING_ISSUES.faceMissing));
           }
           if (phase === "calibrate") {
@@ -469,10 +476,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
   const nextInterstitial = () => { flushSpeech(); setSecondsLeft(0); };
 
-  const handleRetakeEyebrowBaseline = () => {
+  const handleRetakeBaseline = () => {
     flushSpeech();
-    if (onRequestProfileRetake) {
-      onRequestProfileRetake([EYEBROW_RAISE_ID], { source: "session", reason: retakePrompt?.reason ?? "low-eyebrow-signal" });
+    const exerciseId = retakePrompt?.exerciseId;
+    if (onRequestProfileRetake && exerciseId) {
+      onRequestProfileRetake([exerciseId], { source: "session", reason: retakePrompt?.reason ?? "low-baseline-signal" });
     } else {
       onCancel();
     }
@@ -624,12 +632,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       </div>
       </div>
       {retakePrompt && (
-        <div className="absolute inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(12,10,8,0.72)" }} role="dialog" aria-modal="true" aria-labelledby="eyebrow-retake-title">
+        <div className="absolute inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(12,10,8,0.72)" }} role="dialog" aria-modal="true" aria-labelledby="baseline-retake-title">
           <div className="w-full max-w-sm rounded-2xl p-5 shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6", border: "1px solid rgba(212,165,116,0.5)" }}>
-            <div id="eyebrow-retake-title" className="text-xl mb-2" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>Retake Eyebrow Raise baseline</div>
-            <p className="text-sm leading-relaxed opacity-80 mb-5">Your current eyebrow raise is below the saved baseline, so Mirror is not scoring reps.</p>
+            <div id="baseline-retake-title" className="text-xl mb-2" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>Retake {retakePrompt.name ?? "exercise"} baseline</div>
+            <p className="text-sm leading-relaxed opacity-80 mb-5">Your current movement for {retakePrompt.name ?? "this exercise"} is below the saved baseline, so Mirror is not scoring reps.</p>
             <div className="space-y-2">
-              <button onClick={handleRetakeEyebrowBaseline} className="w-full rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake Eyebrow Raise</button>
+              <button onClick={handleRetakeBaseline} className="w-full rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake {retakePrompt.name ?? "baseline"}</button>
               <button onClick={handleEndFromRetakePrompt} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>End practice</button>
             </div>
           </div>
