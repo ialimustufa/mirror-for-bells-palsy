@@ -1,17 +1,31 @@
 import { compactAppDataForStorage } from "../storage";
 import { roundMetric } from "../ml/faceMetrics";
+import { EXERCISE_BY_ID } from "./exercises";
 import { DEFAULT_DATA } from "./session";
+
+function normalizeExerciseIds(ids) {
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids.filter((id) => EXERCISE_BY_ID.has(id)))];
+}
+
+function normalizePersonalPlan(plan) {
+  return {
+    addedExerciseIds: normalizeExerciseIds(plan?.addedExerciseIds),
+    removedExerciseIds: normalizeExerciseIds(plan?.removedExerciseIds),
+  };
+}
 
 export function normalizeAppData(parsed = {}) {
   const compactParsed = compactAppDataForStorage(parsed);
   const movementProfileHistory = Array.isArray(compactParsed.movementProfileHistory) ? compactParsed.movementProfileHistory : [];
   const inferredInitialProfile = compactParsed.initialMovementProfile ?? movementProfileHistory.at(-1) ?? compactParsed.movementProfile ?? null;
+  const prefs = { ...DEFAULT_DATA.prefs, ...(compactParsed.prefs ?? {}) };
   return {
     ...DEFAULT_DATA,
     ...compactParsed,
     initialMovementProfile: inferredInitialProfile,
     movementProfileHistory,
-    prefs: { ...DEFAULT_DATA.prefs, ...(compactParsed.prefs ?? {}) },
+    prefs: { ...prefs, personalPlan: normalizePersonalPlan(prefs.personalPlan) },
   };
 }
 

@@ -16,7 +16,7 @@ import {
   REPORT_SNAPSHOT_QUALITY,
   REPORT_SNAPSHOT_WIDTH,
 } from "../domain/config";
-import { DAILY_ESSENTIALS, EXERCISES, PROFILE_ASSESSMENT_EXERCISES } from "../domain/exercises";
+import { DAILY_ESSENTIALS, EXERCISES, PLAN_REGION_ORDER, PROFILE_ASSESSMENT_EXERCISES } from "../domain/exercises";
 import { clampNumber } from "../domain/session";
 
 const SYMMETRY_PAIRS = [[105, 334], [70, 300], [159, 386], [145, 374], [50, 280], [205, 425], [61, 291], [37, 267], [84, 314]];
@@ -868,10 +868,56 @@ function preferredBaselineProgress(record) {
   return record?.initialBaselineProgress ?? record?.baselineProgress ?? null;
 }
 
-function buildPersonalizedDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length) {
+const EXERCISE_CATALOG_INDEX = new Map(EXERCISES.map((exercise, index) => [exercise.id, index]));
+const PLAN_REGION_INDEX = new Map(PLAN_REGION_ORDER.map((region, index) => [region, index]));
+
+function uniqueKnownExerciseIds(ids) {
+  const out = [];
+  const seen = new Set();
+  for (const id of ids ?? []) {
+    if (seen.has(id) || !EXERCISE_CATALOG_INDEX.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function orderExerciseIdsByRegion(ids, priorityIds = []) {
+  const priorityIndex = new Map(uniqueKnownExerciseIds(priorityIds).map((id, index) => [id, index]));
+  return uniqueKnownExerciseIds(ids).sort((a, b) => {
+    const exA = EXERCISES[EXERCISE_CATALOG_INDEX.get(a)];
+    const exB = EXERCISES[EXERCISE_CATALOG_INDEX.get(b)];
+    const regionA = PLAN_REGION_INDEX.get(exA?.region) ?? PLAN_REGION_ORDER.length;
+    const regionB = PLAN_REGION_INDEX.get(exB?.region) ?? PLAN_REGION_ORDER.length;
+    if (regionA !== regionB) return regionA - regionB;
+    const priorityA = priorityIndex.has(a) ? priorityIndex.get(a) : Number.MAX_SAFE_INTEGER;
+    const priorityB = priorityIndex.has(b) ? priorityIndex.get(b) : Number.MAX_SAFE_INTEGER;
+    if (priorityA !== priorityB) return priorityA - priorityB;
+    return EXERCISE_CATALOG_INDEX.get(a) - EXERCISE_CATALOG_INDEX.get(b);
+  });
+}
+
+function applyPersonalPlanOverrides(coreIds, personalPlan) {
+  const core = uniqueKnownExerciseIds(coreIds);
+  const removed = new Set(uniqueKnownExerciseIds(personalPlan?.removedExerciseIds));
+  const added = uniqueKnownExerciseIds(personalPlan?.addedExerciseIds);
+  const selected = core.filter((id) => !removed.has(id));
+  for (const id of added) {
+    if (!selected.includes(id)) selected.push(id);
+  }
+  return selected.length ? selected : core;
+}
+
+function buildSystemDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length) {
   if (!profile?.exercises) return DAILY_ESSENTIALS.slice(0, count);
   const scored = getAdaptiveFocusItems(profile, sessions, count).map((item) => item.id);
   return [...new Set([...scored, ...DAILY_ESSENTIALS])].slice(0, count);
+}
+
+function buildPersonalizedDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length, options = {}) {
+  const core = buildSystemDailyPlan(profile, sessions, count);
+  const withOverrides = options.personalPlan ? applyPersonalPlanOverrides(core, options.personalPlan) : core;
+  return options.orderByRegion ? orderExerciseIdsByRegion(withOverrides, core) : withOverrides;
 }
 
 function latestSessionBaselineProgress(sessions) {
@@ -1241,6 +1287,7 @@ export {
   latestSessionBaselineProgress,
   normalizedFrameDelta,
   objectCoverTransform,
+  orderExerciseIdsByRegion,
   preferredBaselineProgress,
   profileAgeDays,
   profileBaselineForSide,

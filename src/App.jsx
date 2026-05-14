@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, normalizeAppData } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
+import { EXERCISE_BY_ID } from "./domain/exercises";
 import {
   DEFAULT_DATA,
+  DEFAULT_PERSONAL_PLAN,
   buildSessionExercises,
   computeStreak,
   getComfortDosing,
@@ -10,6 +12,7 @@ import {
   todayISO,
 } from "./domain/session";
 import { compactAppDataForStorage, deleteSessionImages, hydrateSessionImages, loadMirrorData, saveMirrorData } from "./storage";
+import { buildPersonalizedDailyPlan, orderExerciseIdsByRegion } from "./ml/faceMetrics";
 import { primeSpeech } from "./lib/speech";
 import { SessionMode } from "./session/SessionMode";
 import { ProfileAssessment } from "./profile/ProfileAssessment";
@@ -143,6 +146,29 @@ export default function App() {
   const setPref = (key, value) => persist({ ...data, prefs: { ...data.prefs, [key]: value } });
 
   const streak = useMemo(() => computeStreak(data.sessions), [data.sessions]);
+  const recommendedPlanIds = useMemo(
+    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { orderByRegion: true }),
+    [data.movementProfile, data.sessions],
+  );
+  const personalizedPlanIds = useMemo(
+    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { personalPlan: data.prefs.personalPlan, orderByRegion: true }),
+    [data.movementProfile, data.sessions, data.prefs.personalPlan],
+  );
+  const savePersonalPlan = useCallback((selectedExerciseIds) => {
+    const selected = orderExerciseIdsByRegion([...new Set(selectedExerciseIds ?? [])].filter((id) => EXERCISE_BY_ID.has(id)), recommendedPlanIds);
+    if (selected.length === 0) return false;
+    const selectedSet = new Set(selected);
+    const recommendedSet = new Set(recommendedPlanIds);
+    const personalPlan = {
+      addedExerciseIds: selected.filter((id) => !recommendedSet.has(id)),
+      removedExerciseIds: recommendedPlanIds.filter((id) => !selectedSet.has(id)),
+    };
+    persist({ ...data, prefs: { ...data.prefs, personalPlan } });
+    return true;
+  }, [data, persist, recommendedPlanIds]);
+  const resetPersonalPlan = useCallback(() => {
+    persist({ ...data, prefs: { ...data.prefs, personalPlan: DEFAULT_PERSONAL_PLAN } });
+  }, [data, persist]);
 
   if (pathname === "/trial") return <TrialMode />;
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F4EFE6" }}><div className="text-stone-600">Loading…</div></div>;
@@ -157,8 +183,8 @@ export default function App() {
       <div className="relative max-w-2xl mx-auto px-5 pb-28 pt-8 lg:pb-12">
         <Header view={view} streak={streak} />
         <main className="mt-8 lg:mt-2">
-          {view === "home" && <HomeView data={data} streak={streak} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} />}
-          {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} onStartSession={startSession} onShowDetail={setExerciseDetail} />}
+          {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
+          {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
           {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onStartProfile={openProfileAssessment} />}
         </main>

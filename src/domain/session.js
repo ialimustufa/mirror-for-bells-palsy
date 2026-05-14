@@ -3,13 +3,15 @@ import { EXERCISES } from "./exercises";
 
 // Persisted app state is intentionally compact and append-only for sessions/journal.
 // Derived trend metrics are recomputed in views instead of stored.
+export const DEFAULT_PERSONAL_PLAN = { addedExerciseIds: [], removedExerciseIds: [] };
+
 export const DEFAULT_DATA = {
   journal: [],
   sessions: [],
   movementProfile: null,
   initialMovementProfile: null,
   movementProfileHistory: [],
-  prefs: { voiceEnabled: true, mirrorEnabled: true, symmetryEnabled: true, dailyGoal: 3, onboarded: false },
+  prefs: { voiceEnabled: true, mirrorEnabled: true, symmetryEnabled: true, dailyGoal: 3, onboarded: false, personalPlan: DEFAULT_PERSONAL_PLAN },
 };
 
 export const todayISO = () => new Date().toISOString().split("T")[0];

@@ -55,6 +55,8 @@ export const REGIONS = [
   { key: "emoji", label: "Emoji" },
 ];
 
+export const PLAN_REGION_ORDER = ["forehead", "eyes", "nose", "cheeks", "mouth", "emoji"];
+
 export const DAILY_ESSENTIALS = ["eyebrow-raise", "eye-close", "nose-wrinkle", "cheek-puff", "closed-smile", "pucker"];
 
 export const MOOD_OPTIONS = [

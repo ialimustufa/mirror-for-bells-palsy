@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2 } from "lucide-react";
+import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { applySessionDose, daysBetween, exerciseHoldSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
-import { baselineProgressLabel, buildPersonalizedDailyPlan, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionBaselineProgress, objectCoverTransform, preferredBaselineProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
+import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionBaselineProgress, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
 import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
 
 function Header({ view, streak }) {
@@ -56,16 +56,31 @@ function Sidebar({ view, setView, streak }) {
   );
 }
 
-function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
+function sameExerciseIds(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  return a.every((id, index) => id === b[index]);
+}
+
+function sameExerciseSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const bSet = new Set(b);
+  return a.every((id) => bSet.has(id));
+}
+
+function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onStartProfile, onStartSession, onGo, onResetPersonalPlan }) {
   // Home is a derived dashboard: it summarizes today's stored records and maps the
   // configured daily goal into the next practice prompt.
   const todaysSessions = data.sessions.filter((s) => s.date === todayISO());
   const todaysCountedSessions = todaysSessions.filter(isCountedSession);
   const todaysJournal = data.journal.find((j) => j.date === todayISO());
   const dailyGoal = data.prefs.dailyGoal ?? 3;
-  const todaysPlan = buildPersonalizedDailyPlan(data.movementProfile, data.sessions);
+  const todaysPlan = personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []);
+  const hasCustomPlan = !sameExerciseIds(todaysPlan, recommendedPlanIds ?? []);
   const focusItems = getAdaptiveFocusItems(data.movementProfile, data.sessions, 3);
   const planExercises = todaysPlan.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean);
+  const planMissingBaselineIds = data.movementProfile
+    ? todaysPlan.filter((id) => !data.movementProfile.exercises?.[id])
+    : [];
   const latestBaseline = latestSessionBaselineProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -126,15 +141,32 @@ function HomeView({ data, streak, onStartProfile, onStartSession, onGo }) {
           <div className="flex items-center justify-between gap-3 mb-3">
             <div>
               <div className="text-sm font-semibold">Personalized plan</div>
-              <div className="text-xs opacity-60">Prioritized from your baseline profile</div>
+              <div className="text-xs opacity-60">Ordered forehead to mouth from your saved selection</div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap justify-end gap-2">
               {baselineStatus && <div className="text-xs rounded-full px-2.5 py-1" style={{ background: `${baselineStatus.quality.color}26`, color: baselineStatus.quality.color }}>{baselineStatus.quality.label}</div>}
               <div className="text-xs rounded-full px-2.5 py-1" style={{ background: "rgba(244,239,230,0.08)" }}>{planExercises.length} moves</div>
             </div>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {planExercises.map((ex) => <ExerciseGlyph key={ex.id} exercise={ex} size="xs" tone="dark" />)}
+            {planExercises.map((ex) => {
+              const needsBaseline = planMissingBaselineIds.includes(ex.id);
+              return (
+                <div key={ex.id} className="shrink-0 inline-flex items-center gap-2 rounded-xl px-2.5 py-2 max-w-[14rem]" style={{ background: "rgba(244,239,230,0.08)", border: needsBaseline ? "1px solid rgba(212,165,116,0.45)" : "1px solid rgba(244,239,230,0.08)" }}>
+                  <ExerciseGlyph exercise={ex} size="xs" tone="dark" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate">{ex.name}</div>
+                    {needsBaseline && <div className="text-[10px] mt-0.5" style={{ color: "#F6D8B2" }}>Needs baseline</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button onClick={() => onGo("practice")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Edit plan<ArrowRight className="w-3.5 h-3.5" /></button>
+            {hasCustomPlan && (
+              <button onClick={onResetPersonalPlan} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.16)" }}><RotateCcw className="w-3.5 h-3.5" />Reset to recommended</button>
+            )}
           </div>
           <div className="grid grid-cols-1 gap-2 mt-4">
             {focusItems.map((item) => (
@@ -591,51 +623,88 @@ function ExerciseGlyph({ exercise, exerciseId, region, size = "sm", tone = "ligh
   );
 }
 
-function PracticeView({ movementProfile, sessions, onStartSession, onShowDetail }) {
-  // Library state stays local until the user starts a session, keeping custom routines
-  // ephemeral and avoiding partial selections in persisted recovery data.
-  const profilePlan = useMemo(() => buildPersonalizedDailyPlan(movementProfile, sessions), [movementProfile, sessions]);
+function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommendedPlanIds, onStartSession, onShowDetail, onSavePersonalPlan, onResetPersonalPlan }) {
+  // Library state stays local until the user starts or explicitly saves, keeping
+  // one-off custom routines separate from the persisted daily plan.
+  const profilePlan = useMemo(() => personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []), [personalizedPlanIds, recommendedPlanIds]);
+  const recommendedPlan = useMemo(() => recommendedPlanIds ?? profilePlan, [recommendedPlanIds, profilePlan]);
   const focusItems = useMemo(() => getAdaptiveFocusItems(movementProfile, sessions, 3), [movementProfile, sessions]);
   const dosing = getComfortDosing(movementProfile);
   const [region, setRegion] = useState("all");
   const [selected, setSelected] = useState(() => new Set(profilePlan));
-  useEffect(() => { if (movementProfile) setSelected(new Set(profilePlan)); }, [movementProfile, profilePlan]);
+  useEffect(() => { setSelected(new Set(profilePlan)); }, [profilePlan]);
   const filtered = region === "all" ? EXERCISES : EXERCISES.filter((e) => e.region === region);
   const toggle = (id) => { const next = new Set(selected); next.has(id) ? next.delete(id) : next.add(id); setSelected(next); };
   const shownIds = filtered.map((exercise) => exercise.id);
+  const orderedSelectedIds = orderExerciseIdsByRegion([...selected], recommendedPlan);
+  const selectedMissingBaselineIds = movementProfile
+    ? orderedSelectedIds.filter((id) => !movementProfile.exercises?.[id])
+    : [];
   const selectedShownCount = shownIds.filter((id) => selected.has(id)).length;
   const allShownSelected = shownIds.length > 0 && selectedShownCount === shownIds.length;
-  const recommendedSelected = selected.size === profilePlan.length && profilePlan.every((id) => selected.has(id));
-  const selectRecommended = () => setSelected(new Set(profilePlan));
+  const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan);
+  const recommendedSelected = sameExerciseSet(orderedSelectedIds, recommendedPlan);
+  const hasCustomPlan = !sameExerciseIds(profilePlan, recommendedPlan);
+  const canSavePlan = selected.size > 0 && !savedPlanSelected;
+  const selectSavedPlan = () => setSelected(new Set(profilePlan));
+  const selectRecommended = () => setSelected(new Set(recommendedPlan));
   const selectAllShown = () => setSelected((prev) => new Set([...prev, ...shownIds]));
   const clearSelection = () => setSelected(new Set());
+  const handleSavePlan = () => {
+    if (!canSavePlan) return;
+    onSavePersonalPlan?.(orderedSelectedIds);
+  };
+  const handleResetPlan = () => {
+    onResetPersonalPlan?.();
+    setSelected(new Set(recommendedPlan));
+  };
 
   return (
     <div className="space-y-5">
       <div>
         <h2 className="text-3xl" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>Practice library</h2>
-        <p className="text-sm text-stone-600 mt-1">Tap an exercise to see details. Select multiple to build a custom session.</p>
+        <p className="text-sm text-stone-600 mt-1">Select exercises for today, then start once or save them to your plan.</p>
       </div>
       {movementProfile && (
         <div className="rounded-2xl p-4" style={{ background: "rgba(122, 143, 115, 0.12)", border: "1px solid rgba(122, 143, 115, 0.2)" }}>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <div className="text-sm font-semibold">Baseline focus selected</div>
-              <div className="text-xs text-stone-600">{dosing.label} dose · starts with the lowest baseline movements.</div>
+              <div className="text-sm font-semibold">Saved personalized plan</div>
+              <div className="text-xs text-stone-600">{dosing.label} dose · ordered forehead to mouth.</div>
             </div>
-            <button onClick={selectRecommended} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>Recommended</button>
+            {hasCustomPlan
+              ? <button onClick={handleResetPlan} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}><RotateCcw className="w-3.5 h-3.5" />Reset</button>
+              : <button onClick={selectRecommended} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>Recommended</button>}
           </div>
-          <div className="space-y-2">
-            {focusItems.map((item) => (
-              <div key={item.id} className="flex items-center gap-3">
-                <ExerciseGlyph exercise={item.exercise} size="xs" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold truncate">{item.exercise?.name}</div>
-                  <div className="text-[11px] text-stone-600">{focusReason(item)} · limited side {item.profileExercise.limitedSide}</div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {profilePlan.map((id) => {
+              const exercise = EXERCISES.find((item) => item.id === id);
+              if (!exercise) return null;
+              const needsBaseline = !movementProfile.exercises?.[id];
+              return (
+                <div key={id} className="shrink-0 inline-flex items-center gap-2 rounded-xl px-2.5 py-2 max-w-[14rem]" style={{ background: "rgba(255,255,255,0.42)", border: needsBaseline ? "1px solid rgba(154,106,50,0.35)" : "1px solid rgba(122,143,115,0.16)" }}>
+                  <ExerciseGlyph exercise={exercise} size="xs" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold truncate">{exercise.name}</div>
+                    {needsBaseline && <div className="text-[10px] mt-0.5" style={{ color: "#8B5A1E" }}>Needs baseline</div>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+          {focusItems.length > 0 && (
+            <div className="space-y-2 mt-3">
+              {focusItems.map((item) => (
+                <div key={item.id} className="flex items-center gap-3">
+                  <ExerciseGlyph exercise={item.exercise} size="xs" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold truncate">{item.exercise?.name}</div>
+                    <div className="text-[11px] text-stone-600">{focusReason(item)} · limited side {item.profileExercise.limitedSide}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
@@ -644,20 +713,40 @@ function PracticeView({ movementProfile, sessions, onStartSession, onShowDetail 
         ))}
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
-        <div className="text-xs text-stone-600">{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}</div>
+        <div className="text-xs text-stone-600">
+          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}</div>
+          {selectedMissingBaselineIds.length > 0 && <div className="mt-0.5" style={{ color: "#9A6A32" }}>{selectedMissingBaselineIds.length} selected need baseline</div>}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button onClick={selectSavedPlan} disabled={savedPlanSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(184,84,58,0.12)", color: "#8F3C2A" }}>{savedPlanSelected ? "Saved plan selected" : "Saved plan"}</button>
           <button onClick={selectRecommended} disabled={recommendedSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(122, 143, 115, 0.16)", color: "#3E5F3B" }}>{recommendedSelected ? "Recommended selected" : "Recommended"}</button>
           <button onClick={selectAllShown} disabled={allShownSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "#1F1B16", color: "#F4EFE6" }}>{allShownSelected ? "Shown selected" : "Select all shown"}</button>
+          {hasCustomPlan && <button onClick={handleResetPlan} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}>Reset to recommended</button>}
           {selected.size > 0 && <button onClick={clearSelection} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}>Clear</button>}
         </div>
       </div>
       <div className="space-y-2.5">
-        {filtered.map((ex) => <ExerciseRow key={ex.id} exercise={ex} sessionExercise={applySessionDose(ex, movementProfile)} selected={selected.has(ex.id)} onToggle={() => toggle(ex.id)} onShow={() => onShowDetail(ex)} />)}
+        {filtered.map((ex) => (
+          <ExerciseRow
+            key={ex.id}
+            exercise={ex}
+            sessionExercise={applySessionDose(ex, movementProfile)}
+            selected={selected.has(ex.id)}
+            needsBaseline={Boolean(movementProfile && selected.has(ex.id) && !movementProfile.exercises?.[ex.id])}
+            onToggle={() => toggle(ex.id)}
+            onShow={() => onShowDetail(ex)}
+          />
+        ))}
       </div>
       {selected.size > 0 && (
         <div className="fixed bottom-24 left-0 right-0 px-5 z-30 lg:bottom-6 lg:left-20">
-          <div className="max-w-2xl mx-auto">
-            <button onClick={() => onStartSession([...selected])} className="w-full rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+          <div className="max-w-2xl mx-auto flex gap-2">
+            {canSavePlan && (
+              <button onClick={handleSavePlan} className="rounded-full py-3.5 px-5 flex items-center justify-center gap-2 font-semibold shadow-lg shrink-0" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+                <Save className="w-4 h-4" />Save plan
+              </button>
+            )}
+            <button onClick={() => onStartSession(orderedSelectedIds)} className="flex-1 rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
               <Play className="w-4 h-4 fill-current" />Start with {selected.size} exercise{selected.size > 1 ? "s" : ""}
             </button>
           </div>
@@ -667,7 +756,7 @@ function PracticeView({ movementProfile, sessions, onStartSession, onShowDetail 
   );
 }
 
-function ExerciseRow({ exercise, sessionExercise, selected, onToggle, onShow }) {
+function ExerciseRow({ exercise, sessionExercise, selected, needsBaseline, onToggle, onShow }) {
   const dose = sessionExercise ?? exercise;
   return (
     <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: selected ? "rgba(184, 84, 58, 0.08)" : "rgba(255,255,255,0.5)", border: selected ? "1px solid rgba(184, 84, 58, 0.3)" : "1px solid rgba(31, 27, 22, 0.06)" }}>
@@ -678,7 +767,10 @@ function ExerciseRow({ exercise, sessionExercise, selected, onToggle, onShow }) 
         <ExerciseGlyph exercise={exercise} size="sm" />
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-[15px] truncate">{exercise.name}</div>
-          <div className="text-xs text-stone-500 mt-0.5">{dose.reps} reps · {dose.holdSec}s hold · <span className="capitalize">{exercise.region}</span></div>
+          <div className="text-xs text-stone-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <span>{dose.reps} reps · {dose.holdSec}s hold · <span className="capitalize">{exercise.region}</span></span>
+            {needsBaseline && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(212,165,116,0.18)", color: "#8B5A1E" }}>Needs baseline</span>}
+          </div>
         </div>
         <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
       </button>
