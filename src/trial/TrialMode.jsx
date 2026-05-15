@@ -1,5 +1,29 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, RefreshCw, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+
+// Brand glyphs aren't shipped by lucide-react v1 (dropped for trademark reasons), so
+// inline the three we need. Single-path SVGs, currentColor so the button styles win.
+function GithubGlyph({ className = "w-3.5 h-3.5" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.8 10.9.6.1.8-.2.8-.6v-2.2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.6-.3-5.3-1.3-5.3-5.8 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2.9-.3 1.9-.4 2.9-.4s2 .1 2.9.4c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.7.8 1.2 1.8 1.2 3.1 0 4.5-2.7 5.5-5.3 5.8.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6 4.5-1.5 7.8-5.8 7.8-10.9C23.5 5.7 18.3.5 12 .5z"/>
+    </svg>
+  );
+}
+function LinkedinGlyph({ className = "w-3.5 h-3.5" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M20.5 2h-17A1.5 1.5 0 0 0 2 3.5v17A1.5 1.5 0 0 0 3.5 22h17a1.5 1.5 0 0 0 1.5-1.5v-17A1.5 1.5 0 0 0 20.5 2zM8 19H5v-9h3v9zM6.5 8.25A1.75 1.75 0 1 1 8.3 6.5a1.78 1.78 0 0 1-1.8 1.75zM19 19h-3v-4.74c0-1.42-.6-1.93-1.38-1.93A1.74 1.74 0 0 0 13 14.19a.66.66 0 0 0 0 .14V19h-3v-9h2.9v1.3a3.11 3.11 0 0 1 2.7-1.4c1.55 0 3.36.86 3.36 3.66z"/>
+    </svg>
+  );
+}
+function XGlyph({ className = "w-3.5 h-3.5" }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className={className}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+    </svg>
+  );
+}
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS } from "../domain/config";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
@@ -522,7 +546,26 @@ function TrialMode() {
             on your device. No video leaves your browser. The neutral baseline above is the same one used during
             full Mirror sessions to score real movement above per-landmark jitter.
           </p>
-          <MadeByFooter className="mt-3" />
+
+          <section className="mt-6 rounded-2xl p-5 lg:p-6" style={{ background: "rgba(31,27,22,0.04)", border: "1px solid rgba(31,27,22,0.08)" }}>
+            <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-2">My story</div>
+            <p className="text-sm text-stone-700 leading-relaxed">
+              Last week, I hit rock bottom. I was diagnosed with Bell's palsy, and my right face got paralysed; I honestly wondered how I was going to get through it. I vibe-coded my way out and built an AI face tracking app that guides my facial exercises, measures facial symmetry in real time, and tracks my progress.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <a href="https://github.com/ialimustufa/mirror-for-Bells-palsy" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+                <GithubGlyph />GitHub
+              </a>
+              <a href="https://www.linkedin.com/posts/ialimustufa_last-week-i-hit-rock-bottom-i-was-diagnosed-ugcPost-7458136477626093570-PIFK" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31,27,22,0.06)", color: "#1F1B16", border: "1px solid rgba(31,27,22,0.08)" }}>
+                <LinkedinGlyph />LinkedIn post
+              </a>
+              <a href="https://x.com/ialimustufa/status/2052044810173993039" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31,27,22,0.06)", color: "#1F1B16", border: "1px solid rgba(31,27,22,0.08)" }}>
+                <XGlyph />X post
+              </a>
+            </div>
+          </section>
+
+          <MadeByFooter className="mt-4" />
         </footer>
       </div>
     </div>

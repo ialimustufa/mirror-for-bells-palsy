@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { DAY_END_HOUR, DAY_START_HOUR, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
+import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
-import { applySessionDose, daysBetween, exerciseHoldSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
+import { applySessionDose, buildSessionExercises, daysBetween, exerciseHoldSec, exerciseRestSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionBaselineProgress, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
@@ -67,6 +67,59 @@ function sameExerciseSet(a = [], b = []) {
   return a.every((id) => bSet.has(id));
 }
 
+// Modal alert with explicit Cancel/Confirm. Closes on Escape or backdrop click.
+// Auto-focuses Cancel so a stray Enter keeps the plan instead of wiping it.
+function ConfirmAlert({ title, message, confirmLabel = "Confirm", cancelLabel = "Cancel", danger = true, onConfirm, onCancel }) {
+  const cancelRef = useRef(null);
+  useEffect(() => {
+    cancelRef.current?.focus();
+    const onKey = (e) => { if (e.key === "Escape") onCancel?.(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onCancel]);
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="confirm-alert-title" className="fixed inset-0 z-[80] flex items-center justify-center p-5" style={{ background: "rgba(12,10,8,0.65)" }} onClick={onCancel}>
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm rounded-2xl p-6" style={{ background: "#F4EFE6", color: "#1F1B16", boxShadow: "0 24px 60px rgba(0,0,0,0.35)" }}>
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: danger ? "rgba(184,84,58,0.16)" : "rgba(31,27,22,0.08)", color: danger ? "#B8543A" : "#1F1B16" }}>
+            <AlertCircle className="w-5 h-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div id="confirm-alert-title" className="text-lg leading-tight" style={{ fontFamily: "Fraunces", fontWeight: 600, letterSpacing: "-0.01em" }}>{title}</div>
+            {message && <div className="text-sm text-stone-600 mt-2 leading-relaxed">{message}</div>}
+          </div>
+        </div>
+        <div className="flex gap-2 justify-end">
+          <button ref={cancelRef} onClick={onCancel} className="rounded-full px-4 py-2 text-sm font-semibold" style={{ background: "rgba(31,27,22,0.08)", color: "#1F1B16" }}>{cancelLabel}</button>
+          <button onClick={onConfirm} className="rounded-full px-4 py-2 text-sm font-semibold" style={{ background: danger ? "#B8543A" : "#1F1B16", color: "#F4EFE6" }}>{confirmLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmResetButton({ onConfirm, label, confirmTitle = "Reset to recommended plan?", confirmMessage = "This replaces your saved exercise selection with the algorithm's current recommendation. Your custom picks will be lost — you can rebuild them in the Practice library.", confirmActionLabel = "Reset plan", cancelLabel = "Keep my plan", baseStyle, showIcon = true, className = "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap" }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className={className} style={baseStyle} aria-label={label}>
+        {showIcon && <RotateCcw className="w-3.5 h-3.5" />}
+        {label}
+      </button>
+      {open && (
+        <ConfirmAlert
+          title={confirmTitle}
+          message={confirmMessage}
+          confirmLabel={confirmActionLabel}
+          cancelLabel={cancelLabel}
+          onConfirm={() => { setOpen(false); onConfirm?.(); }}
+          onCancel={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
 function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onStartProfile, onStartSession, onGo, onResetPersonalPlan }) {
   // Home is a derived dashboard: it summarizes today's stored records and maps the
   // configured daily goal into the next practice prompt.
@@ -74,13 +127,19 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
   const todaysCountedSessions = todaysSessions.filter(isCountedSession);
   const todaysJournal = data.journal.find((j) => j.date === todayISO());
   const dailyGoal = data.prefs.dailyGoal ?? 3;
-  const todaysPlan = personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []);
+  const todaysPlan = useMemo(() => personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []), [personalizedPlanIds, recommendedPlanIds]);
   const hasCustomPlan = !sameExerciseIds(todaysPlan, recommendedPlanIds ?? []);
   const focusItems = getAdaptiveFocusItems(data.movementProfile, data.sessions, 3);
   const planExercises = todaysPlan.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean);
   const planMissingBaselineIds = data.movementProfile
     ? todaysPlan.filter((id) => !data.movementProfile.exercises?.[id])
     : [];
+  const planSessionExercises = useMemo(() => buildSessionExercises(todaysPlan, data.movementProfile), [todaysPlan, data.movementProfile]);
+  const planDurationSec = useMemo(
+    () => planSessionExercises.reduce((sum, ex) => sum + ex.reps * (exerciseHoldSec(ex) + exerciseRestSec(ex)), 0)
+      + Math.max(0, planSessionExercises.length - 1) * INTERSTITIAL_SEC,
+    [planSessionExercises]
+  );
   const latestBaseline = latestSessionBaselineProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -145,27 +204,36 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {baselineStatus && <div className="text-xs rounded-full px-2.5 py-1" style={{ background: `${baselineStatus.quality.color}26`, color: baselineStatus.quality.color }}>{baselineStatus.quality.label}</div>}
-              <div className="text-xs rounded-full px-2.5 py-1" style={{ background: "rgba(244,239,230,0.08)" }}>{planExercises.length} moves</div>
+              <div className="text-xs rounded-full px-2.5 py-1 tabular-nums" style={{ background: "rgba(244,239,230,0.08)" }} title="Estimated session length">{planExercises.length} moves · ~{formatDuration(planDurationSec)}</div>
             </div>
           </div>
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {planExercises.map((ex) => {
-              const needsBaseline = planMissingBaselineIds.includes(ex.id);
-              return (
-                <div key={ex.id} className="shrink-0 inline-flex items-center gap-2 rounded-xl px-2.5 py-2 max-w-[14rem]" style={{ background: "rgba(244,239,230,0.08)", border: needsBaseline ? "1px solid rgba(212,165,116,0.45)" : "1px solid rgba(244,239,230,0.08)" }}>
-                  <ExerciseGlyph exercise={ex} size="xs" tone="dark" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate">{ex.name}</div>
-                    {needsBaseline && <div className="text-[10px] mt-0.5" style={{ color: "#F6D8B2" }}>Needs baseline</div>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          {(() => {
+            const PLAN_PREVIEW_CAP = 8;
+            const overflow = planExercises.length - PLAN_PREVIEW_CAP;
+            const visible = overflow > 0 ? planExercises.slice(0, PLAN_PREVIEW_CAP - 1) : planExercises;
+            return (
+              <div className="grid grid-cols-4 gap-1.5">
+                {visible.map((ex) => {
+                  const needsBaseline = planMissingBaselineIds.includes(ex.id);
+                  return (
+                    <div key={ex.id} title={needsBaseline ? `${ex.name} · needs baseline` : ex.name} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 min-w-0" style={{ background: "rgba(244,239,230,0.08)", border: needsBaseline ? "1px solid rgba(212,165,116,0.45)" : "1px solid rgba(244,239,230,0.08)" }}>
+                      <ExerciseGlyph exercise={ex} size="xs" tone="dark" />
+                      <div className="text-[11px] font-semibold truncate min-w-0">{ex.name}</div>
+                    </div>
+                  );
+                })}
+                {overflow > 0 && (
+                  <button onClick={() => onGo("practice")} title={`${overflow + 1} more in your plan`} className="inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-semibold" style={{ background: "rgba(244,239,230,0.06)", border: "1px dashed rgba(244,239,230,0.22)", color: "#F4EFE6" }}>
+                    +{overflow + 1} more
+                  </button>
+                )}
+              </div>
+            );
+          })()}
           <div className="flex flex-wrap gap-2 mt-3">
             <button onClick={() => onGo("practice")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Edit plan<ArrowRight className="w-3.5 h-3.5" /></button>
             {hasCustomPlan && (
-              <button onClick={onResetPersonalPlan} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.16)" }}><RotateCcw className="w-3.5 h-3.5" />Reset to recommended</button>
+              <ConfirmResetButton onConfirm={onResetPersonalPlan} label="Reset to recommended" baseStyle={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.16)" }} />
             )}
           </div>
           <div className="grid grid-cols-1 gap-2 mt-4">
@@ -636,12 +704,18 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
   const filtered = region === "all" ? EXERCISES : EXERCISES.filter((e) => e.region === region);
   const toggle = (id) => { const next = new Set(selected); next.has(id) ? next.delete(id) : next.add(id); setSelected(next); };
   const shownIds = filtered.map((exercise) => exercise.id);
-  const orderedSelectedIds = orderExerciseIdsByRegion([...selected], recommendedPlan);
+  const orderedSelectedIds = useMemo(() => orderExerciseIdsByRegion([...selected], recommendedPlan), [selected, recommendedPlan]);
   const selectedMissingBaselineIds = movementProfile
     ? orderedSelectedIds.filter((id) => !movementProfile.exercises?.[id])
     : [];
   const selectedShownCount = shownIds.filter((id) => selected.has(id)).length;
   const allShownSelected = shownIds.length > 0 && selectedShownCount === shownIds.length;
+  const selectedSessionExercises = useMemo(() => buildSessionExercises(orderedSelectedIds, movementProfile), [orderedSelectedIds, movementProfile]);
+  const selectedDurationSec = useMemo(
+    () => selectedSessionExercises.reduce((sum, ex) => sum + ex.reps * (exerciseHoldSec(ex) + exerciseRestSec(ex)), 0)
+      + Math.max(0, selectedSessionExercises.length - 1) * INTERSTITIAL_SEC,
+    [selectedSessionExercises]
+  );
   const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan);
   const recommendedSelected = sameExerciseSet(orderedSelectedIds, recommendedPlan);
   const hasCustomPlan = !sameExerciseIds(profilePlan, recommendedPlan);
@@ -673,7 +747,7 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
               <div className="text-xs text-stone-600">{dosing.label} dose · ordered forehead to mouth.</div>
             </div>
             {hasCustomPlan
-              ? <button onClick={handleResetPlan} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}><RotateCcw className="w-3.5 h-3.5" />Reset</button>
+              ? <ConfirmResetButton onConfirm={handleResetPlan} label="Reset" baseStyle={{ background: "#1F1B16", color: "#F4EFE6" }} />
               : <button onClick={selectRecommended} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>Recommended</button>}
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -714,14 +788,14 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
         <div className="text-xs text-stone-600">
-          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}</div>
+          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}{selected.size > 0 ? ` · ~${formatDuration(selectedDurationSec)}` : ""}</div>
           {selectedMissingBaselineIds.length > 0 && <div className="mt-0.5" style={{ color: "#9A6A32" }}>{selectedMissingBaselineIds.length} selected need baseline</div>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={selectSavedPlan} disabled={savedPlanSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(184,84,58,0.12)", color: "#8F3C2A" }}>{savedPlanSelected ? "Saved plan selected" : "Saved plan"}</button>
           <button onClick={selectRecommended} disabled={recommendedSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(122, 143, 115, 0.16)", color: "#3E5F3B" }}>{recommendedSelected ? "Recommended selected" : "Recommended"}</button>
           <button onClick={selectAllShown} disabled={allShownSelected} className="rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-45" style={{ background: "#1F1B16", color: "#F4EFE6" }}>{allShownSelected ? "Shown selected" : "Select all shown"}</button>
-          {hasCustomPlan && <button onClick={handleResetPlan} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}>Reset to recommended</button>}
+          {hasCustomPlan && <ConfirmResetButton onConfirm={handleResetPlan} label="Reset to recommended" showIcon={false} baseStyle={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }} />}
           {selected.size > 0 && <button onClick={clearSelection} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}>Clear</button>}
         </div>
       </div>
@@ -747,7 +821,7 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
               </button>
             )}
             <button onClick={() => onStartSession(orderedSelectedIds)} className="flex-1 rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
-              <Play className="w-4 h-4 fill-current" />Start with {selected.size} exercise{selected.size > 1 ? "s" : ""}
+              <Play className="w-4 h-4 fill-current" />Start with {selected.size} exercise{selected.size > 1 ? "s" : ""}<span className="opacity-70 font-normal tabular-nums">· ~{formatDuration(selectedDurationSec)}</span>
             </button>
           </div>
         </div>
