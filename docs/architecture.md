@@ -64,7 +64,7 @@ src/
   profile/
     ProfileAssessment.jsx       Onboarding movement profile capture
   trial/
-    TrialMode.jsx               Standalone /trial demo
+    TrialMode.jsx               Standalone /try demo
   components/
     appViews.jsx                Home, Practice, Journal, Progress, modals, charts
   reports/

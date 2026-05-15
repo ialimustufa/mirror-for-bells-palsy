@@ -12,7 +12,7 @@ npm run lint
 Routes:
 
 - `/` - main practice flow
-- `/trial` - standalone tracker demo
+- `/try` - standalone tracker demo
 
 ## Browser Requirements
 

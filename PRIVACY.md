@@ -6,7 +6,7 @@ Mirror for Bell's Palsy is designed as a local-first practice companion. The app
 
 ## Live App URLs
 
-- Trial demo: https://mirror-for-bells-palsy.onrender.com/trial
+- Trial demo: https://mirror-for-bells-palsy.onrender.com/try
 - Full practice app: https://mirror-for-bells-palsy.onrender.com/
 
 ## What Stays On Your Device

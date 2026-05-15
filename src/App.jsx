@@ -42,7 +42,7 @@ export default function App() {
   const [profileAssessment, setProfileAssessment] = useState(null);
   const [exerciseDetail, setExerciseDetail] = useState(null);
   const [viewingReport, setViewingReport] = useState(null);
-  // Path-based route for the public /trial demo. Listening to popstate covers the
+  // Path-based route for the public /try demo. Listening to popstate covers the
   // history-driven nav back from the trial page; the rest of the app remains state-routed.
   const [pathname, setPathname] = useState(() => (typeof window !== "undefined" ? window.location.pathname : "/"));
   useEffect(() => {
@@ -170,7 +170,7 @@ export default function App() {
     persist({ ...data, prefs: { ...data.prefs, personalPlan: DEFAULT_PERSONAL_PLAN } });
   }, [data, persist]);
 
-  if (pathname === "/trial") return <TrialMode />;
+  if (pathname === "/try") return <TrialMode />;
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F4EFE6" }}><div className="text-stone-600">Loading…</div></div>;
 
   return (

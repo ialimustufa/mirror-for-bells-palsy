@@ -6,7 +6,7 @@ Important: Mirror supports practice and self-tracking, but it does not diagnose,
 
 ## Try It
 
-- How it works, for anyone to try: [mirror-for-bells-palsy.onrender.com/trial](https://mirror-for-bells-palsy.onrender.com/trial)
+- How it works, for anyone to try: [mirror-for-bells-palsy.onrender.com/try](https://mirror-for-bells-palsy.onrender.com/try)
 - Full practice app for folks who have Bell's palsy: [mirror-for-bells-palsy.onrender.com](https://mirror-for-bells-palsy.onrender.com/)
 
 ## What Matters
@@ -34,7 +34,7 @@ npm run lint
 
 Routes:
 
-- `/trial` - standalone face tracker demo
+- `/try` - standalone face tracker demo
 - `/` - main practice flow
 
 ## Documentation

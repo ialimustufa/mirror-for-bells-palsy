@@ -11,7 +11,7 @@ This document collects the product behavior that used to live in the main README
 - Comfort levels that adjust reps, hold time, and rest time.
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
 - Printable session report that can be saved as a PDF for a physiotherapist.
-- A live `/trial` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.
+- A live `/try` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.
 
 ## Main Practice Flow
 
@@ -19,7 +19,7 @@ The main app route at `/` guides a user through calibration, exercise preview, r
 
 ## Live Demo Page
 
-The `/trial` route is a standalone showcase of the underlying face tracker, independent of the practice loop. It renders:
+The `/try` route is a standalone showcase of the underlying face tracker, independent of the practice loop. It renders:
 
 - The full 478-point MediaPipe mesh, color-coded by region.
 - Per-region activation glows that pulse on the camera as the matching muscle engages.
