@@ -4,6 +4,11 @@ Mirror is a local-first facial retraining companion for Bell's palsy practice. I
 
 Important: Mirror supports practice and self-tracking, but it does not diagnose, grade paralysis, prescribe treatment, or replace medical care. Work with a qualified clinician and stop any exercise that causes pain, strain, or discomfort.
 
+## Try It
+
+- How it works, for anyone to try: [mirror-for-bells-palsy.onrender.com/trial](https://mirror-for-bells-palsy.onrender.com/trial)
+- Full practice app for folks who have Bell's palsy: [mirror-for-bells-palsy.onrender.com](https://mirror-for-bells-palsy.onrender.com/)
+
 ## What Matters
 
 - Guided practice for forehead, eyes, nose, cheeks, mouth, and expression-style movements.
@@ -34,11 +39,16 @@ Routes:
 
 ## Documentation
 
+- [Data privacy policy](PRIVACY.md)
 - [Features and workflows](docs/features-and-workflows.md)
 - [Development guide](docs/development.md)
 - [Architecture and project map](docs/architecture.md)
 - [Model and scoring](docs/model-and-scoring.md)
 - [Privacy and medical notes](docs/privacy-and-medical.md)
+
+## License
+
+Mirror is free for personal, non-commercial use. Commercial use requires prior written permission from Ali Mustufa. See [LICENSE](LICENSE) for details and contact via [LinkedIn](https://www.linkedin.com/in/ialimustufa/).
 
 ## Made By
 

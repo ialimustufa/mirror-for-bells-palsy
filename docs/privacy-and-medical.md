@@ -1,5 +1,7 @@
 # Privacy And Medical Notes
 
+For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
+
 ## Data And Privacy
 
 - Camera frames are processed in the browser by the MediaPipe model. No video, landmarks, or scores are sent to any server.
