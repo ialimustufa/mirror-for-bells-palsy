@@ -5,6 +5,7 @@
 ```bash
 npm install
 npm run dev      # starts Vite on http://127.0.0.1:5173
+npm test         # pure scoring/progress tests
 npm run build    # production bundle
 npm run lint
 ```

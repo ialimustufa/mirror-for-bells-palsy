@@ -6,7 +6,7 @@ This document collects the product behavior that used to live in the main README
 
 - Guided exercises across forehead, eyes, nose, cheeks, mouth, and emoji-style facial reactions.
 - Neutral calibration with frame-stability gating and per-landmark noise estimation.
-- Exercise-specific symmetry scoring against the user's own baseline.
+- Exercise-specific symmetry scoring plus affected-side progress against the user's own baseline.
 - Optional personal movement profile that personalizes dosing, focus, and progress tracking.
 - Comfort levels that adjust reps, hold time, and rest time.
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
@@ -47,9 +47,9 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - Today's default session is prioritized from lower-baseline-symmetry movements.
 - The Practice library preselects the profile-derived focus plan.
 - Normal session scoring uses per-exercise activation thresholds from the profile.
-- Session reports store both current-baseline progress and first-baseline progress, where `100%` means the matched baseline movement level.
-- Session reports include score summaries, per-exercise rep scores, dose settings, baseline progress, rep snapshots, and neutral-baseline comparison images.
-- Home and Progress show focus recommendations from the baseline profile.
+- Session reports store legacy focused-side baseline progress plus affected-side movement progress against both the current and first saved baselines.
+- Session reports include score summaries, per-exercise rep scores, dose settings, affected-side progress, affected/proper side comparison, rep snapshots, and neutral-baseline comparison images.
+- Home and Progress show focus recommendations from the baseline profile and recent affected-side movement trends.
 - Comfort level adjusts session reps, hold time, and rest time through local dosing rules.
 - Exercises marked `Retake` can be recalibrated individually; partial baseline captures also merge missing add-on movements into the current profile.
 - Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.

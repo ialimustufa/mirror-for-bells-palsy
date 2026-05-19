@@ -1,6 +1,6 @@
 # Model And Scoring
 
-This document explains how Mirror turns the camera feed into real-time facial exercise symmetry scores.
+This document explains how Mirror turns the camera feed into real-time facial exercise symmetry scores and baseline-anchored movement progress metrics.
 
 ## Goals
 
@@ -9,6 +9,7 @@ The scoring system is designed to be:
 - Exercise-specific: different facial movements are measured with different landmark groups.
 - Baseline-relative: movement is measured against the user's own relaxed neutral face.
 - Symmetry-focused: the score compares left-side movement with right-side movement.
+- Recovery-focused: progress tracks affected-side movement against the user's first saved baseline and compares it with the proper side.
 - Stable enough for practice: small frame jitter, camera shift, and head roll should affect scores as little as practical.
 - Conservative: if movement is too small or calibration is missing, the app avoids scoring instead of producing a misleading number.
 
@@ -58,8 +59,9 @@ For each animation frame:
 4. Smooth landmarks and the transform matrix using an exponential moving average.
 5. During calibration, collect stable neutral frames and neutral pose matrices.
 6. During holds, compute exercise-specific symmetry in the matrix-normalized face frame.
-7. Accumulate valid scores across the hold window.
-8. Save the average rep score and a peak-movement snapshot.
+7. Accumulate valid symmetry and left/right movement values across the hold window.
+8. Compare affected-side movement with the working baseline and the first saved baseline.
+9. Save the average rep score, movement progress metrics, and a peak-movement snapshot.
 
 Simplified:
 
@@ -70,6 +72,7 @@ video frame
 -> smoothLandmarks + smoothFacialTransformationMatrix
 -> calibration or scoring branch
 -> live score
+-> affected-side movement progress
 -> rep average
 -> exercise average
 -> session average
@@ -449,6 +452,10 @@ session_score = average(exercise_scores_with_valid_scores)
 
 Frames with no face, no calibration, or motion below the noise threshold are not scored.
 
+Symmetry is still stored as `scores`, `avg`, and `sessionAvg`, but it is treated as
+movement balance/quality. Recovery progress is stored separately so a real increase
+in affected-side movement is not hidden by the left/right balance score.
+
 ## Personal Movement Profile
 
 The first-use baseline layer is implemented as a local movement profile, not as a new trained ML model.
@@ -624,14 +631,14 @@ This is a practice signal, not a diagnosis. The user-reported affected side rema
 The profile is used in normal app behavior after it is saved:
 
 - `buildPersonalizedDailyPlan` prioritizes daily-session exercises with lower initial symmetry and affected-side focus.
-- `getAdaptiveFocusItems` exposes the highest-priority movements for Home, Practice, and Progress UI by combining baseline profile data with recent session results.
+- `getAdaptiveFocusItems` exposes the highest-priority movements for Home, Practice, and Progress UI by combining baseline profile data, affected-side progress, affected/proper balance, and recent symmetry.
 - `PracticeView` preselects the baseline-derived focus plan instead of starting empty when a profile exists.
 - `SessionMode` uses `activationThreshold` to decide whether a hold-frame movement is strong enough to count.
 - `buildSessionExercises` applies comfort-level dosing before a session starts.
-- Live feedback can show the focused side's current movement relative to baseline.
-- Exercise summaries and saved sessions store `baselineProgress`.
+- Live feedback can show the focused side's current movement relative to the working baseline.
+- Exercise summaries and saved sessions store legacy `baselineProgress` plus the newer affected-side `movementProgress`.
 - Session summaries can open a printable report intended to be saved as a PDF for a physiotherapist.
-- The Progress screen charts movement from baseline over time.
+- The Progress screen charts affected-side movement from the first saved baseline over time.
 - `MovementProfileCard` shows the current focus list and latest per-exercise progress from saved sessions.
 - Retaking a profile archives the previous profile as a compact history record for comparison.
 - `profileStatus` classifies baseline quality from calibration noise and prompts retakes after noisy calibration or after 14 days.
@@ -695,13 +702,18 @@ movements, and merges the resulting exercise entries back into the current
 exercise baselines, and `initialAvgSymmetry`. It does not archive or replace the
 whole profile.
 
-`SessionMode` stores both:
+`SessionMode` stores the older focused-side baseline fields for backward compatibility:
 
 - `baselineProgress`: current movement compared with the current working baseline.
 - `initialBaselineProgress`: current movement compared with the first saved baseline.
 
+It also stores the preferred recovery metrics:
+
+- `movementProgress`: affected-side movement compared with the current working baseline.
+- `initialMovementProgress`: affected-side movement compared with the first saved baseline.
+
 The current profile remains the only profile used by `SessionMode` for activation thresholds.
-Progress charts and reports prefer `initialBaselineProgress` when available so recovery
+Progress charts and reports prefer `initialMovementProgress` when available so recovery
 trend remains anchored to the first baseline even after later calibration updates.
 
 ### Comfort-Level Dosing
@@ -737,7 +749,8 @@ The report includes:
 
 - Session date, time, duration, type, and comfort level.
 - Average session symmetry.
-- Progress from the user's saved baseline, when available.
+- Affected-side movement from the user's first saved baseline, when available.
+- Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
 - Per-rep symmetry chips.
 - Target reps, hold seconds, and rest seconds used for each exercise.
@@ -755,28 +768,57 @@ When the session is saved, those base64 camera images are converted into Indexed
 record keeps image references/counts, while past reports hydrate the images on demand.
 The data remains local to the browser and is not uploaded.
 
-### Progress-Vs-Baseline
+### Movement Recovery Progress
 
-Progress-vs-baseline is different from symmetry:
+Movement recovery progress is different from symmetry:
 
 ```text
 symmetry = current left/right balance
-baseline progress = current focused-side movement / onboarding focused-side movement
+affectedProgressRatio = current affected-side movement / baseline affected-side movement
+affectedToProperRatio = current affected-side movement / current proper-side movement
+balanceProgressRatio = affectedToProperRatio / baselineAffectedToProperRatio
 ```
 
 Example:
 
 ```text
-Right smile movement is +18% from baseline.
+Right smile movement is +18% from first baseline.
+Affected vs proper side is 62% today vs 48% at baseline.
 ```
 
-The focused side is resolved in this order:
+The affected side is resolved in this order:
 
 1. User-reported affected side, if it is `left` or `right`.
 2. Exercise-level limited side from the baseline profile.
 3. The lower-moving side in the current frame.
 
-The session-level baseline progress is the average of exercise-level baseline progress values.
+The opposite side is treated as the proper-side reference for ratio comparison. If the
+proper-side baseline is missing or zero, Mirror still reports affected-side progress
+but omits proper-side and balance ratios.
+
+`computeMovementProgressFromDisplacements` returns:
+
+```js
+{
+  side,
+  referenceSide,
+  affectedMovement,
+  properMovement,
+  affectedToProperRatio,
+  baselineAffectedMovement,
+  baselineProperMovement,
+  baselineAffectedToProperRatio,
+  affectedProgressRatio,
+  properProgressRatio,
+  balanceProgressRatio,
+  deltaPct
+}
+```
+
+Exercise-level movement progress is the average of rep-level movement progress values.
+Session-level movement progress is the average of exercise-level movement progress
+values. Older saved records without `movementProgress` continue to fall back to
+`initialBaselineProgress` / `baselineProgress` for display.
 
 ## Visual Overlay
 
@@ -809,7 +851,5 @@ The overlay is visual feedback only. The scoring logic uses the normalized landm
 Potential technical improvements:
 
 - Add exercise-specific direction vectors for cheek, smile, pucker, and eye closure.
-- Track affected-side progress separately from symmetry.
-- Add calibration quality metrics and warnings.
-- Add tests around scorer functions by extracting them from `App.jsx` into a pure module.
+- Add more calibration quality warnings in the live UI.
 - Add optional local-only export/import for progress history.

@@ -1,6 +1,6 @@
 # Mirror for Bell's Palsy
 
-Mirror is a local-first facial retraining companion for Bell's palsy practice. It guides gentle facial exercises, tracks webcam landmarks with MediaPipe Face Landmarker, and shows real-time left/right symmetry against your own neutral baseline.
+Mirror is a local-first facial retraining companion for Bell's palsy practice. It guides gentle facial exercises, tracks webcam landmarks with MediaPipe Face Landmarker, shows real-time left/right symmetry, and tracks affected-side movement against your own baseline.
 
 Important: Mirror supports practice and self-tracking, but it does not diagnose, grade paralysis, prescribe treatment, or replace medical care. Work with a qualified clinician and stop any exercise that causes pain, strain, or discomfort.
 
@@ -12,7 +12,7 @@ Important: Mirror supports practice and self-tracking, but it does not diagnose,
 ## What Matters
 
 - Guided practice for forehead, eyes, nose, cheeks, mouth, and expression-style movements.
-- Neutral calibration and exercise-specific symmetry scoring against the user's own baseline.
+- Neutral calibration, exercise-specific symmetry scoring, and affected-side progress against the user's own baseline.
 - Optional personal movement profile for focus recommendations, dosing, and progress comparison.
 - Local session history, journal entries, streaks, reports, and progress charts.
 - Camera processing runs in the browser. There is no backend service in this codebase.

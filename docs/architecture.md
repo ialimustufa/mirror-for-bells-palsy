@@ -16,7 +16,7 @@ For each video frame, MediaPipe returns:
 - 52 ARKit-style blendshape coefficients.
 - A facial transformation matrix mapping the canonical face model into the detected pose.
 
-MediaPipe handles geometry. Mirror's rehab-oriented symmetry scoring is custom logic built on top of those landmarks. For full algorithm details, see [Model And Scoring](model-and-scoring.md).
+MediaPipe handles geometry. Mirror's rehab-oriented symmetry scoring and affected-side progress metrics are custom logic built on top of those landmarks. For full algorithm details, see [Model And Scoring](model-and-scoring.md).
 
 ## Scoring Pipeline
 
@@ -31,6 +31,7 @@ camera frame
 -> exercise-specific movement measurement
 -> left/right displacement comparison
 -> live symmetry score
+-> affected-side progress vs first/current baseline
 ```
 
 The core scoring formula compares how much each side moved from neutral:
@@ -40,6 +41,10 @@ symmetry = smaller_side_movement / larger_side_movement
 ```
 
 A score near `1.0` means the two sides moved similarly. A lower score means one side moved less than the other. Per-exercise activation thresholds and per-landmark noise floors keep the score conservative when calibration is missing or movement is too small.
+
+Recovery progress is tracked separately from symmetry. The app compares the affected
+side's current movement with that side's first saved baseline and also compares the
+affected side with the proper side for the same exercise.
 
 ## Project Structure
 
@@ -90,5 +95,6 @@ public/                         Static icons
 - Normalization: `faceFrameNormalize`
 - Calibration: `averageLandmarks`, `computeNoiseFloor`, `normalizedFrameDelta`
 - Scoring: `computeExerciseSymmetry`, `computePairwiseSymmetry`, `computeBrowSymmetry`, `computeNoseSymmetry`, `computeSymmetry`
+- Movement progress: `computeMovementProgressFromDisplacements`, `summarizeMovementProgress`, `summarizeSessionMovementProgress`
 - Movement profile: `buildMovementProfile`, `getAdaptiveFocusItems`, `buildPersonalizedDailyPlan`
 - Live detection loop: `SessionMode` and `TrialMode`

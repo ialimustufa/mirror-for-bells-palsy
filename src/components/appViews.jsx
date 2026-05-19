@@ -6,7 +6,7 @@ import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_
 import { applySessionDose, buildSessionExercises, daysBetween, exerciseHoldSec, exerciseRestSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
-import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionBaselineProgress, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
+import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionMovementProgress, movementBalanceLabel, movementProgressLabel, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, preferredMovementProgress, profileExerciseEntries, profileStatus, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
 import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
 
 function Header({ view, streak }) {
@@ -65,6 +65,15 @@ function sameExerciseSet(a = [], b = []) {
   if (a.length !== b.length) return false;
   const bSet = new Set(b);
   return a.every((id) => bSet.has(id));
+}
+
+function progressSummaryLabel(progress) {
+  if (!progress) return null;
+  return progress.affectedProgressRatio != null ? movementProgressLabel(progress) : baselineProgressLabel(progress);
+}
+
+function progressSideLabel(progress) {
+  return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
 }
 
 // Modal alert with explicit Cancel/Confirm. Closes on Escape or backdrop click.
@@ -140,7 +149,7 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
       + Math.max(0, planSessionExercises.length - 1) * INTERSTITIAL_SEC,
     [planSessionExercises]
   );
-  const latestBaseline = latestSessionBaselineProgress(data.sessions);
+  const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
   const missingBaselineIds = data.movementProfile
@@ -247,9 +256,9 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
               </div>
             ))}
           </div>
-          {latestBaseline && (
+          {latestMovement && (
             <div className="mt-3 text-xs rounded-xl px-3 py-2" style={{ background: "rgba(122,143,115,0.18)", color: "#D9E5D2" }}>
-              Latest baseline progress: {latestBaseline.side} side · {baselineProgressLabel(latestBaseline)}
+              Latest recovery progress: {progressSideLabel(latestMovement)} side · {progressSummaryLabel(latestMovement)}
             </div>
           )}
           {missingBaselineIds.length > 0 && (
@@ -995,6 +1004,7 @@ function PreviewView({ exercise, exIdx, totalExercises, onStart, onCancel, strea
 
 function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercises, onNext, onCancel }) {
   if (!just) return null;
+  const progress = just.initialMovementProgress ?? just.movementProgress ?? just.baselineProgress;
   return (
     <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
       <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
@@ -1012,9 +1022,9 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
             <div className="text-5xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(just.avg), letterSpacing: "-0.02em" }}>{displayPct(just.avg)}%</div>
           )}
           {just.avg != null && <div className="text-xs opacity-60 mt-1">avg symmetry</div>}
-          {just.baselineProgress && (
+          {progress && (
             <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)", color: "#D4A574" }}>
-              <TrendingUp className="w-3 h-3" />{just.baselineProgress.side} side · {baselineProgressLabel(just.baselineProgress)}
+              <TrendingUp className="w-3 h-3" />{progressSideLabel(progress)} side · {progressSummaryLabel(progress)}
             </div>
           )}
         </div>
@@ -1053,14 +1063,17 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
 
 // Dual-mode: live mode receives `scores` (in-progress array) + `onFinish`; view mode
 // receives a saved `session` record + `onClose`. Both render the same comprehensive report.
-function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
+function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
   const isView = !!session;
   const scoresArr = isView ? (session.scores || []) : scores;
   const sessionBaseline = isView ? session.baselineProgress : baselineProgress;
   const sessionInitialBaseline = isView ? session.initialBaselineProgress : initialBaselineProgress;
+  const sessionMovement = isView ? session.movementProgress : movementProgress;
+  const sessionInitialMovement = isView ? session.initialMovementProgress : initialMovementProgress;
   const effectiveKind = isView ? session.kind : kind;
   const isPractice = effectiveKind === "practice";
   const nextFocus = sessionFocusRecommendation(scoresArr);
+  const nextFocusProgress = preferredMovementProgress(nextFocus) ?? preferredBaselineProgress(nextFocus);
   const overall = isView
     ? session.sessionAvg
     : (() => {
@@ -1074,6 +1087,8 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
     sessionAvg: overall,
     baselineProgress: sessionBaseline,
     initialBaselineProgress: sessionInitialBaseline,
+    movementProgress: sessionMovement,
+    initialMovementProgress: sessionInitialMovement,
     scores: scoresArr,
     comfortLevel,
     kind: effectiveKind,
@@ -1126,14 +1141,27 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           <div className="text-center mb-8">
             <div className="text-7xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(overall), letterSpacing: "-0.03em" }}>{overallPct}%</div>
             <div className="text-sm opacity-70 mt-1">average symmetry</div>
-            {sessionBaseline && (
-              <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)", color: "#D4A574" }}>
-                <TrendingUp className="w-3 h-3" />current baseline · {sessionBaseline.side} side · {baselineProgressLabel(sessionBaseline)}
+            {sessionInitialMovement && (
+              <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(122,143,115,0.12)", color: "#A8C39F" }}>
+                <TrendingUp className="w-3 h-3" />affected side · first baseline · {movementProgressLabel(sessionInitialMovement)}
               </div>
             )}
-            {sessionInitialBaseline && (
+            {sessionInitialMovement && movementBalanceLabel(sessionInitialMovement) && (
+              <div className="text-xs mt-2" style={{ color: "#A8C39F", opacity: 0.9 }}>{movementBalanceLabel(sessionInitialMovement)}</div>
+            )}
+            {!sessionInitialMovement && sessionInitialBaseline && (
               <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(122,143,115,0.12)", color: "#A8C39F" }}>
                 <TrendingUp className="w-3 h-3" />first baseline · {sessionInitialBaseline.side} side · {baselineProgressLabel(sessionInitialBaseline)}
+              </div>
+            )}
+            {sessionMovement && (!sessionInitialMovement || sessionMovement.affectedProgressRatio !== sessionInitialMovement.affectedProgressRatio || sessionMovement.baselineAffectedMovement !== sessionInitialMovement.baselineAffectedMovement) && (
+              <div className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)", color: "#D4A574" }}>
+                <TrendingUp className="w-3 h-3" />current baseline · affected side · {movementProgressLabel(sessionMovement)}
+              </div>
+            )}
+            {!sessionMovement && sessionBaseline && (
+              <div className="inline-flex items-center gap-1.5 mt-3 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)", color: "#D4A574" }}>
+                <TrendingUp className="w-3 h-3" />current baseline · {sessionBaseline.side} side · {baselineProgressLabel(sessionBaseline)}
               </div>
             )}
           </div>
@@ -1145,7 +1173,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
               <ExerciseGlyph exerciseId={nextFocus.exerciseId} region={nextFocus.region} size="xs" tone="dark" />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium">{nextFocus.name}</div>
-                <div className="text-xs opacity-65 mt-0.5">{nextFocus.avg != null ? `${displayPct(nextFocus.avg)}% symmetry` : "unscored"}{nextFocus.baselineProgress ? ` · ${baselineProgressLabel(nextFocus.baselineProgress)}` : ""}</div>
+                <div className="text-xs opacity-65 mt-0.5">{nextFocus.avg != null ? `${displayPct(nextFocus.avg)}% symmetry` : "unscored"}{nextFocusProgress ? ` · ${progressSummaryLabel(nextFocusProgress)}` : ""}</div>
               </div>
             </div>
           </div>
@@ -1159,8 +1187,11 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium">{s.name}</div>
                   <div className="text-xs opacity-60 mt-0.5">{s.scores.length} rep{s.scores.length !== 1 ? "s" : ""} scored{s.snapshots?.length ? ` · ${s.snapshots.length} shot${s.snapshots.length !== 1 ? "s" : ""}` : ""}</div>
-                  {s.baselineProgress && <div className="text-xs mt-1" style={{ color: "#D4A574" }}>current · {s.baselineProgress.side} side · {baselineProgressLabel(s.baselineProgress)}</div>}
-                  {s.initialBaselineProgress && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · {s.initialBaselineProgress.side} side · {baselineProgressLabel(s.initialBaselineProgress)}</div>}
+                  {s.movementProgress && <div className="text-xs mt-1" style={{ color: "#D4A574" }}>current · affected side · {movementProgressLabel(s.movementProgress)}</div>}
+                  {!s.movementProgress && s.baselineProgress && <div className="text-xs mt-1" style={{ color: "#D4A574" }}>current · {s.baselineProgress.side} side · {baselineProgressLabel(s.baselineProgress)}</div>}
+                  {s.initialMovementProgress && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · affected side · {movementProgressLabel(s.initialMovementProgress)}</div>}
+                  {s.initialMovementProgress && movementBalanceLabel(s.initialMovementProgress) && <div className="text-xs mt-0.5 opacity-70">{movementBalanceLabel(s.initialMovementProgress)}</div>}
+                  {!s.initialMovementProgress && s.initialBaselineProgress && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · {s.initialBaselineProgress.side} side · {baselineProgressLabel(s.initialBaselineProgress)}</div>}
                 </div>
                 {s.avg != null ? <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(s.avg) }}>{displayPct(s.avg)}%</div> : <div className="text-xs opacity-50">—</div>}
               </div>
@@ -1202,7 +1233,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
 function PastSessionRow({ session, onOpen, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const exCount = (session.exercises ?? session.scores ?? []).length;
-  const progress = preferredBaselineProgress(session);
+  const progress = preferredMovementProgress(session) ?? preferredBaselineProgress(session);
   const canDelete = typeof onDelete === "function";
   return (
     <div className="rounded-xl px-3 py-2.5 flex items-center gap-3 transition hover:bg-white" style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}>
@@ -1213,7 +1244,7 @@ function PastSessionRow({ session, onOpen, onDelete }) {
             <span>{exCount} exercise{exCount !== 1 ? "s" : ""}</span>
             {session.kind === "practice" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(184, 84, 58, 0.12)", color: "#B8543A" }}>Practice</span>}
           </div>
-          <div className="text-xs text-stone-500 tabular-nums">{formatDuration(session.duration)}{progress ? ` · ${baselineProgressLabel(progress)}` : ""}</div>
+          <div className="text-xs text-stone-500 tabular-nums">{formatDuration(session.duration)}{progress ? ` · ${progressSummaryLabel(progress)}` : ""}</div>
         </div>
         {session.sessionAvg != null
           ? <div className="tabular-nums font-semibold text-base" style={{ fontFamily: "Fraunces", color: scoreColor(session.sessionAvg) }}>{displayPct(session.sessionAvg)}%</div>
@@ -1490,7 +1521,7 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
               <div className="font-medium truncate">{ex.name}</div>
               <div className="opacity-55">limited side: {ex.limitedSide} · threshold {ex.activationThreshold ?? "—"}</div>
               {ex.quality && <div className="opacity-55">quality: {ex.quality.label}{ex.quality.issues?.length ? ` · ${ex.quality.issues.join(", ")}` : ""}</div>}
-              {progressByExercise?.[ex.exerciseId] && <div className="mt-0.5" style={{ color: "#D4A574" }}>{baselineProgressLabel(progressByExercise[ex.exerciseId])}</div>}
+              {progressByExercise?.[ex.exerciseId] && <div className="mt-0.5" style={{ color: "#D4A574" }}>{progressSummaryLabel(progressByExercise[ex.exerciseId])}</div>}
             </div>
             {ex.quality?.key === "retake" && (
               <button onClick={() => onStart([ex.exerciseId])} className="rounded-full px-2.5 py-1 text-[11px] font-semibold shrink-0" style={{ background: "rgba(184,84,58,0.2)", color: "#FFD3C1" }}>Retake</button>
@@ -1531,8 +1562,9 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
   const journalChartData = useMemo(() => data.journal.length === 0 ? [] : data.journal.slice(-21).map((j) => ({ date: new Date(j.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), symmetry: j.symmetry })), [data.journal]);
   const aiSymmetryData = useMemo(() => data.sessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [data.sessions]);
   const baselineProgressData = useMemo(() => data.sessions.map((s) => {
-    const progress = preferredBaselineProgress(s);
-    return progress?.ratio == null ? null : { date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(progress.ratio * 100) };
+    const progress = preferredMovementProgress(s) ?? preferredBaselineProgress(s);
+    const ratio = progress?.affectedProgressRatio ?? progress?.ratio;
+    return ratio == null ? null : { date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(ratio * 100) };
   }).filter(Boolean).slice(-21), [data.sessions]);
   const progressByExercise = useMemo(() => latestExerciseProgressById(data.sessions), [data.sessions]);
   const activityGrid = useMemo(() => {
@@ -1583,8 +1615,8 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
       )}
       {baselineProgressData.length > 0 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
-          <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Progress from baseline</div></div>
-          <div className="text-xs text-stone-500 mb-4">Affected or limited side movement · 100% = first saved baseline</div>
+          <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Affected-side movement from first baseline</div></div>
+          <div className="text-xs text-stone-500 mb-4">100% = first saved movement baseline</div>
           <div style={{ width: "100%", height: 160 }}>
             <ResponsiveContainer>
               <AreaChart data={baselineProgressData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>

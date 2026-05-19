@@ -6,7 +6,7 @@ import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
-import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeSessionBaselineProgress } from "../ml/faceMetrics";
+import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeMovementProgressFromDisplacements, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
   faceMissing: "Find your face in the camera.",
@@ -80,6 +80,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const repScoresRef = useRef([]);
   const repBaselineProgressRef = useRef([]);
   const repInitialBaselineProgressRef = useRef([]);
+  const repMovementProgressRef = useRef([]);
+  const repInitialMovementProgressRef = useRef([]);
   const repSnapshotsRef = useRef([]);
   const peakSnapshotRef = useRef(null);
   const peakDispRef = useRef(0);
@@ -169,8 +171,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           const rightAvg = holdRightSumRef.current / holdScoreCountRef.current;
           const progress = computeBaselineProgressFromDisplacements(current.id, leftAvg, rightAvg, movementProfile);
           const initialProgress = computeBaselineProgressFromDisplacements(current.id, leftAvg, rightAvg, initialMovementProfile);
+          const movementProgress = computeMovementProgressFromDisplacements(current.id, leftAvg, rightAvg, movementProfile);
+          const initialMovementProgress = computeMovementProgressFromDisplacements(current.id, leftAvg, rightAvg, initialMovementProfile);
           if (progress) repBaselineProgressRef.current = [...repBaselineProgressRef.current, progress];
           if (initialProgress) repInitialBaselineProgressRef.current = [...repInitialBaselineProgressRef.current, initialProgress];
+          if (movementProgress) repMovementProgressRef.current = [...repMovementProgressRef.current, movementProgress];
+          if (initialMovementProgress) repInitialMovementProgressRef.current = [...repInitialMovementProgressRef.current, initialMovementProgress];
         }
         const snap = peakSnapshotRef.current ?? captureSnapshot(videoRef.current, snapshotCanvasRef.current);
         if (snap) repSnapshotsRef.current = [...repSnapshotsRef.current, { ts: Date.now(), score: avgScore, dataUrl: snap }];
@@ -224,12 +230,16 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           const scores = repScoresRef.current;
           const baselineProgress = summarizeBaselineProgress(repBaselineProgressRef.current);
           const initialBaselineProgress = summarizeBaselineProgress(repInitialBaselineProgressRef.current);
+          const movementProgress = summarizeMovementProgress(repMovementProgressRef.current);
+          const initialMovementProgress = summarizeMovementProgress(repInitialMovementProgressRef.current);
           const snapshots = repSnapshotsRef.current;
           const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress }]);
+          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress }]);
           repScoresRef.current = [];
           repBaselineProgressRef.current = [];
           repInitialBaselineProgressRef.current = [];
+          repMovementProgressRef.current = [];
+          repInitialMovementProgressRef.current = [];
           repSnapshotsRef.current = [];
           if (exIdx + 1 < totalExercises) {
             setPhase("interstitial");
@@ -444,12 +454,16 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const scores = repScoresRef.current;
     const baselineProgress = summarizeBaselineProgress(repBaselineProgressRef.current);
     const initialBaselineProgress = summarizeBaselineProgress(repInitialBaselineProgressRef.current);
+    const movementProgress = summarizeMovementProgress(repMovementProgressRef.current);
+    const initialMovementProgress = summarizeMovementProgress(repInitialMovementProgressRef.current);
     const snapshots = repSnapshotsRef.current;
     const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress }]);
+    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress }]);
     repScoresRef.current = [];
     repBaselineProgressRef.current = [];
     repInitialBaselineProgressRef.current = [];
+    repMovementProgressRef.current = [];
+    repInitialMovementProgressRef.current = [];
     repSnapshotsRef.current = [];
     if (exIdx + 1 < totalExercises) { setExIdx(exIdx + 1); setRepIdx(0); restIsEntryRef.current = true; setPhase("preview"); setSecondsLeft(null); }
     else setPhase("summary");
@@ -497,10 +511,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const sessionAvg = validAvgs.length > 0 ? validAvgs.reduce((a, b) => a + b, 0) / validAvgs.length : null;
     const baselineProgress = summarizeSessionBaselineProgress(exerciseScores);
     const initialBaselineProgress = summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress");
-    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, baselineProgress, initialBaselineProgress, baselineSnapshot: baselineSnapshotRef.current, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
+    const movementProgress = summarizeSessionMovementProgress(exerciseScores);
+    const initialMovementProgress = summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress");
+    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, baselineSnapshot: baselineSnapshotRef.current, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
   };
 
-  if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} onFinish={handleFinish} />;
+  if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} movementProgress={summarizeSessionMovementProgress(exerciseScores)} initialMovementProgress={summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress")} onFinish={handleFinish} />;
   if (phase === "preview") {
     return (
       <PreviewView

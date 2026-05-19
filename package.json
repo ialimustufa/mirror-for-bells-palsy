@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --import ./test/register-extensionless-loader.mjs --test test/*.test.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"

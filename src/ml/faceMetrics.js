@@ -817,6 +817,17 @@ function profileBaselineForSide(profileExercise, side) {
   return avg ?? peak ?? null;
 }
 
+function referenceSideFor(side) {
+  if (side === "left") return "right";
+  if (side === "right") return "left";
+  return null;
+}
+
+function ratioOrNull(numerator, denominator) {
+  if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null;
+  return numerator / denominator;
+}
+
 function computeBaselineProgressFromDisplacements(exerciseId, leftDisp, rightDisp, profile) {
   const profileExercise = getProfileExercise(profile, exerciseId);
   if (!profileExercise) return null;
@@ -839,6 +850,47 @@ function computeBaselineProgress(exerciseId, symResult, profile) {
   return computeBaselineProgressFromDisplacements(exerciseId, symResult.leftDisp, symResult.rightDisp, profile);
 }
 
+function computeMovementProgressFromDisplacements(exerciseId, leftDisp, rightDisp, profile) {
+  const profileExercise = getProfileExercise(profile, exerciseId);
+  if (!profileExercise) return null;
+  const side = resolveFocusSide(profile, profileExercise, leftDisp, rightDisp);
+  const referenceSide = referenceSideFor(side);
+  if (!referenceSide) return null;
+
+  const affectedMovement = movementForSide(leftDisp, rightDisp, side);
+  const properMovement = movementForSide(leftDisp, rightDisp, referenceSide);
+  const baselineAffectedMovement = profileBaselineForSide(profileExercise, side);
+  const baselineProperMovement = profileBaselineForSide(profileExercise, referenceSide);
+  const affectedProgressRatio = ratioOrNull(affectedMovement, baselineAffectedMovement);
+  if (affectedProgressRatio == null) return null;
+
+  const affectedToProperRatio = ratioOrNull(affectedMovement, properMovement);
+  const baselineAffectedToProperRatio = ratioOrNull(baselineAffectedMovement, baselineProperMovement);
+  const balanceProgressRatio = affectedToProperRatio != null && baselineAffectedToProperRatio != null
+    ? ratioOrNull(affectedToProperRatio, baselineAffectedToProperRatio)
+    : null;
+
+  return {
+    side,
+    referenceSide,
+    affectedMovement: roundMetric(affectedMovement),
+    properMovement: roundMetric(properMovement),
+    affectedToProperRatio: roundMetric(affectedToProperRatio),
+    baselineAffectedMovement: roundMetric(baselineAffectedMovement),
+    baselineProperMovement: roundMetric(baselineProperMovement),
+    baselineAffectedToProperRatio: roundMetric(baselineAffectedToProperRatio),
+    affectedProgressRatio: roundMetric(affectedProgressRatio),
+    properProgressRatio: roundMetric(ratioOrNull(properMovement, baselineProperMovement)),
+    balanceProgressRatio: roundMetric(balanceProgressRatio),
+    deltaPct: Math.round((affectedProgressRatio - 1) * 100),
+  };
+}
+
+function computeMovementProgress(exerciseId, symResult, profile) {
+  if (!symResult) return null;
+  return computeMovementProgressFromDisplacements(exerciseId, symResult.leftDisp, symResult.rightDisp, profile);
+}
+
 function summarizeBaselineProgress(items) {
   const valid = (items ?? []).filter((p) => p?.ratio != null);
   if (!valid.length) return null;
@@ -858,7 +910,52 @@ function summarizeSessionBaselineProgress(scores, key = "baselineProgress") {
   return summarizeBaselineProgress((scores ?? []).map((s) => s?.[key]).filter(Boolean));
 }
 
+function averageMetric(items, key) {
+  const valid = items.map((item) => item?.[key]).filter((value) => Number.isFinite(value));
+  return valid.length ? roundMetric(valid.reduce((sum, value) => sum + value, 0) / valid.length) : null;
+}
+
+function summarizeMovementProgress(items) {
+  const valid = (items ?? []).filter((p) => p?.affectedProgressRatio != null);
+  if (!valid.length) return null;
+  const affectedProgressRatio = averageMetric(valid, "affectedProgressRatio");
+  return {
+    side: valid[0].side,
+    referenceSide: valid[0].referenceSide,
+    affectedMovement: averageMetric(valid, "affectedMovement"),
+    properMovement: averageMetric(valid, "properMovement"),
+    affectedToProperRatio: averageMetric(valid, "affectedToProperRatio"),
+    baselineAffectedMovement: averageMetric(valid, "baselineAffectedMovement"),
+    baselineProperMovement: averageMetric(valid, "baselineProperMovement"),
+    baselineAffectedToProperRatio: averageMetric(valid, "baselineAffectedToProperRatio"),
+    affectedProgressRatio,
+    properProgressRatio: averageMetric(valid, "properProgressRatio"),
+    balanceProgressRatio: averageMetric(valid, "balanceProgressRatio"),
+    deltaPct: affectedProgressRatio == null ? null : Math.round((affectedProgressRatio - 1) * 100),
+    reps: valid.length,
+  };
+}
+
+function summarizeSessionMovementProgress(scores, key = "movementProgress") {
+  return summarizeMovementProgress((scores ?? []).map((s) => s?.[key]).filter(Boolean));
+}
+
+function movementProgressLabel(progress) {
+  if (progress?.affectedProgressRatio == null) return null;
+  if (progress.affectedProgressRatio >= 1) return `+${progress.deltaPct}% from baseline`;
+  return `${Math.round(progress.affectedProgressRatio * 100)}% of baseline`;
+}
+
+function movementBalanceLabel(progress) {
+  if (progress?.affectedToProperRatio == null) return null;
+  const today = Math.round(progress.affectedToProperRatio * 100);
+  if (progress.baselineAffectedToProperRatio == null) return `affected vs proper: ${today}% today`;
+  const baseline = Math.round(progress.baselineAffectedToProperRatio * 100);
+  return `affected vs proper: ${today}% today vs ${baseline}% at baseline`;
+}
+
 function baselineProgressLabel(progress) {
+  if (progress?.affectedProgressRatio != null) return movementProgressLabel(progress);
   if (progress?.ratio == null) return null;
   if (progress.ratio >= 1) return `+${progress.deltaPct}% from baseline`;
   return `${Math.round(progress.ratio * 100)}% of baseline`;
@@ -866,6 +963,10 @@ function baselineProgressLabel(progress) {
 
 function preferredBaselineProgress(record) {
   return record?.initialBaselineProgress ?? record?.baselineProgress ?? null;
+}
+
+function preferredMovementProgress(record) {
+  return record?.initialMovementProgress ?? record?.movementProgress ?? null;
 }
 
 const EXERCISE_CATALOG_INDEX = new Map(EXERCISES.map((exercise, index) => [exercise.id, index]));
@@ -925,11 +1026,16 @@ function latestSessionBaselineProgress(sessions) {
   return preferredBaselineProgress(latest);
 }
 
+function latestSessionMovementProgress(sessions) {
+  const latest = [...(sessions ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0)).find((s) => preferredMovementProgress(s) || preferredBaselineProgress(s));
+  return preferredMovementProgress(latest) ?? preferredBaselineProgress(latest);
+}
+
 function latestExerciseProgressById(sessions) {
   const out = {};
   for (const session of [...(sessions ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))) {
     for (const score of session.scores ?? []) {
-      const progress = preferredBaselineProgress(score);
+      const progress = preferredMovementProgress(score) ?? preferredBaselineProgress(score);
       if (!out[score.exerciseId] && progress) out[score.exerciseId] = progress;
     }
   }
@@ -955,16 +1061,20 @@ function getAdaptiveFocusItems(profile, sessions, count = 5) {
       const latest = latestByExercise[ex.exerciseId];
       const baselineGap = ex.initialSymmetry == null ? 0.25 : 1 - ex.initialSymmetry;
       const latestGap = latest?.avg == null ? 0 : 1 - latest.avg;
-      const progressGap = latest?.baselineProgress?.ratio == null ? 0 : Math.max(0, 1 - latest.baselineProgress.ratio);
+      const latestProgress = preferredMovementProgress(latest) ?? preferredBaselineProgress(latest);
+      const latestProgressRatio = latestProgress?.affectedProgressRatio ?? latestProgress?.ratio;
+      const progressGap = latestProgressRatio == null ? 0.15 : Math.max(0, 1 - latestProgressRatio);
+      const balanceGap = latestProgress?.balanceProgressRatio == null ? 0 : Math.max(0, 1 - latestProgress.balanceProgressRatio);
       const sideFocus = (profile.affectedSide === "left" || profile.affectedSide === "right") && ex.limitedSide === profile.affectedSide ? 0.2 : 0;
       const noRecentData = latest ? 0 : 0.1;
-      const score = baselineGap * 0.45 + latestGap * 0.35 + progressGap * 0.25 + sideFocus + noRecentData;
+      const score = baselineGap * 0.35 + latestGap * 0.25 + progressGap * 0.35 + balanceGap * 0.2 + sideFocus + noRecentData;
       return {
         id: ex.exerciseId,
         score,
         baselineGap,
         latestGap,
         progressGap,
+        balanceGap,
         latest,
         exercise: EXERCISES.find((item) => item.id === ex.exerciseId),
         profileExercise: ex,
@@ -976,8 +1086,15 @@ function getAdaptiveFocusItems(profile, sessions, count = 5) {
 
 function focusReason(item) {
   if (!item) return "";
-  if (item.latest?.baselineProgress?.ratio != null && item.latest.baselineProgress.ratio < 1) {
-    return `${Math.round(item.latest.baselineProgress.ratio * 100)}% of baseline`;
+  const progress = preferredMovementProgress(item.latest) ?? preferredBaselineProgress(item.latest);
+  if (progress?.affectedProgressRatio != null && progress.affectedProgressRatio < 1) {
+    return `affected movement ${Math.round(progress.affectedProgressRatio * 100)}% of baseline`;
+  }
+  if (progress?.balanceProgressRatio != null && progress.balanceProgressRatio < 1) {
+    return `balance ${Math.round(progress.balanceProgressRatio * 100)}% of baseline`;
+  }
+  if (progress?.ratio != null && progress.ratio < 1) {
+    return `${Math.round(progress.ratio * 100)}% of baseline`;
   }
   if (item.latest?.avg != null) return `recent symmetry ${Math.round(item.latest.avg * 100)}%`;
   if (item.profileExercise.initialSymmetry != null) return `baseline symmetry ${Math.round(item.profileExercise.initialSymmetry * 100)}%`;
@@ -986,11 +1103,14 @@ function focusReason(item) {
 
 function sessionFocusRecommendation(scores) {
   const ranked = (scores ?? [])
-    .filter((s) => s.avg != null || s.baselineProgress?.ratio != null)
+    .filter((s) => s.avg != null || preferredMovementProgress(s) || preferredBaselineProgress(s))
     .map((s) => {
+      const progress = preferredMovementProgress(s) ?? preferredBaselineProgress(s);
+      const progressRatio = progress?.affectedProgressRatio ?? progress?.ratio;
       const symmetryGap = s.avg == null ? 0 : 1 - s.avg;
-      const progressGap = s.baselineProgress?.ratio == null ? 0 : Math.max(0, 1 - s.baselineProgress.ratio);
-      return { ...s, focusScore: symmetryGap * 0.6 + progressGap * 0.4 };
+      const progressGap = progressRatio == null ? 0.1 : Math.max(0, 1 - progressRatio);
+      const balanceGap = progress?.balanceProgressRatio == null ? 0 : Math.max(0, 1 - progress.balanceProgressRatio);
+      return { ...s, focusScore: symmetryGap * 0.45 + progressGap * 0.45 + balanceGap * 0.25 };
     })
     .sort((a, b) => b.focusScore - a.focusScore);
   return ranked[0] ?? null;
@@ -1265,6 +1385,8 @@ export {
   computeBaselineProgressFromDisplacements,
   computeBrowSymmetry,
   computeExerciseSymmetry,
+  computeMovementProgress,
+  computeMovementProgressFromDisplacements,
   computeNoiseFloor,
   computeNoseSymmetry,
   computePairwiseSymmetry,
@@ -1285,10 +1407,14 @@ export {
   latestExerciseProgressById,
   latestExerciseScoreById,
   latestSessionBaselineProgress,
+  latestSessionMovementProgress,
+  movementBalanceLabel,
+  movementProgressLabel,
   normalizedFrameDelta,
   objectCoverTransform,
   orderExerciseIdsByRegion,
   preferredBaselineProgress,
+  preferredMovementProgress,
   profileAgeDays,
   profileBaselineForSide,
   profileExerciseEntries,
@@ -1302,6 +1428,8 @@ export {
   smoothFacialTransformationMatrix,
   smoothLandmarks,
   summarizeBaselineProgress,
+  summarizeMovementProgress,
   summarizeSessionBaselineProgress,
+  summarizeSessionMovementProgress,
   inferLimitedSide,
 };
