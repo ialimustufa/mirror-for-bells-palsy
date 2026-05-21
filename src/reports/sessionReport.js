@@ -1,6 +1,6 @@
 import { COMFORT_DOSING } from "../domain/config";
 import { formatClock, todayISO } from "../domain/session";
-import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel } from "../ml/faceMetrics";
+import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel, progressUsesLegacySideConvention } from "../ml/faceMetrics";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 
 function formatSessionDate(s) {
@@ -24,6 +24,10 @@ function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+function usableProgress(progress) {
+  return progressUsesLegacySideConvention(progress) ? null : progress;
+}
+
 function buildSessionReportHtml(s) {
   const ts = s.ts ? new Date(s.ts) : new Date();
   const dateStr = ts.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
@@ -33,10 +37,10 @@ function buildSessionReportHtml(s) {
   const overallColor = scoreColor(s.sessionAvg);
   const comfort = s.comfortLevel ? (COMFORT_DOSING[s.comfortLevel]?.label ?? s.comfortLevel) : null;
   const sessionType = s.kind === "practice" ? "Practice run" : "Daily session";
-  const baseline = s.baselineProgress;
-  const initialBaseline = s.initialBaselineProgress;
-  const movement = s.movementProgress;
-  const initialMovement = s.initialMovementProgress;
+  const baseline = usableProgress(s.baselineProgress);
+  const initialBaseline = usableProgress(s.initialBaselineProgress);
+  const movement = usableProgress(s.movementProgress);
+  const initialMovement = usableProgress(s.initialMovementProgress);
   const scoresArr = s.scores || [];
   const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
 
@@ -57,18 +61,22 @@ function buildSessionReportHtml(s) {
           return `<span class="rep" style="background:${rp == null ? "#E7E5E4" : scoreColor(r)};color:#fff">${rp == null ? "—" : rp + "%"}</span>`;
         }).join("")
       : '<span class="muted">No symmetry data captured</span>';
-    const baselineLine = e.movementProgress
-      ? `<div class="muted small">Current baseline: affected side · ${escapeHtml(movementProgressLabel(e.movementProgress) ?? "")}</div>`
-      : e.baselineProgress
-      ? `<div class="muted small">Current baseline: ${escapeHtml(e.baselineProgress.side)} side · ${escapeHtml(baselineProgressLabel(e.baselineProgress) ?? "")}</div>`
+    const exerciseMovement = usableProgress(e.movementProgress);
+    const exerciseInitialMovement = usableProgress(e.initialMovementProgress);
+    const exerciseBaseline = usableProgress(e.baselineProgress);
+    const exerciseInitialBaseline = usableProgress(e.initialBaselineProgress);
+    const baselineLine = exerciseMovement
+      ? `<div class="muted small">Current baseline: affected side · ${escapeHtml(movementProgressLabel(exerciseMovement) ?? "")}</div>`
+      : exerciseBaseline
+      ? `<div class="muted small">Current baseline: ${escapeHtml(exerciseBaseline.side)} side · ${escapeHtml(baselineProgressLabel(exerciseBaseline) ?? "")}</div>`
       : "";
-    const initialBalanceLine = e.initialMovementProgress && movementBalanceLabel(e.initialMovementProgress)
-      ? `<div class="muted small">${escapeHtml(movementBalanceLabel(e.initialMovementProgress))}</div>`
+    const initialBalanceLine = exerciseInitialMovement && movementBalanceLabel(exerciseInitialMovement)
+      ? `<div class="muted small">${escapeHtml(movementBalanceLabel(exerciseInitialMovement))}</div>`
       : "";
-    const initialBaselineLine = e.initialMovementProgress
-      ? `<div class="muted small">First baseline: affected side · ${escapeHtml(movementProgressLabel(e.initialMovementProgress) ?? "")}</div>${initialBalanceLine}`
-      : e.initialBaselineProgress
-      ? `<div class="muted small">First baseline: ${escapeHtml(e.initialBaselineProgress.side)} side · ${escapeHtml(baselineProgressLabel(e.initialBaselineProgress) ?? "")}</div>`
+    const initialBaselineLine = exerciseInitialMovement
+      ? `<div class="muted small">First baseline: affected side · ${escapeHtml(movementProgressLabel(exerciseInitialMovement) ?? "")}</div>${initialBalanceLine}`
+      : exerciseInitialBaseline
+      ? `<div class="muted small">First baseline: ${escapeHtml(exerciseInitialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(exerciseInitialBaseline) ?? "")}</div>`
       : "";
     const allSnapshots = e.snapshots || [];
     const movementSnap = allSnapshots.reduce((best, snap) => {
