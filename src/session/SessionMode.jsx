@@ -505,6 +505,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     onCancel();
   };
 
+  const handleSkipFromRetakePrompt = () => {
+    setRetakePrompt(null);
+    setTrackingIssue(null);
+    setPaused(false);
+    handleSkipExercise();
+  };
+
   const handleFinish = () => {
     const duration = Math.round((Date.now() - startTimeRef.current) / 1000);
     const validAvgs = exerciseScores.map((e) => e.avg).filter((v) => v != null);
@@ -654,6 +661,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             <p className="text-sm leading-relaxed opacity-80 mb-5">Your current movement for {retakePrompt.name ?? "this exercise"} is below the saved baseline, so Mirror is not scoring reps.</p>
             <div className="space-y-2">
               <button onClick={handleRetakeBaseline} className="w-full rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Retake {retakePrompt.name ?? "baseline"}</button>
+              {exIdx + 1 < totalExercises && (
+                <button onClick={handleSkipFromRetakePrompt} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Skip this exercise</button>
+              )}
               <button onClick={handleEndFromRetakePrompt} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>End practice</button>
             </div>
           </div>
