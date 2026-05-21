@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  LEGACY_MOVEMENT_SIDE_CONVENTION,
+  MOVEMENT_SIDE_CONVENTION,
   computeMovementProgressFromDisplacements,
+  preferredMovementProgress,
   summarizeMovementProgress,
   summarizeSessionMovementProgress,
 } from "../src/ml/faceMetrics.js";
@@ -37,6 +40,7 @@ test("computes left affected-side progress against first baseline and proper sid
   const progress = computeMovementProgressFromDisplacements(EXERCISE_ID, 0.3, 1.2, profile);
 
   assert.equal(progress.side, "left");
+  assert.equal(progress.sideConvention, MOVEMENT_SIDE_CONVENTION);
   assert.equal(progress.referenceSide, "right");
   assert.equal(progress.affectedMovement, 0.3);
   assert.equal(progress.properMovement, 1.2);
@@ -115,7 +119,16 @@ test("summarizes movement progress across reps and session scores", () => {
   ]);
 
   assert.equal(exerciseSummary.affectedProgressRatio, 1.25);
+  assert.equal(exerciseSummary.sideConvention, MOVEMENT_SIDE_CONVENTION);
   assert.equal(exerciseSummary.deltaPct, 25);
   assert.equal(exerciseSummary.reps, 2);
   assert.deepEqual(sessionSummary, exerciseSummary);
+});
+
+test("preferred movement progress skips legacy image-side records", () => {
+  const current = computeMovementProgressFromDisplacements(EXERCISE_ID, 0.3, 1.2, makeProfile());
+  const legacy = { ...current, sideConvention: LEGACY_MOVEMENT_SIDE_CONVENTION };
+
+  assert.equal(preferredMovementProgress({ initialMovementProgress: legacy, movementProgress: current }), current);
+  assert.equal(preferredMovementProgress({ initialMovementProgress: legacy }), null);
 });

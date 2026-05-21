@@ -40,13 +40,43 @@ const EXERCISE_BLENDSHAPES = {
   "emoji-nose-scrunch": { left: "noseSneerLeft", right: "noseSneerRight" },
 };
 
+const MOVEMENT_SIDE_CONVENTION = "user-anatomical-v1";
+const LEGACY_MOVEMENT_SIDE_CONVENTION = "legacy-image-left-v0";
+
 function bsActivation(bsMap, mapping) {
   if (!bsMap || !mapping) return 0;
   return Math.max(bsMap[mapping.left] ?? 0, bsMap[mapping.right] ?? 0);
 }
 
-// Subject-perspective L/R landmark groups. Symmetry is the ratio of the two sides'
-// displacement-from-neutral, computed in a face-local frame.
+function flipLeftRightSide(side) {
+  if (side === "left") return "right";
+  if (side === "right") return "left";
+  return side;
+}
+
+function toUserSideSymmetryResult(result) {
+  if (!result) return result;
+  return {
+    ...result,
+    leftDisp: result.rightDisp,
+    rightDisp: result.leftDisp,
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
+  };
+}
+
+function progressUsesLegacySideConvention(progress) {
+  return progress?.sideConvention === LEGACY_MOVEMENT_SIDE_CONVENTION;
+}
+
+function progressUsesCurrentSideConvention(progress) {
+  return progress && !progressUsesLegacySideConvention(progress);
+}
+
+// Raw MediaPipe/image-coordinate landmark groups. In a front-facing camera feed,
+// image-left corresponds to the user's right; computeExerciseSymmetry converts
+// these raw measurements to user/anatomical left/right before callers see them.
+// Symmetry is the ratio of the two sides' displacement-from-neutral, computed
+// in a face-local frame.
 // Groups densified for Bell's palsy sensitivity — affected-side movement is often subtle,
 // and more landmarks per side gives spatial averaging that pulls real signal out of noise.
 const EXERCISE_LANDMARK_PAIRS = {
@@ -442,7 +472,9 @@ function browEyeGap(frame, browIdxs, eyeIdxs) {
 // (upward ala lift). A centroid-shift-only score can miss a real flare because the
 // nostril rim widens while the whole cluster barely translates.
 const NOSE_LANDMARKS = {
-  // Subject-perspective L/R, matching code convention where left = image-left.
+  // Raw image-coordinate L/R. computeExerciseSymmetry flips the final result into
+  // user/anatomical L/R, and nose blendshape fusion below uses the matching opposite
+  // anatomical blendshape for each raw image side.
   midline: [1, 2, 4, 5, 195, 197],
   leftRim: [49, 48, 64],
   rightRim: [279, 278, 294],
@@ -576,8 +608,8 @@ function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTr
 
   // Per-side blendshape activation, with calibration-time neutral subtracted so a slightly
   // raised resting `noseSneer*` doesn't masquerade as movement.
-  const lBs = bsMap ? Math.max(0, (bsMap.noseSneerLeft ?? 0) - (neutralBs?.noseSneerLeft ?? 0)) : 0;
-  const rBs = bsMap ? Math.max(0, (bsMap.noseSneerRight ?? 0) - (neutralBs?.noseSneerRight ?? 0)) : 0;
+  const lBs = bsMap ? Math.max(0, (bsMap.noseSneerRight ?? 0) - (neutralBs?.noseSneerRight ?? 0)) : 0;
+  const rBs = bsMap ? Math.max(0, (bsMap.noseSneerLeft ?? 0) - (neutralBs?.noseSneerLeft ?? 0)) : 0;
 
   const lMesh = Math.hypot(lFlare, lLift);
   const rMesh = Math.hypot(rFlare, rLift);
@@ -620,10 +652,11 @@ function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neu
   const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId] ?? null;
   const browResult = BROW_EXERCISES.has(exerciseId) ? computeBrowSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
   const noseResult = NOSE_EXERCISES.has(exerciseId) ? computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
-  return browResult
+  const rawResult = browResult
     ?? noseResult
     ?? computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix)
     ?? computeSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix);
+  return toUserSideSymmetryResult(rawResult);
 }
 
 function roundMetric(v, digits = 4) {
@@ -767,6 +800,7 @@ function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatri
   const p90Noise = percentile(noiseValues, 0.9);
   return {
     version: PROFILE_VERSION,
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
     createdAt: Date.now(),
     affectedSide,
     comfortLevel,
@@ -837,6 +871,7 @@ function computeBaselineProgressFromDisplacements(exerciseId, leftDisp, rightDis
   const current = movementForSide(leftDisp, rightDisp, side);
   const ratio = current / baseline;
   return {
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
     side,
     currentMovement: roundMetric(current),
     baselineMovement: roundMetric(baseline),
@@ -871,6 +906,7 @@ function computeMovementProgressFromDisplacements(exerciseId, leftDisp, rightDis
     : null;
 
   return {
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
     side,
     referenceSide,
     affectedMovement: roundMetric(affectedMovement),
@@ -892,11 +928,12 @@ function computeMovementProgress(exerciseId, symResult, profile) {
 }
 
 function summarizeBaselineProgress(items) {
-  const valid = (items ?? []).filter((p) => p?.ratio != null);
+  const valid = (items ?? []).filter((p) => !progressUsesLegacySideConvention(p) && p?.ratio != null);
   if (!valid.length) return null;
   const ratio = valid.reduce((sum, p) => sum + p.ratio, 0) / valid.length;
   const first = valid[0];
   return {
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
     side: first.side,
     ratio: roundMetric(ratio),
     deltaPct: Math.round((ratio - 1) * 100),
@@ -916,10 +953,11 @@ function averageMetric(items, key) {
 }
 
 function summarizeMovementProgress(items) {
-  const valid = (items ?? []).filter((p) => p?.affectedProgressRatio != null);
+  const valid = (items ?? []).filter((p) => !progressUsesLegacySideConvention(p) && p?.affectedProgressRatio != null);
   if (!valid.length) return null;
   const affectedProgressRatio = averageMetric(valid, "affectedProgressRatio");
   return {
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
     side: valid[0].side,
     referenceSide: valid[0].referenceSide,
     affectedMovement: averageMetric(valid, "affectedMovement"),
@@ -941,12 +979,14 @@ function summarizeSessionMovementProgress(scores, key = "movementProgress") {
 }
 
 function movementProgressLabel(progress) {
+  if (progressUsesLegacySideConvention(progress)) return "legacy movement data";
   if (progress?.affectedProgressRatio == null) return null;
   if (progress.affectedProgressRatio >= 1) return `+${progress.deltaPct}% from baseline`;
   return `${Math.round(progress.affectedProgressRatio * 100)}% of baseline`;
 }
 
 function movementBalanceLabel(progress) {
+  if (progressUsesLegacySideConvention(progress)) return null;
   if (progress?.affectedToProperRatio == null) return null;
   const today = Math.round(progress.affectedToProperRatio * 100);
   if (progress.baselineAffectedToProperRatio == null) return `affected vs proper: ${today}% today`;
@@ -955,6 +995,7 @@ function movementBalanceLabel(progress) {
 }
 
 function baselineProgressLabel(progress) {
+  if (progressUsesLegacySideConvention(progress)) return "legacy movement data";
   if (progress?.affectedProgressRatio != null) return movementProgressLabel(progress);
   if (progress?.ratio == null) return null;
   if (progress.ratio >= 1) return `+${progress.deltaPct}% from baseline`;
@@ -962,11 +1003,15 @@ function baselineProgressLabel(progress) {
 }
 
 function preferredBaselineProgress(record) {
-  return record?.initialBaselineProgress ?? record?.baselineProgress ?? null;
+  if (progressUsesCurrentSideConvention(record?.initialBaselineProgress)) return record.initialBaselineProgress;
+  if (progressUsesCurrentSideConvention(record?.baselineProgress)) return record.baselineProgress;
+  return null;
 }
 
 function preferredMovementProgress(record) {
-  return record?.initialMovementProgress ?? record?.movementProgress ?? null;
+  if (progressUsesCurrentSideConvention(record?.initialMovementProgress)) return record.initialMovementProgress;
+  if (progressUsesCurrentSideConvention(record?.movementProgress)) return record.movementProgress;
+  return null;
 }
 
 const EXERCISE_CATALOG_INDEX = new Map(EXERCISES.map((exercise, index) => [exercise.id, index]));
@@ -1369,6 +1414,8 @@ export {
   CALIBRATION_DELTA_POINTS,
   CORE_QUALITY_POINTS,
   EXERCISE_BLENDSHAPES,
+  LEGACY_MOVEMENT_SIDE_CONVENTION,
+  MOVEMENT_SIDE_CONVENTION,
   NOSE_EXERCISES,
   activationThresholdForExercise,
   averageFacialTransformationMatrix,
@@ -1398,6 +1445,7 @@ export {
   faceAlignmentFeedback,
   faceFrameNormalize,
   firstFacialTransformationMatrix,
+  flipLeftRightSide,
   focusReason,
   formatProfileDate,
   formatProfileSide,
@@ -1415,6 +1463,7 @@ export {
   orderExerciseIdsByRegion,
   preferredBaselineProgress,
   preferredMovementProgress,
+  progressUsesLegacySideConvention,
   profileAgeDays,
   profileBaselineForSide,
   profileExerciseEntries,
