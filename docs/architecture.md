@@ -29,6 +29,7 @@ camera frame
 -> neutral calibration
 -> face-local normalization
 -> exercise-specific movement measurement
+-> raw image-side movement converted to user/anatomical left/right
 -> left/right displacement comparison
 -> live symmetry score
 -> affected-side progress vs first/current baseline
@@ -45,6 +46,11 @@ A score near `1.0` means the two sides moved similarly. A lower score means one 
 Recovery progress is tracked separately from symmetry. The app compares the affected
 side's current movement with that side's first saved baseline and also compares the
 affected side with the proper side for the same exercise.
+
+Persisted profile and session movement fields use user/anatomical left/right. Legacy
+image-side baseline profiles are migrated by `normalizeAppData`; historical session
+progress values that cannot be recomputed are tagged as legacy and ignored by progress
+charts.
 
 ## Project Structure
 

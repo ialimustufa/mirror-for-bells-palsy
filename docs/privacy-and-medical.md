@@ -13,6 +13,7 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 - When only weak exercise baselines are retaken, those entries are merged into the current profile without archiving or replacing the rest of the baseline.
 - App state is persisted locally in IndexedDB under `mirror-db`, with `appState`, `sessions`, and `sessionImages` stores.
 - The legacy `mirror-app-data` localStorage record is migrated once and removed after a successful migration.
+- Legacy image-side movement profiles are migrated locally to user/anatomical side labels; historical session progress that cannot be recomputed is retained but marked as legacy.
 - There is no backend service in this codebase.
 
 ## Medical Disclaimer

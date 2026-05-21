@@ -12,7 +12,7 @@ Important: Mirror supports practice and self-tracking, but it does not diagnose,
 ## What Matters
 
 - Guided practice for forehead, eyes, nose, cheeks, mouth, and expression-style movements.
-- Neutral calibration, exercise-specific symmetry scoring, and affected-side progress against the user's own baseline.
+- Neutral calibration, exercise-specific symmetry scoring, and affected-side progress against the user's own baseline using user/anatomical left-right side labels.
 - Optional personal movement profile for focus recommendations, dosing, and progress comparison.
 - Local session history, journal entries, streaks, reports, and progress charts.
 - Camera processing runs in the browser. There is no backend service in this codebase.

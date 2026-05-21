@@ -229,7 +229,11 @@ the same pose-normalized coordinate system used during exercise scoring.
 
 The default scorer is `computePairwiseSymmetry`.
 
-Each exercise maps left-side landmarks to matching right-side landmarks in `EXERCISE_LANDMARK_PAIRS`.
+Each exercise maps raw image-side landmarks to matching landmarks in
+`EXERCISE_LANDMARK_PAIRS`. MediaPipe sees the unmirrored camera frame, so image-left
+corresponds to the user's anatomical right in the selfie view. `computeExerciseSymmetry`
+converts raw image-side displacement into user/anatomical `leftDisp` and `rightDisp`
+before any baseline, session, chart, or report code reads it.
 
 For each side:
 
@@ -553,6 +557,7 @@ means the entire profile is bad; it identifies the specific movement that needs 
 ```js
 {
   version,
+  sideConvention: "user-anatomical-v1",
   createdAt,
   affectedSide,
   comfortLevel,
@@ -585,12 +590,12 @@ means the entire profile is bad; it identifies the specific movement that needs 
 
 ### Baseline Metrics
 
-For each assessment exercise, Mirror stores:
+For each assessment exercise, Mirror stores user/anatomical side metrics:
 
-- Average left-side movement.
-- Average right-side movement.
-- Peak left-side movement.
-- Peak right-side movement.
+- Average user-left movement.
+- Average user-right movement.
+- Peak user-left movement.
+- Peak user-right movement.
 - Average symmetry during the hold.
 - Estimated limited side.
 - A personalized activation threshold.
@@ -693,6 +698,10 @@ The app now separates the first saved baseline from the current working baseline
 
 For existing installs, `normalizeAppData` infers `initialMovementProfile` from the
 oldest archived profile when available, otherwise from the current `movementProfile`.
+It also migrates legacy image-side profile fields into the current
+`sideConvention: "user-anatomical-v1"` shape by swapping left/right movement fields and
+limited-side labels exactly once. User-entered `affectedSide` is not flipped because it
+already represents the user's anatomical side.
 
 If only specific exercises are weak, the app opens `ProfileAssessment` with
 `retakeExerciseIds`. That flow recalibrates neutral pose, reruns only the requested
@@ -800,6 +809,7 @@ but omits proper-side and balance ratios.
 
 ```js
 {
+  sideConvention,
   side,
   referenceSide,
   affectedMovement,
@@ -817,8 +827,10 @@ but omits proper-side and balance ratios.
 
 Exercise-level movement progress is the average of rep-level movement progress values.
 Session-level movement progress is the average of exercise-level movement progress
-values. Older saved records without `movementProgress` continue to fall back to
-`initialBaselineProgress` / `baselineProgress` for display.
+values. Legacy image-side session progress is tagged as
+`sideConvention: "legacy-image-left-v0"` and skipped by charts/adaptive planning because
+old saved sessions do not contain enough raw displacement data to recompute corrected
+affected/proper ratios.
 
 ## Visual Overlay
 

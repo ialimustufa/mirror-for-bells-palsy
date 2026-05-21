@@ -38,7 +38,7 @@ The profile captures:
 - A short rest-neutral capture before each baseline exercise.
 - Per-landmark calibration noise.
 - User-reported affected side and comfort level.
-- Initial movement metrics for the starter baseline set, with remaining practice-library movements offered later as add-on baselines.
+- Initial movement metrics for the starter baseline set, stored as user/anatomical left/right even though the camera preview is mirrored.
 - Per-exercise robust baseline movement ranges, initial symmetry, estimated limited side, and activation thresholds.
 - Per-exercise baseline quality labels so weak captures can be retaken without treating the whole profile as bad.
 
@@ -50,6 +50,7 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - Session reports store legacy focused-side baseline progress plus affected-side movement progress against both the current and first saved baselines.
 - Session reports include score summaries, per-exercise rep scores, dose settings, affected-side progress, affected/proper side comparison, rep snapshots, and neutral-baseline comparison images.
 - Home and Progress show focus recommendations from the baseline profile and recent affected-side movement trends.
+- Existing image-side profile data is migrated to user/anatomical side fields on load; old session progress that cannot be recomputed is tagged as legacy instead of reused for affected-side trend charts.
 - Comfort level adjusts session reps, hold time, and rest time through local dosing rules.
 - Exercises marked `Retake` can be recalibrated individually; partial baseline captures also merge missing add-on movements into the current profile.
 - Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.
