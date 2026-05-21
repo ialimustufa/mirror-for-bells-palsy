@@ -9,8 +9,16 @@ import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionMovementProgress, movementBalanceLabel, movementProgressLabel, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, preferredMovementProgress, profileExerciseEntries, profileStatus, progressUsesLegacySideConvention, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
 import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
 
+const NAV_ITEMS = [
+  { key: "home", label: "Today", icon: Home },
+  { key: "practice", label: "Practice", icon: Sparkles },
+  { key: "baseline", label: "Baseline", icon: Zap },
+  { key: "journal", label: "Journal", icon: BookOpen },
+  { key: "progress", label: "Progress", icon: TrendingUp },
+];
+
 function Header({ view, streak }) {
-  const titles = { home: "Today", practice: "Practice", journal: "Journal", progress: "Progress" };
+  const titles = { home: "Today", practice: "Practice", baseline: "Baseline", journal: "Journal", progress: "Progress" };
   return (
     <header className="flex items-center justify-between lg:hidden">
       <div className="flex items-center gap-2">
@@ -28,14 +36,13 @@ function Header({ view, streak }) {
 }
 
 function Sidebar({ view, setView, streak }) {
-  const items = [{ key: "home", label: "Today", icon: Home }, { key: "practice", label: "Practice", icon: Sparkles }, { key: "journal", label: "Journal", icon: BookOpen }, { key: "progress", label: "Progress", icon: TrendingUp }];
   return (
     <aside className="hidden lg:flex fixed top-0 left-0 bottom-0 w-20 z-20 flex-col items-center py-5 gap-2" style={{ background: "rgba(31, 27, 22, 0.94)", borderRight: "1px solid rgba(244,239,230,0.06)" }}>
       <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ background: "#F4EFE6" }} title="Mirror">
         <div className="w-4 h-4 rounded-full" style={{ background: "#1F1B16" }} />
       </div>
       <div className="flex flex-col items-center gap-1 flex-1 mt-2">
-        {items.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = view === item.key;
           return (
@@ -74,6 +81,36 @@ function progressSummaryLabel(progress) {
 
 function progressSideLabel(progress) {
   return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
+}
+
+function clampJournalRating(value) {
+  return Math.max(1, Math.min(10, Math.round(value)));
+}
+
+function autoJournalRatingFromSession(session) {
+  if (Number.isFinite(session?.sessionAvg)) {
+    return {
+      value: clampJournalRating(session.sessionAvg * 10),
+      reason: `${displayPct(session.sessionAvg)}% average symmetry`,
+    };
+  }
+  const progress = preferredMovementProgress(session) ?? preferredBaselineProgress(session);
+  const ratio = progress?.affectedProgressRatio ?? progress?.ratio;
+  if (Number.isFinite(ratio)) {
+    const cappedRatio = Math.min(1.25, Math.max(0, ratio));
+    return {
+      value: clampJournalRating((cappedRatio / 1.25) * 10),
+      reason: `${Math.round(ratio * 100)}% movement from baseline`,
+    };
+  }
+  return { value: 5, reason: "today's completed session" };
+}
+
+function moodFromRating(rating) {
+  if (rating >= 8) return "hopeful";
+  if (rating >= 6) return "okay";
+  if (rating >= 4) return "tired";
+  return "frustrated";
 }
 
 // Modal alert with explicit Cancel/Confirm. Closes on Escape or backdrop click.
@@ -126,6 +163,91 @@ function ConfirmResetButton({ onConfirm, label, confirmTitle = "Reset to recomme
         />
       )}
     </>
+  );
+}
+
+function BaselineManagerPanel({ profile, onRedo, onReset }) {
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const items = PROFILE_ASSESSMENT_EXERCISES
+    .map((exerciseId) => ({
+      exerciseId,
+      exercise: EXERCISES.find((item) => item.id === exerciseId),
+      profileExercise: profile?.exercises?.[exerciseId] ?? null,
+    }))
+    .filter((item) => item.exercise);
+  const selectedExistingIds = selectedIds.filter((id) => profile?.exercises?.[id]);
+  const selectedMissingIds = selectedIds.filter((id) => !profile?.exercises?.[id]);
+  const redoLabel = selectedIds.length > 0 && selectedMissingIds.length === selectedIds.length
+    ? "Capture selected"
+    : selectedMissingIds.length > 0
+      ? "Redo/add selected"
+      : "Redo selected";
+  const toggleSelected = (exerciseId) => {
+    setSelectedIds((current) => current.includes(exerciseId)
+      ? current.filter((id) => id !== exerciseId)
+      : [...current, exerciseId]);
+  };
+  const resetSelected = () => {
+    onReset?.(selectedExistingIds);
+    setSelectedIds((current) => current.filter((id) => !selectedExistingIds.includes(id)));
+    setConfirmResetOpen(false);
+  };
+
+  return (
+    <div className="mt-4 rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.1)" }}>
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">Baseline manager</div>
+          <div className="text-[11px] opacity-55 mt-0.5">{selectedIds.length ? `${selectedIds.length} selected` : `${items.filter((item) => item.profileExercise).length}/${items.length} captured`}</div>
+        </div>
+        <div className="flex gap-1.5">
+          <button onClick={() => setSelectedIds(items.filter((item) => item.profileExercise).map((item) => item.exerciseId))} className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6" }}>Captured</button>
+          <button onClick={() => setSelectedIds([])} className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: "rgba(244,239,230,0.06)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.12)" }}>Clear</button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+        {items.map(({ exerciseId, exercise, profileExercise }) => {
+          const selected = selectedIds.includes(exerciseId);
+          const quality = profileExercise?.quality;
+          const pct = displayPct(profileExercise?.initialSymmetry);
+          return (
+            <button key={exerciseId} onClick={() => toggleSelected(exerciseId)} aria-pressed={selected} className="text-left rounded-xl px-3 py-2.5 flex items-center gap-2" style={{ background: selected ? "rgba(184,84,58,0.24)" : "rgba(244,239,230,0.06)", border: selected ? "1px solid rgba(255,180,143,0.45)" : "1px solid rgba(244,239,230,0.08)", color: "#F4EFE6" }}>
+              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0" style={{ background: selected ? "#B8543A" : "rgba(244,239,230,0.08)", border: selected ? "none" : "1px solid rgba(244,239,230,0.16)" }}>
+                {selected && <Check className="w-3 h-3" />}
+              </div>
+              <ExerciseGlyph exercise={exercise} size="xs" tone="dark" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-semibold truncate">{exercise.name}</div>
+                <div className="text-[10px] opacity-60 truncate">
+                  {profileExercise
+                    ? `${pct == null ? "Baseline saved" : `${pct}% baseline`}${quality?.label ? ` · ${quality.label}` : ""}`
+                    : "Needs baseline"}
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2 mt-3">
+        <button disabled={!selectedIds.length} onClick={() => onRedo?.(selectedIds)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-40" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+          <RotateCcw className="w-3.5 h-3.5" />{redoLabel}
+        </button>
+        <button disabled={!selectedExistingIds.length} onClick={() => setConfirmResetOpen(true)} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold disabled:opacity-40" style={{ background: "rgba(244,239,230,0.08)", color: "#FFD3C1", border: "1px solid rgba(184,84,58,0.3)" }}>
+          <Trash2 className="w-3.5 h-3.5" />Reset selected
+        </button>
+      </div>
+      {confirmResetOpen && (
+        <ConfirmAlert
+          title={`Reset ${selectedExistingIds.length} baseline${selectedExistingIds.length === 1 ? "" : "s"}?`}
+          message="The selected movement baselines will be cleared from the current and first-baseline profiles. Mirror will treat them as missing until you capture them again."
+          confirmLabel="Reset baselines"
+          cancelLabel="Keep baselines"
+          onConfirm={resetSelected}
+          onCancel={() => setConfirmResetOpen(false)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -241,6 +363,9 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
           })()}
           <div className="flex flex-wrap gap-2 mt-3">
             <button onClick={() => onGo("practice")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Edit plan<ArrowRight className="w-3.5 h-3.5" /></button>
+            <button onClick={() => onGo("baseline")} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.16)" }}>
+              <RotateCcw className="w-3.5 h-3.5" />Baselines
+            </button>
             {hasCustomPlan && (
               <ConfirmResetButton onConfirm={onResetPersonalPlan} label="Reset to recommended" baseStyle={{ background: "rgba(244,239,230,0.1)", color: "#F4EFE6", border: "1px solid rgba(244,239,230,0.16)" }} />
             )}
@@ -1376,6 +1501,72 @@ function JournalView({ entries, onSave }) {
   );
 }
 
+function JournalPrompt({ session, onSave, onSkip }) {
+  const autoRating = useMemo(() => autoJournalRatingFromSession(session), [session]);
+  const [symmetry, setSymmetry] = useState(autoRating.value);
+  const [mood, setMood] = useState(moodFromRating(autoRating.value));
+  const [notes, setNotes] = useState("");
+  const date = session?.date ?? todayISO();
+  const save = () => {
+    onSave({
+      date,
+      symmetry,
+      mood,
+      notes,
+      ts: Date.now(),
+      autoRated: true,
+      autoRatingReason: autoRating.reason,
+      sourceSessionTs: session?.ts ?? null,
+      sourceSessionAvg: session?.sessionAvg ?? null,
+    });
+  };
+
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="journal-prompt-title" className="fixed inset-0 z-[70] flex items-center justify-center p-5" style={{ background: "rgba(12,10,8,0.72)" }}>
+      <div className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-3xl p-5" style={{ background: "#F4EFE6", color: "#1F1B16", boxShadow: "0 24px 80px rgba(0,0,0,0.35)" }}>
+        <div className="flex items-start justify-between gap-3 mb-5">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-stone-500 mb-2">Daily journal</div>
+            <h2 id="journal-prompt-title" className="text-3xl" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>Log today's progress</h2>
+            <p className="text-sm text-stone-600 mt-2 leading-relaxed">Mirror auto-rated this from {autoRating.reason}. Adjust it if your face feels different than the camera score.</p>
+          </div>
+          <button onClick={onSkip} className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: "rgba(31,27,22,0.08)" }} aria-label="Skip journal"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="rounded-2xl p-4 mb-4" style={{ background: "rgba(255,255,255,0.55)", border: "1px solid rgba(31,27,22,0.06)" }}>
+          <div className="flex justify-between items-baseline mb-3">
+            <div className="text-sm font-semibold">Daily progress rating</div>
+            <div className="text-4xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: "#B8543A" }}>{symmetry}<span className="text-sm text-stone-500 ml-1">/ 10</span></div>
+          </div>
+          <input type="range" min="1" max="10" value={symmetry} onChange={(e) => setSymmetry(Number(e.target.value))} className="w-full" style={{ accentColor: "#B8543A" }} />
+        </div>
+
+        <div className="mb-4">
+          <div className="text-sm font-semibold mb-3">Mood</div>
+          <div className="grid grid-cols-4 gap-2">
+            {MOOD_OPTIONS.map((m) => (
+              <button key={m.key} onClick={() => setMood(m.key)} className="rounded-2xl p-3 text-center" style={{ background: mood === m.key ? "#1F1B16" : "rgba(255,255,255,0.55)", color: mood === m.key ? "#F4EFE6" : "#1F1B16", border: mood === m.key ? "none" : "1px solid rgba(31,27,22,0.06)" }}>
+                <div className="text-2xl mb-1">{m.emoji}</div>
+                <div className="text-xs font-medium">{m.label}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mb-5">
+          <div className="text-sm font-semibold mb-2">Notes</div>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything you noticed today — dryness, fatigue, taste, small wins…" rows="3" className="w-full rounded-2xl p-4 text-sm resize-none focus:outline-none focus:ring-2" style={{ background: "rgba(255,255,255,0.55)", border: "1px solid rgba(31,27,22,0.06)", fontFamily: "Manrope" }} />
+        </div>
+
+        <div className="flex gap-2">
+          <button onClick={onSkip} className="rounded-full px-4 py-3 text-sm font-semibold" style={{ background: "rgba(31,27,22,0.08)", color: "#1F1B16" }}>Skip</button>
+          <button onClick={save} className="flex-1 rounded-full px-4 py-3 text-sm font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Save journal entry</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PastEntryRow({ entry }) {
   const mood = MOOD_OPTIONS.find((m) => m.key === entry.mood);
   const d = new Date(entry.date);
@@ -1392,8 +1583,9 @@ function PastEntryRow({ entry }) {
   );
 }
 
-function MovementProfileCard({ profile, initialProfile, history, sessions, progressByExercise, onStart }) {
+function MovementProfileCard({ profile, initialProfile, history, sessions, progressByExercise, onStart, onReset }) {
   const exercises = profileExerciseEntries(profile);
+  const [managerOpen, setManagerOpen] = useState(false);
   const focusItems = getAdaptiveFocusItems(profile, sessions, 3);
   const created = profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : null;
   const status = profileStatus(profile);
@@ -1556,12 +1748,39 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
           </div>
         </div>
       )}
-      <button onClick={onStart} className="rounded-full px-4 py-2 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Redo baseline</button>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={onStart} className="rounded-full px-4 py-2 text-xs font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Redo full baseline</button>
+        <button onClick={() => setManagerOpen((open) => !open)} className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold" style={{ background: managerOpen ? "#B8543A" : "rgba(244,239,230,0.12)", color: "#F4EFE6", border: managerOpen ? "none" : "1px solid rgba(244,239,230,0.16)" }}>
+          <RotateCcw className="w-3.5 h-3.5" />Individual baselines
+        </button>
+      </div>
+      {managerOpen && <BaselineManagerPanel profile={profile} onRedo={onStart} onReset={onReset} />}
     </div>
   );
 }
 
-function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onStartProfile }) {
+function BaselineView({ data, onStartProfile, onResetBaselines }) {
+  const progressByExercise = useMemo(() => latestExerciseProgressById(data.sessions), [data.sessions]);
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>Baseline</h2>
+        <p className="text-sm text-stone-600 mt-1">Manage the movement baselines that drive progress, focus, and activation thresholds.</p>
+      </div>
+      <MovementProfileCard
+        profile={data.movementProfile}
+        initialProfile={data.initialMovementProfile}
+        history={data.movementProfileHistory}
+        sessions={data.sessions}
+        progressByExercise={progressByExercise}
+        onStart={onStartProfile}
+        onReset={onResetBaselines}
+      />
+    </div>
+  );
+}
+
+function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenReport, onDeleteSession }) {
   // Progress charts are projections of journal/session history. Keeping them derived
   // avoids migration work when scoring or display rules change.
   const totalSessions = data.sessions.length;
@@ -1573,7 +1792,6 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
     const ratio = progress?.affectedProgressRatio ?? progress?.ratio;
     return ratio == null ? null : { date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(ratio * 100) };
   }).filter(Boolean).slice(-21), [data.sessions]);
-  const progressByExercise = useMemo(() => latestExerciseProgressById(data.sessions), [data.sessions]);
   const activityGrid = useMemo(() => {
     const today = new Date(); const grid = [];
     for (let i = 13; i >= 0; i--) {
@@ -1669,7 +1887,6 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
         </div>
       </div>
       <PastSessionsList sessions={data.sessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
-      <MovementProfileCard profile={data.movementProfile} initialProfile={data.initialMovementProfile} history={data.movementProfileHistory} sessions={data.sessions} progressByExercise={progressByExercise} onStart={onStartProfile} />
       {journalChartData.length > 1 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="text-sm font-semibold mb-1">Self-rated symmetry</div>
@@ -1739,11 +1956,10 @@ function ToggleRow({ label, description, value, onToggle }) {
 }
 
 function BottomNav({ view, setView }) {
-  const items = [{ key: "home", label: "Today", icon: Home }, { key: "practice", label: "Practice", icon: Sparkles }, { key: "journal", label: "Journal", icon: BookOpen }, { key: "progress", label: "Progress", icon: TrendingUp }];
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-2" style={{ background: "linear-gradient(to top, rgba(244,239,230,1) 60%, rgba(244,239,230,0))" }}>
       <div className="max-w-2xl mx-auto rounded-full flex items-center p-1.5 backdrop-blur-md" style={{ background: "rgba(31, 27, 22, 0.92)", boxShadow: "0 8px 32px rgba(31, 27, 22, 0.15)" }}>
-        {items.map((item) => {
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = view === item.key;
           return (
@@ -2073,12 +2289,14 @@ function Onboarding({ onDone, dailyGoal, onSetDailyGoal, voiceEnabled, onToggleV
 
 export {
   BottomNav,
+  BaselineView,
   ExerciseAnimation,
   ExerciseDetail,
   ExerciseGlyph,
   Header,
   HomeView,
   InterstitialView,
+  JournalPrompt,
   JournalView,
   LiveExercisePreview,
   Onboarding,

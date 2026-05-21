@@ -53,4 +53,6 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - Existing image-side profile data is migrated to user/anatomical side fields on load; old session progress that cannot be recomputed is tagged as legacy instead of reused for affected-side trend charts.
 - Comfort level adjusts session reps, hold time, and rest time through local dosing rules.
 - Exercises marked `Retake` can be recalibrated individually; partial baseline captures also merge missing add-on movements into the current profile.
+- The Baseline menu lets users select individual movement baselines to redo or reset. Redo uses the partial-retake flow; reset clears those movements from the current and first-baseline profiles until they are captured again.
+- After the first counted daily session, Mirror prompts for a journal entry if today is not logged yet. The progress rating is prefilled from detected session symmetry or movement progress and can be edited before saving.
 - Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APP_SIDE_CONVENTION_VERSION, needsSideConventionMigration, normalizeAppData } from "../src/domain/appData.js";
+import { APP_SIDE_CONVENTION_VERSION, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "../src/domain/appData.js";
 import { LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION } from "../src/ml/faceMetrics.js";
 
 const EXERCISE_ID = "closed-smile";
@@ -85,4 +85,36 @@ test("side-convention migration is idempotent once data is normalized", () => {
   assert.deepEqual(twice.movementProfile, once.movementProfile);
   assert.deepEqual(twice.sessions, once.sessions);
   assert.equal(needsSideConventionMigration(once), false);
+});
+
+test("resets selected movement profile baselines and recalculates average symmetry", () => {
+  const profile = {
+    affectedSide: "right",
+    exercises: {
+      "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.4 },
+      "open-smile": { exerciseId: "open-smile", initialSymmetry: 0.8 },
+      "eye-close": { exerciseId: "eye-close", initialSymmetry: null },
+    },
+    initialAvgSymmetry: 0.6,
+  };
+
+  const reset = resetMovementProfileBaselines(profile, ["closed-smile", "unknown"], 1234);
+
+  assert.equal(reset.exercises["closed-smile"], undefined);
+  assert.ok(reset.exercises["open-smile"]);
+  assert.ok(reset.exercises["eye-close"]);
+  assert.equal(reset.initialAvgSymmetry, 0.8);
+  assert.equal(reset.updatedAt, 1234);
+  assert.equal(reset.lastBaselineResetAt, 1234);
+  assert.deepEqual(reset.lastBaselineResetExerciseIds, ["closed-smile"]);
+});
+
+test("returns the original profile when reset has no matching baselines", () => {
+  const profile = {
+    exercises: {
+      "open-smile": { exerciseId: "open-smile", initialSymmetry: 0.8 },
+    },
+  };
+
+  assert.equal(resetMovementProfileBaselines(profile, ["closed-smile"], 1234), profile);
 });

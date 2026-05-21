@@ -207,3 +207,24 @@ export function mergeMissingMovementProfileBaselines(currentProfile, partialProf
     initialAvgSymmetry: averageProfileSymmetry(exercises),
   };
 }
+
+export function resetMovementProfileBaselines(profile, exerciseIds = [], resetAt = Date.now()) {
+  const ids = normalizeExerciseIds(exerciseIds);
+  if (!profile?.exercises || ids.length === 0) return profile;
+  const exercises = { ...profile.exercises };
+  const removedIds = [];
+  for (const exerciseId of ids) {
+    if (!exercises[exerciseId]) continue;
+    delete exercises[exerciseId];
+    removedIds.push(exerciseId);
+  }
+  if (removedIds.length === 0) return profile;
+  return {
+    ...profile,
+    updatedAt: resetAt,
+    lastBaselineResetAt: resetAt,
+    lastBaselineResetExerciseIds: removedIds,
+    exercises,
+    initialAvgSymmetry: averageProfileSymmetry(exercises),
+  };
+}

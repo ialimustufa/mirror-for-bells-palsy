@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData } from "./domain/appData";
+import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
 import { EXERCISE_BY_ID } from "./domain/exercises";
 import {
@@ -19,10 +19,12 @@ import { ProfileAssessment } from "./profile/ProfileAssessment";
 import { TrialMode } from "./trial/TrialMode";
 import { MadeByFooter } from "./components/MadeByFooter";
 import {
+  BaselineView,
   BottomNav,
   ExerciseDetail,
   Header,
   HomeView,
+  JournalPrompt,
   JournalView,
   Onboarding,
   PracticeView,
@@ -42,6 +44,7 @@ export default function App() {
   const [profileAssessment, setProfileAssessment] = useState(null);
   const [exerciseDetail, setExerciseDetail] = useState(null);
   const [viewingReport, setViewingReport] = useState(null);
+  const [journalPrompt, setJournalPrompt] = useState(null);
   // Path-based route for the public /try demo. Listening to popstate covers the
   // history-driven nav back from the trial page; the rest of the app remains state-routed.
   const [pathname, setPathname] = useState(() => (typeof window !== "undefined" ? window.location.pathname : "/"));
@@ -135,7 +138,15 @@ export default function App() {
     const kind = ids.length > 1 ? "session" : "practice";
     setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
-  const completeSession = (rec) => { persist({ ...data, sessions: [...data.sessions, rec] }); setSession(null); };
+  const completeSession = (rec) => {
+    const existingCountedSessionsToday = data.sessions.filter((s) => s.date === rec.date && isCountedSession(s)).length;
+    const shouldPromptJournal = isCountedSession(rec)
+      && existingCountedSessionsToday === 0
+      && !data.journal.some((entry) => entry.date === rec.date);
+    persist({ ...data, sessions: [...data.sessions, rec] });
+    setSession(null);
+    if (shouldPromptJournal) setJournalPrompt({ session: rec });
+  };
   const deleteSession = useCallback(async (session) => {
     if (!session) return;
     const id = session.id;
@@ -178,6 +189,15 @@ export default function App() {
   const resetPersonalPlan = useCallback(() => {
     persist({ ...data, prefs: { ...data.prefs, personalPlan: DEFAULT_PERSONAL_PLAN } });
   }, [data, persist]);
+  const resetMovementBaselines = useCallback((exerciseIds) => {
+    const ids = [...new Set((exerciseIds ?? []).filter((id) => EXERCISE_BY_ID.has(id)))];
+    if (!ids.length || !data.movementProfile) return;
+    persist({
+      ...data,
+      movementProfile: resetMovementProfileBaselines(data.movementProfile, ids),
+      initialMovementProfile: resetMovementProfileBaselines(data.initialMovementProfile, ids),
+    });
+  }, [data, persist]);
 
   if (pathname === "/try") return <TrialMode />;
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F4EFE6" }}><div className="text-stone-600">Loading…</div></div>;
@@ -194,8 +214,9 @@ export default function App() {
         <main className="mt-8 lg:mt-2">
           {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
+          {view === "baseline" && <BaselineView data={data} onStartProfile={openProfileAssessment} onResetBaselines={resetMovementBaselines} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onStartProfile={openProfileAssessment} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} />}
         </main>
         <footer className="mt-10 text-center text-xs text-stone-500">
           <MadeByFooter />
@@ -207,6 +228,13 @@ export default function App() {
       {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} voiceEnabled={data.prefs.voiceEnabled} onToggleVoice={() => togglePref("voiceEnabled")} />}
       {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} prefs={data.prefs} onTogglePref={togglePref} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
       {viewingReport && <SessionSummary session={viewingReport} onClose={() => setViewingReport(null)} />}
+      {journalPrompt && (
+        <JournalPrompt
+          session={journalPrompt.session}
+          onSave={(entry) => { saveJournal(entry); setJournalPrompt(null); }}
+          onSkip={() => setJournalPrompt(null)}
+        />
+      )}
     </div>
   );
 }

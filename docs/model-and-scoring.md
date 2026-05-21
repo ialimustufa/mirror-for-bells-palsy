@@ -711,6 +711,12 @@ movements, and merges the resulting exercise entries back into the current
 exercise baselines, and `initialAvgSymmetry`. It does not archive or replace the
 whole profile.
 
+Users can also reset selected exercise baselines from the Baseline menu. Reset removes those
+exercise entries from both `movementProfile` and `initialMovementProfile`, recalculates
+`initialAvgSymmetry`, and records `lastBaselineResetAt` /
+`lastBaselineResetExerciseIds`. The app then treats those movements as missing until
+they are captured again.
+
 `SessionMode` stores the older focused-side baseline fields for backward compatibility:
 
 - `baselineProgress`: current movement compared with the current working baseline.
@@ -724,6 +730,11 @@ It also stores the preferred recovery metrics:
 The current profile remains the only profile used by `SessionMode` for activation thresholds.
 Progress charts and reports prefer `initialMovementProgress` when available so recovery
 trend remains anchored to the first baseline even after later calibration updates.
+
+After the first counted daily session, App opens a journal prompt when no entry exists
+for that date. The journal rating is prefilled from `sessionAvg` when available, falling
+back to movement progress if the session has no average symmetry. The user can adjust
+the rating, mood, and notes before saving.
 
 ### Comfort-Level Dosing
 
