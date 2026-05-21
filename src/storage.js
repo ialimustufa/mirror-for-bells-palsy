@@ -307,8 +307,35 @@ async function prepareDataForIndexedDb(next) {
   };
 }
 
+function collectReferencedImageIds(sessions = []) {
+  const ids = new Set();
+  for (const session of sessions) {
+    if (session?.baselineImageId) ids.add(session.baselineImageId);
+    for (const score of session?.scores ?? []) {
+      if (score?.baselineImageId) ids.add(score.baselineImageId);
+      for (const ref of score?.snapshotRefs ?? []) {
+        if (ref?.id) ids.add(ref.id);
+      }
+    }
+  }
+  return ids;
+}
+
+async function readReferencedSessionImages(db, referencedIds, replacementIds) {
+  if (!referencedIds.size) return [];
+  const tx = db.transaction(SESSION_IMAGES_STORE, "readonly");
+  const done = transactionDone(tx);
+  const request = tx.objectStore(SESSION_IMAGES_STORE).getAll();
+  const images = await requestToPromise(request);
+  await done;
+  return images.filter((image) => referencedIds.has(image.id) && !replacementIds.has(image.id));
+}
+
 async function writePreparedDataToIndexedDb(prepared) {
   const db = await openMirrorDb();
+  const referencedIds = collectReferencedImageIds(prepared.sessions);
+  const replacementIds = new Set(prepared.images.map((image) => image.id));
+  const preservedImages = await readReferencedSessionImages(db, referencedIds, replacementIds);
   const tx = db.transaction([APP_STATE_STORE, SESSIONS_STORE, SESSION_IMAGES_STORE], "readwrite");
   const done = transactionDone(tx);
   tx.objectStore(APP_STATE_STORE).put(prepared.appState);
@@ -317,6 +344,7 @@ async function writePreparedDataToIndexedDb(prepared) {
   sessionsStore.clear();
   for (const session of prepared.sessions) sessionsStore.put(session);
   for (const image of prepared.images) imagesStore.put(image);
+  for (const image of preservedImages) imagesStore.put(image);
   await done;
 }
 

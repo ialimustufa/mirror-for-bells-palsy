@@ -1,7 +1,22 @@
 import { compactAppDataForStorage } from "../storage";
-import { roundMetric } from "../ml/faceMetrics";
+import { LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION, flipLeftRightSide, roundMetric } from "../ml/faceMetrics";
 import { EXERCISE_BY_ID } from "./exercises";
 import { DEFAULT_DATA } from "./session";
+
+export const APP_SIDE_CONVENTION_VERSION = 2;
+
+const PROFILE_SIDE_FIELD_PAIRS = [
+  ["leftMeanMovement", "rightMeanMovement"],
+  ["leftBaselineMovement", "rightBaselineMovement"],
+  ["leftPeakMovement", "rightPeakMovement"],
+];
+
+const PROGRESS_FIELDS = [
+  "baselineProgress",
+  "initialBaselineProgress",
+  "movementProgress",
+  "initialMovementProgress",
+];
 
 function normalizeExerciseIds(ids) {
   if (!Array.isArray(ids)) return [];
@@ -17,16 +32,124 @@ function normalizePersonalPlan(plan) {
 
 export function normalizeAppData(parsed = {}) {
   const compactParsed = compactAppDataForStorage(parsed);
-  const movementProfileHistory = Array.isArray(compactParsed.movementProfileHistory) ? compactParsed.movementProfileHistory : [];
-  const inferredInitialProfile = compactParsed.initialMovementProfile ?? movementProfileHistory.at(-1) ?? compactParsed.movementProfile ?? null;
-  const prefs = { ...DEFAULT_DATA.prefs, ...(compactParsed.prefs ?? {}) };
+  const rawMovementProfileHistory = Array.isArray(compactParsed.movementProfileHistory) ? compactParsed.movementProfileHistory : [];
+  const withInitialProfile = {
+    ...compactParsed,
+    movementProfileHistory: rawMovementProfileHistory,
+    initialMovementProfile: compactParsed.initialMovementProfile ?? rawMovementProfileHistory.at(-1) ?? compactParsed.movementProfile ?? null,
+  };
+  const migratedParsed = migrateAppDataSideConvention(withInitialProfile);
+  const movementProfileHistory = Array.isArray(migratedParsed.movementProfileHistory) ? migratedParsed.movementProfileHistory : [];
+  const prefs = { ...DEFAULT_DATA.prefs, ...(migratedParsed.prefs ?? {}) };
   return {
     ...DEFAULT_DATA,
-    ...compactParsed,
-    initialMovementProfile: inferredInitialProfile,
+    ...migratedParsed,
     movementProfileHistory,
     prefs: { ...prefs, personalPlan: normalizePersonalPlan(prefs.personalPlan) },
   };
+}
+
+function swapProfileExerciseSideFields(exercise) {
+  if (!exercise || typeof exercise !== "object") return exercise;
+  const next = { ...exercise };
+  for (const [leftKey, rightKey] of PROFILE_SIDE_FIELD_PAIRS) {
+    const leftHasValue = Object.prototype.hasOwnProperty.call(next, leftKey);
+    const rightHasValue = Object.prototype.hasOwnProperty.call(next, rightKey);
+    if (!leftHasValue && !rightHasValue) continue;
+    const leftValue = next[leftKey];
+    const rightValue = next[rightKey];
+    if (rightHasValue) next[leftKey] = rightValue;
+    else delete next[leftKey];
+    if (leftHasValue) next[rightKey] = leftValue;
+    else delete next[rightKey];
+  }
+  next.limitedSide = flipLeftRightSide(next.limitedSide);
+  return next;
+}
+
+function migrateMovementProfileSideConvention(profile) {
+  if (!profile || typeof profile !== "object") return profile;
+  if (profile.sideConvention === MOVEMENT_SIDE_CONVENTION) return profile;
+  const exercises = {};
+  for (const [exerciseId, exercise] of Object.entries(profile.exercises ?? {})) {
+    exercises[exerciseId] = swapProfileExerciseSideFields(exercise);
+  }
+  return {
+    ...profile,
+    sideConvention: MOVEMENT_SIDE_CONVENTION,
+    migratedFromSideConvention: profile.sideConvention ?? LEGACY_MOVEMENT_SIDE_CONVENTION,
+    exercises,
+  };
+}
+
+function markLegacyProgressSideConvention(progress) {
+  if (!progress || typeof progress !== "object") return progress;
+  if (progress.sideConvention === MOVEMENT_SIDE_CONVENTION || progress.sideConvention === LEGACY_MOVEMENT_SIDE_CONVENTION) {
+    return progress;
+  }
+  return {
+    ...progress,
+    sideConvention: LEGACY_MOVEMENT_SIDE_CONVENTION,
+  };
+}
+
+function migrateRecordProgressSideConvention(record) {
+  if (!record || typeof record !== "object") return record;
+  const next = { ...record };
+  for (const field of PROGRESS_FIELDS) {
+    if (next[field]) next[field] = markLegacyProgressSideConvention(next[field]);
+  }
+  return next;
+}
+
+function migrateSessionSideConvention(session) {
+  const next = migrateRecordProgressSideConvention(session);
+  if (!next || typeof next !== "object") return next;
+  if (Array.isArray(next.scores)) {
+    next.scores = next.scores.map(migrateRecordProgressSideConvention);
+  }
+  return next;
+}
+
+function migrateAppDataSideConvention(data) {
+  return {
+    ...data,
+    sideConventionVersion: APP_SIDE_CONVENTION_VERSION,
+    movementProfile: migrateMovementProfileSideConvention(data.movementProfile),
+    initialMovementProfile: migrateMovementProfileSideConvention(data.initialMovementProfile),
+    movementProfileHistory: Array.isArray(data.movementProfileHistory)
+      ? data.movementProfileHistory.map(migrateMovementProfileSideConvention)
+      : [],
+    sessions: Array.isArray(data.sessions) ? data.sessions.map(migrateSessionSideConvention) : [],
+  };
+}
+
+function progressNeedsSideConventionMigration(progress) {
+  return Boolean(
+    progress
+    && typeof progress === "object"
+    && progress.sideConvention !== MOVEMENT_SIDE_CONVENTION
+    && progress.sideConvention !== LEGACY_MOVEMENT_SIDE_CONVENTION,
+  );
+}
+
+function recordNeedsProgressSideConventionMigration(record) {
+  return Boolean(record && typeof record === "object" && PROGRESS_FIELDS.some((field) => progressNeedsSideConventionMigration(record[field])));
+}
+
+function profileNeedsSideConventionMigration(profile) {
+  return Boolean(profile && typeof profile === "object" && profile.sideConvention !== MOVEMENT_SIDE_CONVENTION);
+}
+
+export function needsSideConventionMigration(data = {}) {
+  if (!data || typeof data !== "object") return false;
+  if (data.sideConventionVersion !== APP_SIDE_CONVENTION_VERSION) return true;
+  if (profileNeedsSideConventionMigration(data.movementProfile) || profileNeedsSideConventionMigration(data.initialMovementProfile)) return true;
+  if (Array.isArray(data.movementProfileHistory) && data.movementProfileHistory.some(profileNeedsSideConventionMigration)) return true;
+  return Array.isArray(data.sessions) && data.sessions.some((session) => (
+    recordNeedsProgressSideConventionMigration(session)
+    || (Array.isArray(session.scores) && session.scores.some(recordNeedsProgressSideConventionMigration))
+  ));
 }
 
 export function archiveMovementProfile(profile, archivedAt = Date.now()) {

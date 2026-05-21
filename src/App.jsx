@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, normalizeAppData } from "./domain/appData";
+import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
 import { EXERCISE_BY_ID } from "./domain/exercises";
 import {
@@ -56,8 +56,17 @@ export default function App() {
       try {
         const stored = await loadMirrorData();
         if (stored) {
+          const shouldPersistMigration = needsSideConventionMigration(stored);
           const normalized = normalizeAppData(stored);
           setData(normalized);
+          if (shouldPersistMigration) {
+            try {
+              const saved = await saveMirrorData(normalized);
+              setData(normalizeAppData(saved));
+            } catch (error) {
+              console.error("Failed to persist side-convention migration", error);
+            }
+          }
           if (!normalized.prefs?.onboarded) setShowOnboarding(true);
         } else { setShowOnboarding(true); }
       } catch { setShowOnboarding(true); }
