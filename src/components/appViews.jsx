@@ -2370,6 +2370,48 @@ function Onboarding({ onDone, dailyGoal, onSetDailyGoal, voiceEnabled, onToggleV
   );
 }
 
+// Session-wide progress as a "healing journey" trail: one node per exercise, lit as each
+// is completed, with a pulsing marker on the current movement. Drives off completed reps so
+// the fill creeps forward smoothly within an exercise. Display-only; sits above the timer.
+function SessionJourney({ exercises, exIdx, repIdx, currentReps, phaseColor = "#D4A574" }) {
+  const total = exercises?.length ?? 0;
+  if (total === 0) return null;
+  const accent = "#D4A574";
+  const repFrac = currentReps > 0 ? clampNumber(repIdx / currentReps, 0, 1) : 0;
+  const span = Math.max(1, total - 1);
+  // Marker value 0..(total-1): integer part = current node, fraction = progress toward the next.
+  const marker = Math.min(exIdx + repFrac, span);
+  const fillFrac = marker / span;
+
+  return (
+    <div className="mb-3 select-none" aria-hidden>
+      <div className="flex items-center justify-between mb-1.5 px-0.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ opacity: 0.6 }}>Your journey</span>
+        <span className="text-[10px] font-semibold tabular-nums" style={{ opacity: 0.6 }}>{Math.min(exIdx + 1, total)} / {total}</span>
+      </div>
+      <div className="relative" style={{ height: 18 }}>
+        <div className="absolute top-1/2 -translate-y-1/2 h-[3px] rounded-full" style={{ left: 9, right: 9, background: "rgba(244,239,230,0.18)" }} />
+        <div className="absolute top-1/2 -translate-y-1/2 h-[3px] rounded-full" style={{ left: 9, width: `calc((100% - 18px) * ${fillFrac})`, background: accent, transition: "width 600ms cubic-bezier(0.4,0,0.2,1)" }} />
+        {exercises.map((ex, i) => {
+          const pct = total === 1 ? 0.5 : i / span;
+          const done = i < exIdx;
+          const current = i === exIdx;
+          const size = current ? 16 : 10;
+          const background = done ? accent : current ? phaseColor : "rgba(244,239,230,0.30)";
+          return (
+            <div key={ex.id ? `${ex.id}-${i}` : i} className="absolute top-1/2" style={{ left: `calc(9px + (100% - 18px) * ${pct})`, transform: "translate(-50%, -50%)" }}>
+              {current && <div className="absolute inset-0 rounded-full motion-safe:animate-ping" style={{ background: phaseColor, opacity: 0.45 }} />}
+              <div className="relative rounded-full flex items-center justify-center" style={{ width: size, height: size, background, boxShadow: current ? "0 0 0 3px rgba(244,239,230,0.16)" : "none", transition: "background 400ms ease, width 300ms ease, height 300ms ease" }}>
+                {done && <Check style={{ width: 7, height: 7, color: "#1F1B16" }} strokeWidth={3.5} />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export {
   BottomNav,
   BaselineView,
@@ -2387,6 +2429,7 @@ export {
   PreviewView,
   ProgressView,
   RealtimeFeedback,
+  SessionJourney,
   SessionSummary,
   Sidebar,
   TrackerStatusPill,

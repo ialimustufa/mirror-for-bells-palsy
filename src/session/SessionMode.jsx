@@ -5,7 +5,7 @@ import { canPromptRetakeAfterRep, exerciseHoldSec, exerciseRestSec, todayISO } f
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
-import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
+import { InterstitialView, PreviewView, RealtimeFeedback, SessionJourney, SessionSummary, TrackerStatusPill } from "../components/appViews";
 import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeMovementProgressFromDisplacements, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
@@ -35,6 +35,19 @@ function hasRetakeGate(tracking, exerciseId) {
 
 function lowSignalIssue(exercise) {
   return `${exercise?.name ?? "This exercise"} is below your saved baseline.`;
+}
+
+function exercisePlannedSec(exercise) {
+  if (!exercise) return 0;
+  const reps = Math.max(0, exercise.reps ?? 0);
+  return reps * exerciseHoldSec(exercise) + (reps + 1) * exerciseRestSec(exercise);
+}
+
+function formatRemainingTime(seconds) {
+  const safe = Math.max(0, Math.ceil(seconds ?? 0));
+  const minutes = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return minutes > 0 ? `${minutes}:${String(secs).padStart(2, "0")}` : `${secs}s`;
 }
 
 function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref, onRequestProfileRetake }) {
@@ -561,6 +574,22 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   }[phase];
   const calibrationPct = Math.round((calibrationProgress / CALIBRATION_FRAMES) * 100);
   const displayPrompt = autoPaused ? "Paused. Center your face inside the ring to continue." : phaseTone.prompt;
+  const plannedSessionSec = session.exercises.reduce((sum, exercise) => sum + exercisePlannedSec(exercise), 0)
+    + Math.max(0, totalExercises - 1) * INTERSTITIAL_SEC;
+  const remainingInLaterExercises = session.exercises.slice(exIdx + 1).reduce((sum, exercise) => sum + exercisePlannedSec(exercise), 0);
+  const remainingInterstitialSec = Math.max(0, totalExercises - exIdx - 1) * INTERSTITIAL_SEC;
+  const currentPhaseRemainingSec = typeof secondsLeft === "number" ? Math.max(0, secondsLeft) : 0;
+  const currentExerciseRemainingSec = phase === "hold"
+    ? currentPhaseRemainingSec + currentRestSec + Math.max(0, currentReps - repIdx - 1) * (currentHoldSec + currentRestSec)
+    : phase === "rest"
+      ? currentPhaseRemainingSec + (restIsEntryRef.current
+        ? currentReps * (currentHoldSec + currentRestSec)
+        : Math.max(0, currentReps - repIdx - 1) * (currentHoldSec + currentRestSec))
+      : exercisePlannedSec(current);
+  const remainingSessionSec = currentExerciseRemainingSec + remainingInLaterExercises + remainingInterstitialSec;
+  const showRemainingTicker = (phase === "hold" || phase === "rest") && plannedSessionSec > 0;
+  const remainingFraction = showRemainingTicker ? Math.max(0, Math.min(1, remainingSessionSec / plannedSessionSec)) : 0;
+  const remainingLabel = `${formatRemainingTime(remainingSessionSec)} remaining`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -589,6 +618,17 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             <div className="text-xs opacity-70 whitespace-nowrap">Rep {repIdx + 1} / {currentReps}</div>
           </div>
           <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{displayPrompt}</div>
+          {showRemainingTicker && (
+            <div className="mt-3" aria-live="polite">
+              <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: phaseTone.color }}>
+                <span>Session time</span>
+                <span className="tabular-nums normal-case tracking-normal">{remainingLabel}</span>
+              </div>
+              <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(244, 239, 230, 0.16)" }}>
+                <div className="h-full rounded-full transition-all duration-300 ease-linear" style={{ width: `${remainingFraction * 100}%`, background: phaseTone.color }} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -630,6 +670,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
         <div className="absolute inset-0 flex flex-col justify-end pointer-events-none">
           <div className="p-6 pb-4" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.95) 0%, rgba(31,27,22,0.7) 60%, transparent 100%)" }}>
+            {totalExercises > 1 && (
+              <SessionJourney exercises={session.exercises} exIdx={exIdx} repIdx={repIdx} currentReps={currentReps} phaseColor={phaseTone.color} />
+            )}
             <div className="flex items-center gap-2 mb-1">
               <div className="text-[11px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>
                 {phaseTone.tag}
