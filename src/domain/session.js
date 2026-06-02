@@ -52,6 +52,16 @@ export function exerciseHoldSec(exercise) {
   return exercise?.holdSec ?? HOLD_SEC;
 }
 
+export function minCompletedRepsBeforeRetake(totalReps) {
+  const reps = Math.max(0, Math.round(totalReps ?? 0));
+  return Math.max(1, Math.ceil(reps * 0.25));
+}
+
+export function canPromptRetakeAfterRep(repIdx, totalReps) {
+  const completedReps = Math.max(0, Math.floor((repIdx ?? -1) + 1));
+  return completedReps >= minCompletedRepsBeforeRetake(totalReps);
+}
+
 // Evenly-spaced session times today (e.g. dailyGoal=5 -> 9:00, 12:00, 15:00, 18:00, 21:00).
 export function todaysSessionSlots(dailyGoal) {
   if (!dailyGoal || dailyGoal <= 0) return [];

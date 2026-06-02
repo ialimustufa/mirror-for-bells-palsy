@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause, X, ChevronRight, Volume2, VolumeX, Camera, CameraOff } from "lucide-react";
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, INTERSTITIAL_SEC } from "../domain/config";
-import { exerciseHoldSec, exerciseRestSec, todayISO } from "../domain/session";
+import { canPromptRetakeAfterRep, exerciseHoldSec, exerciseRestSec, todayISO } from "../domain/session";
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
@@ -199,6 +199,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       if (phase === "hold") {
         const holdTracking = holdTrackingRef.current;
         const shouldRetakeBaseline =
+          canPromptRetakeAfterRep(repIdx, currentReps) &&
           hasRetakeGate(holdTracking, current.id) &&
           holdTracking.alignedFrames > 0 &&
           holdTracking.activatedFrames === 0;
