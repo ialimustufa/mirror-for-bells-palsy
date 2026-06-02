@@ -542,6 +542,13 @@ function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
       drawArrow(ctx, browL.x, browL.y, "down", "Pull", dpr, PRIMARY, pulse);
       drawArrow(ctx, browR.x, browR.y, "down", "Pull", dpr, PRIMARY, pulse);
       break;
+    case "emoji-raised-brow": {
+      const active = alt ? browL : browR;
+      const quiet = alt ? browR : browL;
+      drawArrow(ctx, active.x, active.y, "up", "Raise", dpr, PRIMARY, pulse);
+      drawArrow(ctx, quiet.x, quiet.y, "ringDashed", "Relax", dpr, SECONDARY, 1);
+      break;
+    }
     case "eye-close":
       drawArrow(ctx, eyeL.x, eyeL.y, "ring", "Close softly", dpr, PRIMARY, pulse);
       drawArrow(ctx, eyeR.x, eyeR.y, "ring", null, dpr, PRIMARY, pulse);
@@ -566,6 +573,10 @@ function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
       drawArrow(ctx, cheekL.x, cheekL.y, "out", "Puff", dpr, PRIMARY, pulse, "left");
       drawArrow(ctx, cheekR.x, cheekR.y, "out", null, dpr, PRIMARY, pulse, "right");
       break;
+    case "water-swish":
+      drawArrow(ctx, cheekL.x, cheekL.y, alt ? "out" : "in", "Move water", dpr, PRIMARY, pulse, "left");
+      drawArrow(ctx, cheekR.x, cheekR.y, alt ? "in" : "out", null, dpr, PRIMARY, pulse, "right");
+      break;
     case "cheek-suck":
       drawArrow(ctx, cheekL.x, cheekL.y, "in", "Pull in", dpr, PRIMARY, pulse, "left");
       drawArrow(ctx, cheekR.x, cheekR.y, "in", null, dpr, PRIMARY, pulse, "right");
@@ -584,6 +595,13 @@ function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
       drawArrow(ctx, mouthL.x, mouthL.y, "down", "Lower", dpr, PRIMARY, pulse);
       drawArrow(ctx, mouthR.x, mouthR.y, "down", null, dpr, PRIMARY, pulse);
       break;
+    case "emoji-smirk": {
+      const active = alt ? mouthL : mouthR;
+      const quiet = alt ? mouthR : mouthL;
+      drawArrow(ctx, active.x, active.y, "up", "Lift one side", dpr, PRIMARY, pulse);
+      drawArrow(ctx, quiet.x, quiet.y, "ringDashed", "Soft", dpr, SECONDARY, 1);
+      break;
+    }
     case "pucker":
     case "emoji-kiss":
       drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Pucker forward", dpr, PRIMARY, pulse);

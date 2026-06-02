@@ -355,7 +355,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               }
               let symResult = null;
               // Brow exercises: pitch-invariant brow-to-eye gap delta.
-              // Nose exercises: aperture widening + upward ala lift (handles both wrinkle and flare).
+              // Nose exercises: direction-specific nostril flare or nose scrunch.
               // Other exercises: face-local landmark-pair displacement with per-landmark noise
               // subtracted out. Fallback: generic 9-pair.
               symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current, facialTransformationMatrix, neutralMatrixRef.current);

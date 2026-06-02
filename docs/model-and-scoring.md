@@ -269,16 +269,16 @@ Examples:
 
 - Eyebrow raise and frown: brow ridge and forehead-side landmarks.
 - Eye close and wink: full upper/lower eyelid contours.
-- Cheek exercises: cheek, zygomatic, and nasolabial landmarks.
+- Cheek exercises: cheek, zygomatic, nasolabial, and mouth-seal landmarks, including the water swish movement.
 - Smile, pucker, and separate vowel shapes: mouth corners, outer lip ring, inner lip ring, and nearby chin/lip landmarks. Vowels are modeled as individual `vowel-a`, `vowel-e`, `vowel-i`, `vowel-o`, and `vowel-u` exercises so each shape gets its own hold time, baseline, and progress history.
 - Nose wrinkle / nostril flare: nostril rim, ala wing, and nasalis insertion landmarks.
-- Emoji reactions: practical expression combinations such as smile, big smile, surprise, wink, kiss, sad frown, and nose scrunch. These reuse the same region-specific landmark families but are exposed as separate exercises so real-world expressions can have their own baselines and progress history.
+- Emoji reactions: practical expression combinations such as smile, big smile, surprise, raised brow, wink, smirk, kiss, sad frown, and nose scrunch. These reuse the same region-specific landmark families but are exposed as separate exercises so real-world expressions can have their own baselines and progress history.
 
 The mapping is defined in `EXERCISE_LANDMARK_PAIRS`.
 
 ## Brow-Specific Scoring
 
-Brow exercises use `computeBrowSymmetry` instead of the generic displacement scorer.
+Brow raise exercises use `computeBrowSymmetry` instead of the generic displacement scorer.
 
 Reason: brow movement is mostly vertical, and measuring the brow relative to the upper eyelid is more stable than absolute brow displacement.
 
@@ -295,24 +295,25 @@ Then:
 symmetry = min(left_movement, right_movement) / max(left_movement, right_movement)
 ```
 
-The scorer handles both brow raise and gentle frown because it uses the absolute change in brow-to-eye gap.
-
 Current threshold:
 
 ```js
 if (peak < 0.008) return null;
 ```
 
+`gentle-frown` uses `computeFrownSymmetry` instead. A frown is direction-specific:
+it must move the inner brows downward toward the eyelids and/or inward toward the
+face midline. This prevents an eyebrow raise from scoring as a successful frown.
+
 ## Nose-Specific Scoring
 
-Nose exercises use `computeNoseSymmetry`.
+Nose exercises use direction-specific nose scorers.
 
-The app previously treated each nostril side as a single centroid shift. That can miss true nostril flare because the nostril can widen while the whole cluster barely translates.
+The app previously treated each nostril side as a single centroid shift. That can miss true nostril flare because the nostril can widen while the whole cluster barely translates. It can also score the wrong movement if an inward pull or upward scrunch falls back to generic displacement scoring.
 
-The current scorer combines two signals:
+`Nostril Flare` uses `computeNostrilFlareSymmetry`, which scores outward aperture widening only. `Emoji Nose Scrunch` uses `computeNoseScrunchSymmetry`, which scores upward ala / nasalis lift plus supporting nose-sneer blendshape activation.
 
-1. Nostril aperture widening.
-2. Upward ala / nasalis lift.
+Nose exercises return from their specific scorer directly; if the direction-specific scorer returns `null`, the app does not fall back to generic symmetry for that exercise.
 
 Landmark groups:
 
@@ -339,25 +340,30 @@ The rim gets double weight because nostril flare primarily opens the nostril rim
 weighted_nostril_x = (rim_x * 2 + ala_x) / 3
 ```
 
-Movement from neutral:
+Nostril flare movement from neutral:
 
 ```text
 flare = max(0, current_width - neutral_width)
-lift = max(0, neutral_y - current_y)
 ```
 
-Each axis has the per-side centroid noise floor subtracted before combining, mirroring the
+The flare axis has the per-side centroid noise floor subtracted before scoring, mirroring the
 per-landmark denoising used by the generic pairwise scorer. The centroid jitter for an
 N-point average scales as the average single-point noise divided by `sqrt(N)`:
 
 ```text
 side_noise = mean(noise_floor[side_indices]) / sqrt(N)
 flare_d    = max(0, flare - side_noise)
-lift_d     = max(0, lift  - side_noise)
-mesh_movement = hypot(flare_d, lift_d)
+side_movement = flare_d
 ```
 
-The mesh movement is then fused with a per-side blendshape activation. The MediaPipe
+For nose scrunch, upward lift is scored separately:
+
+```text
+lift      = max(0, neutral_y - current_y)
+lift_d    = max(0, lift - side_noise)
+```
+
+The scrunch movement is then fused with a per-side blendshape activation. The MediaPipe
 `noseSneerLeft` / `noseSneerRight` coefficients are read from each frame and have their
 calibration-time neutral values subtracted so a slightly raised resting sneer doesn't
 masquerade as movement:
@@ -365,13 +371,11 @@ masquerade as movement:
 ```text
 bs_l = max(0, current.noseSneerLeft  - neutral.noseSneerLeft)
 bs_r = max(0, current.noseSneerRight - neutral.noseSneerRight)
-side_movement = mesh_movement + 0.03 * bs_side
+side_movement = lift_d + 0.03 * bs_side
 ```
 
-The 0.03 weight maps a saturating blendshape activation (1.0) to a strong mesh flare
-(~0.03 in face-local units), so both signals contribute on roughly comparable scales. The
-mesh stays primary because it lateralizes more honestly on asymmetric faces; blendshapes
-provide supporting activation evidence so weak flares the mesh can't resolve still score.
+The 0.03 weight maps a saturating blendshape activation (1.0) to a strong mesh movement
+(~0.03 in face-local units), so both scrunch signals contribute on roughly comparable scales. Nostril flare does not use the sneer blendshape because flare is defined as outward widening from rest.
 
 Neutral blendshape values are captured during the same calibration window that builds
 the neutral landmark mean and noise floor, so they share the user's at-rest baseline.

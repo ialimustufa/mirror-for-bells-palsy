@@ -35,7 +35,9 @@ const EXERCISE_BLENDSHAPES = {
   "lip-press":     { left: "mouthPressLeft",  right: "mouthPressRight" },
   "emoji-smile":    { left: "mouthSmileLeft",  right: "mouthSmileRight" },
   "emoji-big-smile": { left: "mouthSmileLeft", right: "mouthSmileRight" },
+  "emoji-raised-brow": { left: "browOuterUpLeft", right: "browOuterUpRight" },
   "emoji-wink":     { left: "eyeBlinkLeft",    right: "eyeBlinkRight" },
+  "emoji-smirk":    { left: "mouthSmileLeft",  right: "mouthSmileRight" },
   "emoji-sad-frown": { left: "mouthFrownLeft", right: "mouthFrownRight" },
   "emoji-nose-scrunch": { left: "noseSneerLeft", right: "noseSneerRight" },
 };
@@ -113,6 +115,10 @@ const EXERCISE_LANDMARK_PAIRS = {
     left:  [205, 192, 213, 50, 187, 147, 36, 142, 207, 216],
     right: [425, 416, 433, 280, 411, 376, 266, 371, 427, 436],
   },
+  "water-swish":    {
+    left:  [205, 192, 213, 50, 187, 147, 36, 142, 207, 216, 61, 84, 91, 146],
+    right: [425, 416, 433, 280, 411, 376, 266, 371, 427, 436, 291, 314, 321, 375],
+  },
   // Mouth corner + outer lip ring + inner lip ring + chin corner
   "closed-smile":   {
     left:  [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181],
@@ -162,9 +168,17 @@ const EXERCISE_LANDMARK_PAIRS = {
     left:  [70, 63, 105, 66, 107, 61, 91, 146, 78, 185, 95, 88, 178, 40, 37, 0, 17],
     right: [300, 293, 334, 296, 336, 291, 321, 375, 308, 409, 324, 318, 402, 270, 267, 0, 17],
   },
+  "emoji-raised-brow": {
+    left:  [70, 63, 105, 66, 107, 46, 53, 52, 65, 55, 109, 67, 104, 69],
+    right: [300, 293, 334, 296, 336, 276, 283, 282, 295, 285, 338, 297, 333, 299],
+  },
   "emoji-wink":     {
     left:  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246, 61, 84, 91],
     right: [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466, 291, 314, 321],
+  },
+  "emoji-smirk":    {
+    left:  [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181, 205, 50],
+    right: [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405, 425, 280],
   },
   "emoji-kiss":     {
     left:  [61, 91, 146, 78, 185, 95, 88, 178, 40, 39, 37, 0],
@@ -451,11 +465,19 @@ const BROW_LANDMARKS = {
   // Upper brow row + lower brow ridge — 10 points per side
   leftBrow:    [70, 63, 105, 66, 107, 46, 53, 52, 65, 55],
   rightBrow:   [300, 293, 334, 296, 336, 276, 283, 282, 295, 285],
+  // Inner brow/corrugator points that move down and inward during a frown.
+  leftInnerBrow: [107, 66, 65, 55],
+  rightInnerBrow: [336, 296, 295, 285],
+  midline: [1, 4, 5, 195, 197],
   // Upper eyelid arc — the stable reference the brow lifts away from
   leftEyeTop:  [159, 158, 157, 160, 161],
   rightEyeTop: [386, 385, 384, 387, 388],
 };
-const BROW_EXERCISES = new Set(["eyebrow-raise", "gentle-frown"]);
+const BROW_EXERCISES = new Set(["eyebrow-raise", "gentle-frown", "emoji-raised-brow"]);
+const FROWN_EXERCISES = new Set(["gentle-frown"]);
+const FROWN_MIN_SIGNAL = 0.0035;
+const FROWN_INWARD_WEIGHT = 1.15;
+const FROWN_BS_WEIGHT = 0.01;
 
 function avgY(frame, idxs) {
   let s = 0, c = 0;
@@ -468,9 +490,16 @@ function browEyeGap(frame, browIdxs, eyeIdxs) {
   return (b == null || e == null) ? null : (e - b); // smaller image y = higher; positive = brow above eye
 }
 
-// Nose tracking: handles BOTH nostril flare (aperture widening) and wrinkle/sneer
-// (upward ala lift). A centroid-shift-only score can miss a real flare because the
-// nostril rim widens while the whole cluster barely translates.
+function browDistanceFromMidline(frame, browIdxs, side) {
+  const brow = avgXY(frame, browIdxs);
+  const mid = avgXY(frame, BROW_LANDMARKS.midline);
+  if (!brow || !mid) return null;
+  return side === "left" ? mid.x - brow.x : brow.x - mid.x;
+}
+
+// Nose tracking separates nostril flare (outward aperture widening) from nose scrunch
+// (upward ala lift / sneer). A centroid-shift-only score can miss true nostril flare
+// because the nostril rim widens while the whole cluster barely translates.
 const NOSE_LANDMARKS = {
   // Raw image-coordinate L/R. computeExerciseSymmetry flips the final result into
   // user/anatomical L/R, and nose blendshape fusion below uses the matching opposite
@@ -481,7 +510,9 @@ const NOSE_LANDMARKS = {
   leftAla: [102, 219, 218],
   rightAla: [331, 439, 438],
 };
-const NOSE_EXERCISES = new Set(["nose-wrinkle", "emoji-nose-scrunch"]);
+const NOSTRIL_FLARE_EXERCISES = new Set(["nose-wrinkle"]);
+const NOSE_SCRUNCH_EXERCISES = new Set(["emoji-nose-scrunch"]);
+const NOSE_EXERCISES = new Set([...NOSTRIL_FLARE_EXERCISES, ...NOSE_SCRUNCH_EXERCISES]);
 const NOSE_MIN_SIGNAL = 0.0012;
 const NOSE_PROFILE_THRESHOLD_FLOOR = 0.0015;
 const NOSE_PROFILE_THRESHOLD_MAX = 0.0025;
@@ -575,13 +606,20 @@ function averageBlendshapes(buffer) {
   return avg;
 }
 
-// Weight that maps a 1.0 blendshape activation to a strong-flare mesh magnitude (~0.03).
-// Used so per-side blendshape activation can additively reinforce the mesh signal without
-// dominating it. The mesh stays primary because it lateralizes more honestly on asymmetric
-// faces; blendshapes regress toward bilaterally similar values.
+// Weight that maps a 1.0 nose-sneer blendshape activation to a strong mesh magnitude
+// (~0.03). Used for nose scrunch only; nostril flare is scored as outward widening.
 const NOSE_BS_WEIGHT = 0.03;
 
-function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function noseSideNoise(noiseFloor) {
+  const leftIdxs = [...NOSE_LANDMARKS.leftRim, ...NOSE_LANDMARKS.leftAla];
+  const rightIdxs = [...NOSE_LANDMARKS.rightRim, ...NOSE_LANDMARKS.rightAla];
+  return {
+    left: meanNoise(noiseFloor, leftIdxs) / Math.sqrt(leftIdxs.length),
+    right: meanNoise(noiseFloor, rightIdxs) / Math.sqrt(rightIdxs.length),
+  };
+}
+
+function computeNostrilFlareSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
   if (!lm || !neutral) return null;
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!lmN || !neuN) return null;
@@ -590,19 +628,28 @@ function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTr
 
   const lFlareRaw = Math.max(0, cur.leftWidth - neu.leftWidth);
   const rFlareRaw = Math.max(0, cur.rightWidth - neu.rightWidth);
-  const lLiftRaw = Math.max(0, neu.leftY - cur.leftY);   // smaller y = lifted upward
-  const rLiftRaw = Math.max(0, neu.rightY - cur.rightY);
 
-  // Per-side centroid jitter: averaging N landmarks scales single-point noise by 1/sqrt(N),
-  // which is what the width/lift signals operate on. Subtracting this brings nose scoring
-  // in line with sumDisp's per-point denoising in the pairwise scorer.
-  const leftIdxs = [...NOSE_LANDMARKS.leftRim, ...NOSE_LANDMARKS.leftAla];
-  const rightIdxs = [...NOSE_LANDMARKS.rightRim, ...NOSE_LANDMARKS.rightAla];
-  const leftNoise = meanNoise(noiseFloor, leftIdxs) / Math.sqrt(leftIdxs.length);
-  const rightNoise = meanNoise(noiseFloor, rightIdxs) / Math.sqrt(rightIdxs.length);
+  const { left: leftNoise, right: rightNoise } = noseSideNoise(noiseFloor);
 
   const lFlare = Math.max(0, lFlareRaw - leftNoise);
   const rFlare = Math.max(0, rFlareRaw - rightNoise);
+  const peak = Math.max(lFlare, rFlare);
+  const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
+  if (peak < Math.max(NOSE_MIN_SIGNAL, noiseGate)) return null;
+  const symmetry = Math.min(lFlare, rFlare) / peak;
+  return { symmetry, leftDisp: lFlare, rightDisp: rFlare, peak };
+}
+
+function computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+  if (!lm || !neutral) return null;
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
+  if (!lmN || !neuN) return null;
+  const cur = noseShape(lmN), neu = noseShape(neuN);
+  if (!cur || !neu) return null;
+
+  const lLiftRaw = Math.max(0, neu.leftY - cur.leftY);   // smaller y = lifted upward
+  const rLiftRaw = Math.max(0, neu.rightY - cur.rightY);
+  const { left: leftNoise, right: rightNoise } = noseSideNoise(noiseFloor);
   const lLift = Math.max(0, lLiftRaw - leftNoise);
   const rLift = Math.max(0, rLiftRaw - rightNoise);
 
@@ -611,15 +658,57 @@ function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTr
   const lBs = bsMap ? Math.max(0, (bsMap.noseSneerRight ?? 0) - (neutralBs?.noseSneerRight ?? 0)) : 0;
   const rBs = bsMap ? Math.max(0, (bsMap.noseSneerLeft ?? 0) - (neutralBs?.noseSneerLeft ?? 0)) : 0;
 
-  const lMesh = Math.hypot(lFlare, lLift);
-  const rMesh = Math.hypot(rFlare, rLift);
-  const lMag = lMesh + NOSE_BS_WEIGHT * lBs;
-  const rMag = rMesh + NOSE_BS_WEIGHT * rBs;
+  const lMag = lLift + NOSE_BS_WEIGHT * lBs;
+  const rMag = rLift + NOSE_BS_WEIGHT * rBs;
   const peak = Math.max(lMag, rMag);
-  // Adaptive gate: small absolute floor for real flare signals, but rises with calibration
+  // Adaptive gate: small absolute floor for real nose signals, but rises with calibration
   // jitter so a noisy session doesn't drift into "scored" territory after denoising.
   const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
   if (peak < Math.max(NOSE_MIN_SIGNAL, noiseGate)) return null;
+  const symmetry = Math.min(lMag, rMag) / peak;
+  return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
+}
+
+function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+  return computeNostrilFlareSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix)
+    ?? computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix);
+}
+
+function computeFrownSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+  if (!lm || !neutral) return null;
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
+  if (!lmN || !neuN) return null;
+
+  const lCurGap = browEyeGap(lmN, BROW_LANDMARKS.leftInnerBrow, BROW_LANDMARKS.leftEyeTop);
+  const lNeuGap = browEyeGap(neuN, BROW_LANDMARKS.leftInnerBrow, BROW_LANDMARKS.leftEyeTop);
+  const rCurGap = browEyeGap(lmN, BROW_LANDMARKS.rightInnerBrow, BROW_LANDMARKS.rightEyeTop);
+  const rNeuGap = browEyeGap(neuN, BROW_LANDMARKS.rightInnerBrow, BROW_LANDMARKS.rightEyeTop);
+  const lCurDist = browDistanceFromMidline(lmN, BROW_LANDMARKS.leftInnerBrow, "left");
+  const lNeuDist = browDistanceFromMidline(neuN, BROW_LANDMARKS.leftInnerBrow, "left");
+  const rCurDist = browDistanceFromMidline(lmN, BROW_LANDMARKS.rightInnerBrow, "right");
+  const rNeuDist = browDistanceFromMidline(neuN, BROW_LANDMARKS.rightInnerBrow, "right");
+  if ([lCurGap, lNeuGap, rCurGap, rNeuGap, lCurDist, lNeuDist, rCurDist, rNeuDist].some((value) => value == null)) return null;
+
+  const lDown = Math.max(0, lNeuGap - lCurGap);
+  const rDown = Math.max(0, rNeuGap - rCurGap);
+  const lInward = Math.max(0, lNeuDist - lCurDist);
+  const rInward = Math.max(0, rNeuDist - rCurDist);
+
+  const leftNoiseIdxs = [...BROW_LANDMARKS.leftInnerBrow, ...BROW_LANDMARKS.leftEyeTop];
+  const rightNoiseIdxs = [...BROW_LANDMARKS.rightInnerBrow, ...BROW_LANDMARKS.rightEyeTop];
+  const leftNoise = meanNoise(noiseFloor, leftNoiseIdxs) / Math.sqrt(leftNoiseIdxs.length);
+  const rightNoise = meanNoise(noiseFloor, rightNoiseIdxs) / Math.sqrt(rightNoiseIdxs.length);
+
+  const lMesh = Math.max(0, Math.hypot(lDown, lInward * FROWN_INWARD_WEIGHT) - leftNoise);
+  const rMesh = Math.max(0, Math.hypot(rDown, rInward * FROWN_INWARD_WEIGHT) - rightNoise);
+  // Raw image-left is the user's anatomical right, so use the opposite named blendshape.
+  const lBs = bsMap ? Math.max(0, (bsMap.browDownRight ?? 0) - (neutralBs?.browDownRight ?? 0)) : 0;
+  const rBs = bsMap ? Math.max(0, (bsMap.browDownLeft ?? 0) - (neutralBs?.browDownLeft ?? 0)) : 0;
+  const lMag = lMesh + FROWN_BS_WEIGHT * lBs;
+  const rMag = rMesh + FROWN_BS_WEIGHT * rBs;
+  const peak = Math.max(lMag, rMag);
+  const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
+  if (peak < Math.max(FROWN_MIN_SIGNAL, noiseGate)) return null;
   const symmetry = Math.min(lMag, rMag) / peak;
   return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
 }
@@ -633,7 +722,7 @@ function computeBrowSymmetry(lm, neutral, facialTransformationMatrix = null, neu
   const rCur = browEyeGap(lmN, BROW_LANDMARKS.rightBrow, BROW_LANDMARKS.rightEyeTop);
   const rNeu = browEyeGap(neuN, BROW_LANDMARKS.rightBrow, BROW_LANDMARKS.rightEyeTop);
   if (lCur == null || lNeu == null || rCur == null || rNeu == null) return null;
-  const lLift = Math.abs(lCur - lNeu); // abs handles both raise (gap grows) and frown (gap shrinks)
+  const lLift = Math.abs(lCur - lNeu); // frown has a separate direction-specific scorer.
   const rLift = Math.abs(rCur - rNeu);
   const peak = Math.max(lLift, rLift);
   if (peak < 0.008) return null; // brow noise floor (lowered after denser landmark groups average out more per-point jitter)
@@ -650,10 +739,17 @@ function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neu
   if (poseDeviation != null && poseDeviation > HOLD_HEAD_POSE_MAX_RAD) return null;
 
   const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId] ?? null;
+  if (FROWN_EXERCISES.has(exerciseId)) {
+    return toUserSideSymmetryResult(computeFrownSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix));
+  }
+  if (NOSTRIL_FLARE_EXERCISES.has(exerciseId)) {
+    return toUserSideSymmetryResult(computeNostrilFlareSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix));
+  }
+  if (NOSE_SCRUNCH_EXERCISES.has(exerciseId)) {
+    return toUserSideSymmetryResult(computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix));
+  }
   const browResult = BROW_EXERCISES.has(exerciseId) ? computeBrowSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
-  const noseResult = NOSE_EXERCISES.has(exerciseId) ? computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
   const rawResult = browResult
-    ?? noseResult
     ?? computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix)
     ?? computeSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix);
   return toUserSideSymmetryResult(rawResult);
@@ -1432,10 +1528,13 @@ export {
   computeBaselineProgressFromDisplacements,
   computeBrowSymmetry,
   computeExerciseSymmetry,
+  computeFrownSymmetry,
   computeMovementProgress,
   computeMovementProgressFromDisplacements,
   computeNoiseFloor,
+  computeNoseScrunchSymmetry,
   computeNoseSymmetry,
+  computeNostrilFlareSymmetry,
   computePairwiseSymmetry,
   computeSymmetry,
   compactFacialTransformationMatrix,
