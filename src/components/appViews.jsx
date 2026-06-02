@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw } from "lucide-react";
+import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
-import { applySessionDose, buildSessionExercises, daysBetween, exerciseHoldSec, exerciseRestSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
+import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exerciseRestSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionMovementProgress, movementBalanceLabel, movementProgressLabel, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, preferredMovementProgress, profileExerciseEntries, profileStatus, progressUsesLegacySideConvention, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
 import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
+
+// Cap on how many times one exercise can be queued in a single manual routine.
+const MAX_EXERCISE_REPEATS = 5;
 
 const NAV_ITEMS = [
   { key: "home", label: "Today", icon: Home },
@@ -852,21 +855,56 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
   const dosing = getComfortDosing(movementProfile);
   const [region, setRegion] = useState("all");
   const [selected, setSelected] = useState(() => new Set(profilePlan));
-  useEffect(() => { setSelected(new Set(profilePlan)); }, [profilePlan]);
+  // Per-exercise repeat count for one-off routines — lets the same exercise be queued
+  // multiple times in a single session. Counts of 1 are omitted; the saved plan stays
+  // de-duplicated (savePersonalPlan collapses ids through a Set).
+  const [repeatCounts, setRepeatCounts] = useState({});
+  useEffect(() => { setSelected(new Set(profilePlan)); setRepeatCounts({}); }, [profilePlan]);
   const filtered = region === "all" ? EXERCISES : EXERCISES.filter((e) => e.region === region);
-  const toggle = (id) => { const next = new Set(selected); next.has(id) ? next.delete(id) : next.add(id); setSelected(next); };
+  const repeatOf = (id) => repeatCounts[id] ?? 1;
+  const toggle = (id) => {
+    const next = new Set(selected);
+    if (next.has(id)) {
+      next.delete(id);
+      setRepeatCounts((prev) => {
+        const rest = { ...prev };
+        delete rest[id];
+        return rest;
+      });
+    } else {
+      next.add(id);
+    }
+    setSelected(next);
+  };
+  const setRepeat = (id, count) => {
+    const clamped = clampNumber(Math.round(count), 1, MAX_EXERCISE_REPEATS);
+    setRepeatCounts((prev) => {
+      if (clamped <= 1) {
+        const rest = { ...prev };
+        delete rest[id];
+        return rest;
+      }
+      return { ...prev, [id]: clamped };
+    });
+  };
   const shownIds = filtered.map((exercise) => exercise.id);
   const orderedSelectedIds = useMemo(() => orderExerciseIdsByRegion([...selected], recommendedPlan), [selected, recommendedPlan]);
+  // Expand ordered selection by repeat count, spacing repeats out so the same exercise
+  // isn't queued back-to-back.
+  const startIds = useMemo(
+    () => spreadRepeatedExercises(orderedSelectedIds, repeatCounts),
+    [orderedSelectedIds, repeatCounts]
+  );
   const selectedMissingBaselineIds = movementProfile
     ? orderedSelectedIds.filter((id) => !movementProfile.exercises?.[id])
     : [];
   const selectedShownCount = shownIds.filter((id) => selected.has(id)).length;
   const allShownSelected = shownIds.length > 0 && selectedShownCount === shownIds.length;
-  const selectedSessionExercises = useMemo(() => buildSessionExercises(orderedSelectedIds, movementProfile), [orderedSelectedIds, movementProfile]);
+  const startSessionExercises = useMemo(() => buildSessionExercises(startIds, movementProfile), [startIds, movementProfile]);
   const selectedDurationSec = useMemo(
-    () => selectedSessionExercises.reduce((sum, ex) => sum + ex.reps * (exerciseHoldSec(ex) + exerciseRestSec(ex)), 0)
-      + Math.max(0, selectedSessionExercises.length - 1) * INTERSTITIAL_SEC,
-    [selectedSessionExercises]
+    () => startSessionExercises.reduce((sum, ex) => sum + ex.reps * (exerciseHoldSec(ex) + exerciseRestSec(ex)), 0)
+      + Math.max(0, startSessionExercises.length - 1) * INTERSTITIAL_SEC,
+    [startSessionExercises]
   );
   const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan);
   const recommendedSelected = sameExerciseSet(orderedSelectedIds, recommendedPlan);
@@ -875,7 +913,8 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
   const selectSavedPlan = () => setSelected(new Set(profilePlan));
   const selectRecommended = () => setSelected(new Set(recommendedPlan));
   const selectAllShown = () => setSelected((prev) => new Set([...prev, ...shownIds]));
-  const clearSelection = () => setSelected(new Set());
+  const clearSelection = () => { setSelected(new Set()); setRepeatCounts({}); };
+  const totalReps = startIds.length;
   const handleSavePlan = () => {
     if (!canSavePlan) return;
     onSavePersonalPlan?.(orderedSelectedIds);
@@ -940,7 +979,7 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
         <div className="text-xs text-stone-600">
-          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}{selected.size > 0 ? ` · ~${formatDuration(selectedDurationSec)}` : ""}</div>
+          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}{totalReps !== selected.size ? ` · ${totalReps} in routine` : ""}{selected.size > 0 ? ` · ~${formatDuration(selectedDurationSec)}` : ""}</div>
           {selectedMissingBaselineIds.length > 0 && <div className="mt-0.5" style={{ color: "#9A6A32" }}>{selectedMissingBaselineIds.length} selected need baseline</div>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -959,7 +998,10 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
             sessionExercise={applySessionDose(ex, movementProfile)}
             selected={selected.has(ex.id)}
             needsBaseline={Boolean(movementProfile && selected.has(ex.id) && !movementProfile.exercises?.[ex.id])}
+            repeat={repeatOf(ex.id)}
+            maxRepeat={MAX_EXERCISE_REPEATS}
             onToggle={() => toggle(ex.id)}
+            onRepeatChange={(count) => setRepeat(ex.id, count)}
             onShow={() => onShowDetail(ex)}
           />
         ))}
@@ -972,8 +1014,8 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
                 <Save className="w-4 h-4" />Save plan
               </button>
             )}
-            <button onClick={() => onStartSession(orderedSelectedIds)} className="flex-1 rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
-              <Play className="w-4 h-4 fill-current" />Start with {selected.size} exercise{selected.size > 1 ? "s" : ""}<span className="opacity-70 font-normal tabular-nums">· ~{formatDuration(selectedDurationSec)}</span>
+            <button onClick={() => onStartSession(startIds)} className="flex-1 rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+              <Play className="w-4 h-4 fill-current" />Start with {totalReps} exercise{totalReps > 1 ? "s" : ""}<span className="opacity-70 font-normal tabular-nums">· ~{formatDuration(selectedDurationSec)}</span>
             </button>
           </div>
         </div>
@@ -982,24 +1024,47 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
   );
 }
 
-function ExerciseRow({ exercise, sessionExercise, selected, needsBaseline, onToggle, onShow }) {
+function ExerciseRow({ exercise, sessionExercise, selected, needsBaseline, repeat = 1, maxRepeat = 5, onToggle, onRepeatChange, onShow }) {
   const dose = sessionExercise ?? exercise;
   return (
     <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: selected ? "rgba(184, 84, 58, 0.08)" : "rgba(255,255,255,0.5)", border: selected ? "1px solid rgba(184, 84, 58, 0.3)" : "1px solid rgba(31, 27, 22, 0.06)" }}>
       <button onClick={onToggle} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: selected ? "#B8543A" : "transparent", border: selected ? "none" : "1.5px solid rgba(31, 27, 22, 0.2)" }} aria-label={selected ? "Deselect" : "Select"}>
         {selected && <Check className="w-3.5 h-3.5 text-white" />}
       </button>
-      <button onClick={onShow} className="flex-1 flex items-center gap-3 text-left">
+      <button onClick={onShow} className="flex-1 flex items-center gap-3 text-left min-w-0">
         <ExerciseGlyph exercise={exercise} size="sm" />
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-[15px] truncate">{exercise.name}</div>
+          <div className="font-semibold text-[15px] truncate">{exercise.name}{repeat > 1 ? <span className="text-stone-400 font-normal"> ×{repeat}</span> : null}</div>
           <div className="text-xs text-stone-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
             <span>{dose.reps} reps · {dose.holdSec}s hold · <span className="capitalize">{exercise.region}</span></span>
             {needsBaseline && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(212,165,116,0.18)", color: "#8B5A1E" }}>Needs baseline</span>}
           </div>
         </div>
-        <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
+        {!selected && <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />}
       </button>
+      {selected && (
+        <div className="flex items-center gap-1.5 shrink-0" role="group" aria-label={`${exercise.name} times in routine`}>
+          <button
+            onClick={() => onRepeatChange?.(repeat - 1)}
+            disabled={repeat <= 1}
+            className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-35"
+            style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}
+            aria-label={`Remove one ${exercise.name}`}
+          >
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <span className="w-5 text-center text-sm font-semibold tabular-nums" aria-label={`${repeat} times`}>{repeat}</span>
+          <button
+            onClick={() => onRepeatChange?.(repeat + 1)}
+            disabled={repeat >= maxRepeat}
+            className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-35"
+            style={{ background: "rgba(184, 84, 58, 0.16)", color: "#8F3C2A" }}
+            aria-label={`Add another ${exercise.name}`}
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

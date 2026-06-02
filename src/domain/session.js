@@ -44,6 +44,32 @@ export function buildSessionExercises(ids, profile) {
   return ids.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean).map((exercise) => applySessionDose(exercise, profile));
 }
 
+// Expand a unique, ordered id list by per-id repeat counts, spacing repeats of the
+// same exercise as far apart as possible so they aren't performed back-to-back. Greedy:
+// at each slot place the id with the most remaining repeats that isn't the one just
+// placed (ties keep the original order). Copies only end up adjacent when nothing else
+// is left to interleave (e.g. a single exercise repeated on its own).
+export function spreadRepeatedExercises(ids, counts = {}) {
+  const remaining = ids.map((id) => ({ id, n: Math.max(1, Math.round(counts[id] ?? 1)) }));
+  const total = remaining.reduce((sum, e) => sum + e.n, 0);
+  const result = [];
+  let last = null;
+  for (let i = 0; i < total; i++) {
+    let pick = null;
+    for (const e of remaining) {
+      if (e.n <= 0) continue;
+      // Skip the just-placed id while any other exercise still has repeats left.
+      if (e.id === last && remaining.some((o) => o !== e && o.n > 0)) continue;
+      if (!pick || e.n > pick.n) pick = e;
+    }
+    if (!pick) pick = remaining.find((e) => e.n > 0);
+    result.push(pick.id);
+    pick.n -= 1;
+    last = pick.id;
+  }
+  return result;
+}
+
 export function exerciseRestSec(exercise) {
   return exercise?.restSec ?? REST_SEC;
 }
