@@ -1,16 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
+import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exerciseRestSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
 import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionMovementProgress, movementBalanceLabel, movementProgressLabel, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, preferredMovementProgress, profileExerciseEntries, profileStatus, progressUsesLegacySideConvention, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
 import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
-
-// Cap on how many times one exercise can be queued in a single manual routine.
-const MAX_EXERCISE_REPEATS = 5;
 
 const NAV_ITEMS = [
   { key: "home", label: "Today", icon: Home },
@@ -846,20 +843,31 @@ function ExerciseGlyph({ exercise, exerciseId, region, size = "sm", tone = "ligh
   );
 }
 
-function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommendedPlanIds, onStartSession, onShowDetail, onSavePersonalPlan, onResetPersonalPlan }) {
+function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommendedPlanIds, savedRepeatCounts, onStartSession, onShowDetail, onSavePersonalPlan, onResetPersonalPlan }) {
   // Library state stays local until the user starts or explicitly saves, keeping
   // one-off custom routines separate from the persisted daily plan.
   const profilePlan = useMemo(() => personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []), [personalizedPlanIds, recommendedPlanIds]);
   const recommendedPlan = useMemo(() => recommendedPlanIds ?? profilePlan, [recommendedPlanIds, profilePlan]);
   const focusItems = useMemo(() => getAdaptiveFocusItems(movementProfile, sessions, 3), [movementProfile, sessions]);
   const dosing = getComfortDosing(movementProfile);
+  // Repeat counts saved with the plan, narrowed to ids still in it. Seeds the editable
+  // state so a saved routine reopens with its rep multipliers intact.
+  const planRepeatCounts = useMemo(() => {
+    if (!savedRepeatCounts) return {};
+    const planSet = new Set(profilePlan);
+    const result = {};
+    for (const [id, count] of Object.entries(savedRepeatCounts)) {
+      if (planSet.has(id) && count > 1) result[id] = count;
+    }
+    return result;
+  }, [savedRepeatCounts, profilePlan]);
   const [region, setRegion] = useState("all");
   const [selected, setSelected] = useState(() => new Set(profilePlan));
   // Per-exercise repeat count for one-off routines — lets the same exercise be queued
   // multiple times in a single session. Counts of 1 are omitted; the saved plan stays
-  // de-duplicated (savePersonalPlan collapses ids through a Set).
-  const [repeatCounts, setRepeatCounts] = useState({});
-  useEffect(() => { setSelected(new Set(profilePlan)); setRepeatCounts({}); }, [profilePlan]);
+  // de-duplicated (savePersonalPlan collapses ids through a Set) but keeps each count.
+  const [repeatCounts, setRepeatCounts] = useState(planRepeatCounts);
+  useEffect(() => { setSelected(new Set(profilePlan)); setRepeatCounts(planRepeatCounts); }, [profilePlan, planRepeatCounts]);
   const filtered = region === "all" ? EXERCISES : EXERCISES.filter((e) => e.region === region);
   const repeatOf = (id) => repeatCounts[id] ?? 1;
   const toggle = (id) => {
@@ -906,22 +914,32 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
       + Math.max(0, startSessionExercises.length - 1) * INTERSTITIAL_SEC,
     [startSessionExercises]
   );
-  const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan);
+  // The saved plan matches only when both the exercise set AND the per-exercise repeat
+  // counts line up — changing just a rep multiplier should still offer to re-save.
+  const repeatCountsMatchSaved = useMemo(() => {
+    const ids = new Set([...Object.keys(repeatCounts), ...Object.keys(planRepeatCounts)]);
+    for (const id of ids) {
+      if ((repeatCounts[id] ?? 1) !== (planRepeatCounts[id] ?? 1)) return false;
+    }
+    return true;
+  }, [repeatCounts, planRepeatCounts]);
+  const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan) && repeatCountsMatchSaved;
   const recommendedSelected = sameExerciseSet(orderedSelectedIds, recommendedPlan);
-  const hasCustomPlan = !sameExerciseIds(profilePlan, recommendedPlan);
+  const hasCustomPlan = !sameExerciseIds(profilePlan, recommendedPlan) || Object.keys(planRepeatCounts).length > 0;
   const canSavePlan = selected.size > 0 && !savedPlanSelected;
-  const selectSavedPlan = () => setSelected(new Set(profilePlan));
-  const selectRecommended = () => setSelected(new Set(recommendedPlan));
+  const selectSavedPlan = () => { setSelected(new Set(profilePlan)); setRepeatCounts(planRepeatCounts); };
+  const selectRecommended = () => { setSelected(new Set(recommendedPlan)); setRepeatCounts({}); };
   const selectAllShown = () => setSelected((prev) => new Set([...prev, ...shownIds]));
   const clearSelection = () => { setSelected(new Set()); setRepeatCounts({}); };
   const totalReps = startIds.length;
   const handleSavePlan = () => {
     if (!canSavePlan) return;
-    onSavePersonalPlan?.(orderedSelectedIds);
+    onSavePersonalPlan?.(orderedSelectedIds, repeatCounts);
   };
   const handleResetPlan = () => {
     onResetPersonalPlan?.();
     setSelected(new Set(recommendedPlan));
+    setRepeatCounts({});
   };
 
   return (
@@ -946,11 +964,12 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
               const exercise = EXERCISES.find((item) => item.id === id);
               if (!exercise) return null;
               const needsBaseline = !movementProfile.exercises?.[id];
+              const repeat = planRepeatCounts[id] ?? 1;
               return (
                 <div key={id} className="shrink-0 inline-flex items-center gap-2 rounded-xl px-2.5 py-2 max-w-[14rem]" style={{ background: "rgba(255,255,255,0.42)", border: needsBaseline ? "1px solid rgba(154,106,50,0.35)" : "1px solid rgba(122,143,115,0.16)" }}>
                   <ExerciseGlyph exercise={exercise} size="xs" />
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate">{exercise.name}</div>
+                    <div className="text-xs font-semibold truncate">{exercise.name}{repeat > 1 ? ` ×${repeat}` : ""}</div>
                     {needsBaseline && <div className="text-[10px] mt-0.5" style={{ color: "#8B5A1E" }}>Needs baseline</div>}
                   </div>
                 </div>

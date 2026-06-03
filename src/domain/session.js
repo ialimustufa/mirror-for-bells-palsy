@@ -3,7 +3,9 @@ import { EXERCISES } from "./exercises";
 
 // Persisted app state is intentionally compact and append-only for sessions/journal.
 // Derived trend metrics are recomputed in views instead of stored.
-export const DEFAULT_PERSONAL_PLAN = { addedExerciseIds: [], removedExerciseIds: [] };
+// repeatCounts maps an exercise id → how many times it repeats in the routine (>= 2;
+// a count of 1 is the default and is omitted). Kept de-duplicated alongside the id lists.
+export const DEFAULT_PERSONAL_PLAN = { addedExerciseIds: [], removedExerciseIds: [], repeatCounts: {} };
 
 export const DEFAULT_DATA = {
   journal: [],

@@ -174,14 +174,21 @@ export default function App() {
     () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { personalPlan: data.prefs.personalPlan, orderByRegion: true }),
     [data.movementProfile, data.sessions, data.prefs.personalPlan],
   );
-  const savePersonalPlan = useCallback((selectedExerciseIds) => {
+  const savePersonalPlan = useCallback((selectedExerciseIds, repeatCounts = {}) => {
     const selected = orderExerciseIdsByRegion([...new Set(selectedExerciseIds ?? [])].filter((id) => EXERCISE_BY_ID.has(id)), recommendedPlanIds);
     if (selected.length === 0) return false;
     const selectedSet = new Set(selected);
     const recommendedSet = new Set(recommendedPlanIds);
+    // Keep only repeat counts for exercises still in the plan; normalizePersonalPlan
+    // drops counts <= 1 and clamps to the UI ceiling on the next load.
+    const planRepeatCounts = {};
+    for (const [id, count] of Object.entries(repeatCounts ?? {})) {
+      if (selectedSet.has(id) && count > 1) planRepeatCounts[id] = count;
+    }
     const personalPlan = {
       addedExerciseIds: selected.filter((id) => !recommendedSet.has(id)),
       removedExerciseIds: recommendedPlanIds.filter((id) => !selectedSet.has(id)),
+      repeatCounts: planRepeatCounts,
     };
     persist({ ...data, prefs: { ...data.prefs, personalPlan } });
     return true;
@@ -213,7 +220,7 @@ export default function App() {
         <Header view={view} streak={streak} />
         <main className="mt-8 lg:mt-2">
           {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
-          {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
+          {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} savedRepeatCounts={data.prefs.personalPlan?.repeatCounts} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "baseline" && <BaselineView data={data} onStartProfile={openProfileAssessment} onResetBaselines={resetMovementBaselines} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
           {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} />}

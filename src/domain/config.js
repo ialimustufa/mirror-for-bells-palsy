@@ -2,6 +2,8 @@
 export const DAY_START_HOUR = 9;  // 9 AM
 export const DAY_END_HOUR = 21;   // 9 PM
 export const INTERSTITIAL_SEC = 10;
+// Max times a single exercise can be queued in one routine.
+export const MAX_EXERCISE_REPEATS = 5;
 export const HOLD_SEC = 4;       // fallback hold duration; profiled sessions can use exercise-specific dosing
 export const REST_SEC = 2;       // fallback rest duration; serves as entry settle AND between-rep recovery
 

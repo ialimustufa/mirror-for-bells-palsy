@@ -2,6 +2,7 @@ import { compactAppDataForStorage } from "../storage";
 import { LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION, flipLeftRightSide, roundMetric } from "../ml/faceMetrics";
 import { EXERCISE_BY_ID } from "./exercises";
 import { DEFAULT_DATA } from "./session";
+import { MAX_EXERCISE_REPEATS } from "./config";
 
 export const APP_SIDE_CONVENTION_VERSION = 2;
 
@@ -23,10 +24,23 @@ function normalizeExerciseIds(ids) {
   return [...new Set(ids.filter((id) => EXERCISE_BY_ID.has(id)))];
 }
 
+function normalizeRepeatCounts(counts) {
+  if (!counts || typeof counts !== "object") return {};
+  const result = {};
+  for (const [id, value] of Object.entries(counts)) {
+    if (!EXERCISE_BY_ID.has(id)) continue;
+    const n = Math.round(Number(value));
+    // 1 is the implicit default — only persist genuine repeats, clamped to the UI ceiling.
+    if (Number.isFinite(n) && n >= 2) result[id] = Math.min(n, MAX_EXERCISE_REPEATS);
+  }
+  return result;
+}
+
 function normalizePersonalPlan(plan) {
   return {
     addedExerciseIds: normalizeExerciseIds(plan?.addedExerciseIds),
     removedExerciseIds: normalizeExerciseIds(plan?.removedExerciseIds),
+    repeatCounts: normalizeRepeatCounts(plan?.repeatCounts),
   };
 }
 
