@@ -5,7 +5,7 @@ import { canPromptRetakeAfterRep, exerciseHoldSec, exerciseRestSec, todayISO } f
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
-import { InterstitialView, PreviewView, RealtimeFeedback, SessionJourney, SessionSummary, TrackerStatusPill } from "../components/appViews";
+import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
 import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeMovementProgressFromDisplacements, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
@@ -611,11 +611,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
 
       <div className="px-4 pb-3 shrink-0">
         <div className="rounded-2xl p-3" style={{ background: "rgba(244, 239, 230, 0.1)", border: `1px solid ${phaseTone.color}` }}>
-          <div className="flex items-center justify-between gap-3 mb-1.5">
-            <div className="text-[11px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>
-              {phaseTone.tag}
+          <div className="flex items-end justify-between gap-3 mb-1.5">
+            <div className="text-2xl leading-tight" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>
+              {phaseTone.title}
             </div>
-            <div className="text-xs opacity-70 whitespace-nowrap">Rep {repIdx + 1} / {currentReps}</div>
+            <div className="text-4xl tabular-nums leading-none transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color }}>
+              {phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
+            </div>
           </div>
           <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{displayPrompt}</div>
           {showRemainingTicker && (
@@ -651,9 +653,14 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           </div>
         )}
 
-        {phase === "hold" && liveScore != null && (
-          <div className="absolute top-4 right-4"><RealtimeFeedback symmetry={liveScore} balance={liveBalance} baseline={liveBaselineProgress} /></div>
-        )}
+        <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
+          <div className="px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap" style={{ background: "rgba(31, 27, 22, 0.7)", color: "#F4EFE6" }}>
+            Rep {repIdx + 1} / {currentReps}
+          </div>
+          {phase === "hold" && liveScore != null && (
+            <RealtimeFeedback symmetry={liveScore} balance={liveBalance} baseline={liveBaselineProgress} />
+          )}
+        </div>
 
         {autoPaused && (
           <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
@@ -668,23 +675,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           <div className="absolute inset-x-0 top-0 h-1.5 transition-colors duration-300" style={{ background: phaseTone.color }} />
         )}
 
-        <div className="absolute inset-0 flex flex-col justify-end pointer-events-none">
-          <div className="p-6 pb-4" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.95) 0%, rgba(31,27,22,0.7) 60%, transparent 100%)" }}>
-            {totalExercises > 1 && (
-              <SessionJourney exercises={session.exercises} exIdx={exIdx} repIdx={repIdx} currentReps={currentReps} phaseColor={phaseTone.color} />
-            )}
-            <div className="flex items-center gap-2 mb-1">
-              <div className="text-[11px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>
-                {phaseTone.tag}
-              </div>
-              <div className="text-xs opacity-70">Rep {repIdx + 1} / {currentReps}</div>
-            </div>
-            <div className="text-5xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>
-              {phaseTone.title}
-            </div>
-            <div className="text-7xl tabular-nums transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color }}>
-              {phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
-            </div>
+        <div className="absolute bottom-4 inset-x-0 flex justify-center pointer-events-none">
+          <div className="text-[11px] font-bold uppercase tracking-[0.18em] px-2.5 py-1 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>
+            {phaseTone.tag}
           </div>
         </div>
       </div>
