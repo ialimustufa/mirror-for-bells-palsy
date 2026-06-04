@@ -50,6 +50,186 @@ function formatRemainingTime(seconds) {
   return minutes > 0 ? `${minutes}:${String(secs).padStart(2, "0")}` : `${secs}s`;
 }
 
+// Vertical "ascent rail": session time flows bottom (launchpad) → top (orbit). The rocket's
+// altitude tracks elapsed session time; each exercise is a station along the way, and the
+// exhaust flame at its base reacts to the live hold/rest countdown.
+function AscentRail({ exercises, exIdx, phase, phaseColor, elapsedFraction }) {
+  const total = exercises?.length ?? 0;
+  if (total === 0) return null;
+  const accent = "#D4A574";
+  const clamp01 = (n) => Math.max(0, Math.min(1, n));
+  const altitude = clamp01(elapsedFraction);
+
+  // Milestones spaced by each exercise's planned duration, not evenly.
+  const planned = exercises.map(exercisePlannedSec);
+  const totalSec = planned.reduce((a, b) => a + b, 0) + Math.max(0, total - 1) * INTERSTITIAL_SEC;
+  const markers = exercises.map((ex, i) => {
+    // Start time of this exercise = all earlier exercises + the interstitials before it.
+    const startSec = planned.slice(0, i).reduce((a, b) => a + b, 0) + i * INTERSTITIAL_SEC;
+    const frac = totalSec > 0 ? clamp01(startSec / totalSec) : i / Math.max(1, total - 1);
+    return { id: ex.id ? `${ex.id}-${i}` : i, frac, done: i < exIdx, current: i === exIdx };
+  });
+
+  // Exhaust follows the phase: a long bright burn on hold, idle flicker on rest, faint hover otherwise.
+  const flameScale = phase === "hold" ? 1 : phase === "rest" ? 0.5 : 0.28;
+  const flameOp = phase === "hold" ? 1 : phase === "rest" ? 0.7 : 0.5;
+  const glowOp = phase === "hold" ? 0.55 : phase === "rest" ? 0.24 : 0.12;
+  const bobClass = phase === "hold" ? "bp-rail-thrust" : "bp-rail-hover";
+  // Stage separation: the strap-on boosters detach and tumble away once past mid-ascent.
+  const boostersGone = altitude >= 0.5;
+
+  return (
+    <div className="absolute top-0 bottom-0 right-0 w-12 pointer-events-none select-none z-10" aria-hidden>
+      <style>{`
+        @keyframes bpRailFlame { 0%,100% { transform: scaleY(1) scaleX(1); opacity: var(--flame-op,0.9); } 50% { transform: scaleY(1.26) scaleX(0.82); opacity: calc(var(--flame-op,0.9) * 0.62); } }
+        @keyframes bpRailFlame2 { 0%,100% { transform: scaleY(1.12) scaleX(0.92); opacity: calc(var(--flame-op,0.9) * 0.8); } 50% { transform: scaleY(0.9) scaleX(1.08); opacity: var(--flame-op,0.9); } }
+        @keyframes bpRailSway { 0%,100% { transform: translateX(-0.5px) rotate(-1.4deg); } 50% { transform: translateX(0.5px) rotate(1.4deg); } }
+        @keyframes bpRailThroat { 0%,100% { transform: scale(1); opacity: 0.95; } 50% { transform: scale(1.18); opacity: 0.7; } }
+        @keyframes bpRailThrust { 0%,100% { transform: translateY(0) scaleX(1); } 50% { transform: translateY(0.4px) scaleX(0.992); } }
+        @keyframes bpRailHover { 0%,100% { transform: translateY(0.6px); } 50% { transform: translateY(-0.6px); } }
+        .bp-rail-flame { animation: bpRailFlame 0.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0%; }
+        .bp-rail-flame2 { animation: bpRailFlame2 0.27s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0%; }
+        .bp-rail-sway { animation: bpRailSway 0.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 0%; }
+        .bp-rail-throat { animation: bpRailThroat 0.2s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+        .bp-rail-thrust { animation: bpRailThrust 0.11s linear infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+        .bp-rail-hover { animation: bpRailHover 2.6s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 50%; }
+        @media (prefers-reduced-motion: reduce) { .bp-rail-flame, .bp-rail-flame2, .bp-rail-sway, .bp-rail-throat, .bp-rail-thrust, .bp-rail-hover { animation: none !important; } }
+      `}</style>
+
+      <div className="absolute left-0 right-0" style={{ top: 56, bottom: 12 }}>
+        {/* trajectory line + traveled fill */}
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-0 top-0 w-[2px] rounded-full" style={{ background: "rgba(244,239,230,0.28)", boxShadow: "0 0 3px rgba(0,0,0,0.6)" }} />
+        <div
+          className="absolute left-1/2 -translate-x-1/2 bottom-0 w-[2px] rounded-full"
+          style={{ height: `${altitude * 100}%`, background: accent, boxShadow: `0 0 4px ${accent}`, transition: "height 600ms cubic-bezier(0.4,0,0.2,1)" }}
+        />
+
+        {/* exercise stations along the ascent */}
+        {markers.map((m) => {
+          const w = m.current ? 20 : m.done ? 14 : 11;
+          const h = m.current ? 4 : 3;
+          const color = m.done ? accent : m.current ? phaseColor : "rgba(244,239,230,0.45)";
+          return (
+            <div key={m.id} className="absolute left-1/2 -translate-x-1/2 translate-y-1/2 flex items-center justify-center" style={{ bottom: `${m.frac * 100}%` }}>
+              {m.current && <div className="absolute rounded-full motion-safe:animate-ping" style={{ width: 24, height: 6, background: phaseColor, opacity: 0.4 }} />}
+              <div
+                className="relative rounded-full"
+                style={{ width: w, height: h, background: color, boxShadow: m.current ? `0 0 6px ${phaseColor}` : "0 0 2px rgba(0,0,0,0.55)", transition: "width 300ms ease, height 300ms ease, background 400ms ease" }}
+              />
+            </div>
+          );
+        })}
+
+        {/* LVM3-style rocket + layered exhaust at current altitude */}
+        <div className="absolute left-1/2" style={{ bottom: `${altitude * 100}%`, width: 34, transform: "translate(-50%, 50%)", transition: "bottom 600ms cubic-bezier(0.4,0,0.2,1)" }}>
+          <svg width="34" height="80" viewBox="0 0 34 80" fill="none" style={{ display: "block", overflow: "visible", filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))" }}>
+            <defs>
+              <linearGradient id="bpFlameOuter" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={phaseColor} stopOpacity="0.95" />
+                <stop offset="100%" stopColor={phaseColor} stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="bpFlameMid" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FFC56B" stopOpacity="0.95" />
+                <stop offset="55%" stopColor={phaseColor} stopOpacity="0.85" />
+                <stop offset="100%" stopColor={phaseColor} stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="bpFlameInner" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#FFFDF6" stopOpacity="1" />
+                <stop offset="45%" stopColor="#FFE39C" stopOpacity="0.95" />
+                <stop offset="100%" stopColor={phaseColor} stopOpacity="0" />
+              </linearGradient>
+              <radialGradient id="bpFlameCore" cx="50%" cy="35%" r="65%">
+                <stop offset="0%" stopColor="#FFFFFF" stopOpacity="1" />
+                <stop offset="45%" stopColor="#FFEEBE" stopOpacity="0.95" />
+                <stop offset="100%" stopColor={phaseColor} stopOpacity="0" />
+              </radialGradient>
+              <filter id="bpFlameBlur" x="-80%" y="-20%" width="260%" height="170%">
+                <feGaussianBlur stdDeviation="1.3" />
+              </filter>
+              <radialGradient id="bpFlameGlow" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor={phaseColor} stopOpacity="0.8" />
+                <stop offset="100%" stopColor={phaseColor} stopOpacity="0" />
+              </radialGradient>
+              <linearGradient id="bpCore" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#CFC9BD" />
+                <stop offset="32%" stopColor="#F6F2EA" />
+                <stop offset="100%" stopColor="#D2CCC0" />
+              </linearGradient>
+              <linearGradient id="bpBooster" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#D8D2C7" />
+                <stop offset="38%" stopColor="#F4F0E8" />
+                <stop offset="100%" stopColor="#C9C3B7" />
+              </linearGradient>
+            </defs>
+
+            <g className={bobClass}>
+              {/* exhaust glow pool */}
+              <ellipse cx="17" cy="52" rx={boostersGone ? 9 : 15} ry="7" fill="url(#bpFlameGlow)" opacity={glowOp} />
+
+              {/* exhaust: phase sets length, layered plumes flicker out of sync for a live burn */}
+              <g style={{ transformBox: "fill-box", transformOrigin: "50% 0%", transform: `scaleY(${flameScale})` }}>
+                {/* core engine: soft blurred halo (gently swaying tip) */}
+                <g className="bp-rail-sway">
+                  <g className="bp-rail-flame" style={{ "--flame-op": flameOp }}>
+                    <path d="M11.2 49Q17 62 22.8 49Q23.6 72 17 83Q10.4 72 11.2 49Z" fill="url(#bpFlameOuter)" filter="url(#bpFlameBlur)" />
+                    <path d="M12.8 50Q17 59 21.2 50Q21.8 68 17 78Q12.2 68 12.8 50Z" fill="url(#bpFlameMid)" />
+                  </g>
+                </g>
+                {/* core engine: shimmering bright cone + Mach diamonds */}
+                <g className="bp-rail-flame2" style={{ "--flame-op": flameOp }}>
+                  <path d="M14.4 50Q17 56 19.6 50Q20 64 17 72Q14 64 14.4 50Z" fill="url(#bpFlameInner)" />
+                  <ellipse cx="17" cy="55.5" rx="1.5" ry="1.1" fill="#FFFDF6" opacity="0.85" />
+                  <ellipse cx="17" cy="60" rx="1.2" ry="0.95" fill="#FFFDF6" opacity="0.6" />
+                  <ellipse cx="17" cy="64" rx="0.9" ry="0.8" fill="#FFFDF6" opacity="0.4" />
+                </g>
+                {/* white-hot throat at the nozzle */}
+                <ellipse className="bp-rail-throat" cx="17" cy="51.5" rx="3.1" ry="2.4" fill="url(#bpFlameCore)" />
+                {/* booster plumes — vanish after separation */}
+                {!boostersGone && (
+                  <g className="bp-rail-flame2" style={{ "--flame-op": flameOp }}>
+                    <path d="M3 46Q6 54 9 46Q9.4 60 6 71Q2.6 60 3 46Z" fill="url(#bpFlameOuter)" filter="url(#bpFlameBlur)" />
+                    <path d="M25 46Q28 54 31 46Q31.4 60 28 71Q24.6 60 25 46Z" fill="url(#bpFlameOuter)" filter="url(#bpFlameBlur)" />
+                    <path d="M4.2 46Q6 51 7.8 46Q8 56 6 63Q4 56 4.2 46Z" fill="url(#bpFlameMid)" />
+                    <path d="M26.2 46Q28 51 29.8 46Q30 56 28 63Q26 56 26.2 46Z" fill="url(#bpFlameMid)" />
+                  </g>
+                )}
+              </g>
+
+              {/* strap-on boosters — detach and tumble outward past mid-ascent */}
+              <g style={{ transition: "transform 1200ms cubic-bezier(0.22,1,0.36,1), opacity 900ms ease", transformBox: "fill-box", transformOrigin: "50% 35%", transform: boostersGone ? "translate(-10px,20px) rotate(-26deg)" : "none", opacity: boostersGone ? 0 : 1 }}>
+                <path d="M6 17c2.7 2 3.8 5 3.8 8.4V46H2.2V25.4C2.2 22 3.3 19 6 17Z" fill="url(#bpBooster)" />
+                <rect x="5.4" y="26" width="1.2" height="20" fill="#B9B3A6" opacity="0.7" />
+                <path d="M2.6 46h6.8l-1.5 5.4H4.1Z" fill="#B8543A" />
+              </g>
+              <g style={{ transition: "transform 1200ms cubic-bezier(0.22,1,0.36,1), opacity 900ms ease", transformBox: "fill-box", transformOrigin: "50% 35%", transform: boostersGone ? "translate(10px,20px) rotate(26deg)" : "none", opacity: boostersGone ? 0 : 1 }}>
+                <path d="M28 17c2.7 2 3.8 5 3.8 8.4V46h-7.6V25.4C24.2 22 25.3 19 28 17Z" fill="url(#bpBooster)" />
+                <rect x="27.4" y="26" width="1.2" height="20" fill="#B9B3A6" opacity="0.7" />
+                <path d="M24.6 46h6.8l-1.5 5.4H26.1Z" fill="#B8543A" />
+              </g>
+
+              {/* core nose cone (payload fairing) */}
+              <path d="M17 1.2c3.2 2.9 4.8 7.1 4.8 11.8H12.2C12.2 8.3 13.8 4.1 17 1.2Z" fill="#F6F2EA" />
+              {/* tricolour band */}
+              <rect x="12.4" y="9.6" width="9.2" height="1.5" fill="#D4A574" />
+              <rect x="12.4" y="11.1" width="9.2" height="1.5" fill="#7A8F73" />
+              {/* core body */}
+              <rect x="12.2" y="13" width="9.6" height="33" rx="0.8" fill="url(#bpCore)" />
+              {/* interstage bands */}
+              <rect x="12.2" y="23" width="9.6" height="2" fill="#C2BCB0" />
+              <rect x="12.2" y="38.5" width="9.6" height="1.6" fill="#C2BCB0" />
+              {/* accent stripe + logo window */}
+              <rect x="12.2" y="16.2" width="9.6" height="1.8" fill={phaseColor} />
+              <rect x="15.3" y="29.4" width="3.4" height="3.4" rx="1" fill={phaseColor} />
+              {/* core nozzle */}
+              <path d="M13.4 46h7.2l-1.9 6.2h-3.4Z" fill="#B8543A" />
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref, onRequestProfileRetake }) {
   // Phases: optional calibrate → rest (2s entry) → hold (4s) → rest (2s) → hold → ... → interstitial (10s) → next exercise → ... → summary
   // The single `rest` phase plays double-duty as exercise-entry settle AND between-rep recovery.
@@ -107,6 +287,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const holdTrackingRef = useRef(createHoldTracking());
   const [trackingIssue, setTrackingIssue] = useState(null);
   const [retakePrompt, setRetakePrompt] = useState(null);
+  const [endSessionConfirmStep, setEndSessionConfirmStep] = useState(0);
 
   const startTimeRef = useRef(session.startedAt);
   const current = session.exercises[exIdx];
@@ -116,7 +297,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const currentRestSec = exerciseRestSec(current);
   const currentHoldSec = exerciseHoldSec(current);
   const autoPaused = symEnabled && trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
-  const timerPaused = paused || autoPaused || Boolean(retakePrompt);
+  const timerPaused = paused || autoPaused || Boolean(retakePrompt) || endSessionConfirmStep > 0;
 
   useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
 
@@ -463,8 +644,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     return () => { alive = false; cancelAnimationFrame(raf); };
   }, [faceLandmarker, phase, current.id, currentRestSec, movementProfile]);
 
-  const handleSkipExercise = () => {
-    flushSpeech();
+  const finalizeCurrentExercise = () => {
     const scores = repScoresRef.current;
     const baselineProgress = summarizeBaselineProgress(repBaselineProgressRef.current);
     const initialBaselineProgress = summarizeBaselineProgress(repInitialBaselineProgressRef.current);
@@ -479,8 +659,33 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     repMovementProgressRef.current = [];
     repInitialMovementProgressRef.current = [];
     repSnapshotsRef.current = [];
+  };
+
+  const handleSkipExercise = () => {
+    flushSpeech();
+    finalizeCurrentExercise();
     if (exIdx + 1 < totalExercises) { setExIdx(exIdx + 1); setRepIdx(0); restIsEntryRef.current = true; setPhase("preview"); setSecondsLeft(null); }
     else setPhase("summary");
+  };
+
+  const beginEndSessionConfirmation = () => {
+    flushSpeech();
+    setEndSessionConfirmStep(1);
+  };
+
+  const closeEndSessionConfirmation = () => {
+    setEndSessionConfirmStep(0);
+  };
+
+  const confirmEndSession = () => {
+    flushSpeech();
+    setEndSessionConfirmStep(0);
+    setRetakePrompt(null);
+    setTrackingIssue(null);
+    setPaused(false);
+    finalizeCurrentExercise();
+    setPhase("summary");
+    setSecondsLeft(null);
   };
 
   const skipCalibration = () => {
@@ -515,8 +720,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   };
 
   const handleEndFromRetakePrompt = () => {
-    flushSpeech();
-    onCancel();
+    setRetakePrompt(null);
+    setTrackingIssue(null);
+    beginEndSessionConfirmation();
   };
 
   const handleSkipFromRetakePrompt = () => {
@@ -587,9 +793,9 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         : Math.max(0, currentReps - repIdx - 1) * (currentHoldSec + currentRestSec))
       : exercisePlannedSec(current);
   const remainingSessionSec = currentExerciseRemainingSec + remainingInLaterExercises + remainingInterstitialSec;
-  const showRemainingTicker = (phase === "hold" || phase === "rest") && plannedSessionSec > 0;
-  const remainingFraction = showRemainingTicker ? Math.max(0, Math.min(1, remainingSessionSec / plannedSessionSec)) : 0;
-  const remainingLabel = `${formatRemainingTime(remainingSessionSec)} remaining`;
+  const elapsedFraction = plannedSessionSec > 0 ? Math.max(0, Math.min(1, 1 - remainingSessionSec / plannedSessionSec)) : 0;
+  const clockLabel = formatRemainingTime(remainingSessionSec);
+  const remainingExerciseCount = Math.max(0, totalExercises - exIdx - 1);
 
   return (
     <div className="fixed inset-0 z-50 flex items-stretch lg:items-center lg:justify-center lg:p-6" style={{ background: "rgba(12,10,8,0.92)" }}>
@@ -620,17 +826,6 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             </div>
           </div>
           <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{displayPrompt}</div>
-          {showRemainingTicker && (
-            <div className="mt-3" aria-live="polite">
-              <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.16em]" style={{ color: phaseTone.color }}>
-                <span>Session time</span>
-                <span className="tabular-nums normal-case tracking-normal">{remainingLabel}</span>
-              </div>
-              <div className="mt-1.5 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(244, 239, 230, 0.16)" }}>
-                <div className="h-full rounded-full transition-all duration-300 ease-linear" style={{ width: `${remainingFraction * 100}%`, background: phaseTone.color }} />
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
@@ -647,15 +842,27 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           </div>
         )}
 
+        {(phase === "hold" || phase === "rest" || phase === "calibrate") && (
+          <AscentRail
+            exercises={session.exercises}
+            exIdx={exIdx}
+            phase={phase}
+            phaseColor={phaseTone.color}
+            elapsedFraction={elapsedFraction}
+          />
+        )}
+
         {prefs.mirrorEnabled && !cameraError && trackerStatus === "ready" && (
           <div className="absolute top-4 left-4 px-2.5 py-1 rounded-full text-[11px] font-medium" style={{ background: postureAligned ? "rgba(122,143,115,0.85)" : "rgba(212,165,116,0.85)", color: "#1F1B16" }}>
             {postureAligned ? "Posture · centered" : "Center your face in the ring"}
           </div>
         )}
 
-        <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
-          <div className="px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap" style={{ background: "rgba(31, 27, 22, 0.7)", color: "#F4EFE6" }}>
-            Rep {repIdx + 1} / {currentReps}
+        <div className="absolute top-4 right-[60px] flex flex-col items-end gap-2">
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap" style={{ background: "rgba(31, 27, 22, 0.7)", color: "#F4EFE6" }}>
+            <span>Rep {repIdx + 1} / {currentReps}</span>
+            <span className="h-3 w-px" style={{ background: "rgba(244, 239, 230, 0.28)" }} />
+            <span className="tabular-nums">{clockLabel}</span>
           </div>
           {phase === "hold" && liveScore != null && (
             <RealtimeFeedback symmetry={liveScore} balance={liveBalance} baseline={liveBaselineProgress} />
@@ -683,14 +890,55 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       </div>
 
       <div className="p-4 shrink-0" style={{ borderTop: phase === "hold" || phase === "rest" || phase === "calibrate" ? `2px solid ${phaseTone.color}` : "2px solid transparent", transition: "border-color 300ms" }}>
-        <div className="flex gap-3">
+        <div className="flex items-start gap-3">
           <button onClick={() => { setPaused((p) => { if (!p) flushSpeech(); return !p; }); }} className="flex-1 rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "rgba(244, 239, 230, 0.15)", color: "#F4EFE6" }}>
             {paused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}{paused ? "Resume" : "Pause"}
           </button>
-          <button onClick={phase === "calibrate" ? skipCalibration : handleSkipExercise} className="flex-1 rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{phase === "calibrate" ? "Start unscored" : "Skip"}<ChevronRight className="w-4 h-4" /></button>
+          <div className="flex-1 flex flex-col items-stretch gap-1.5">
+            <button onClick={phase === "calibrate" ? skipCalibration : handleSkipExercise} className="rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{phase === "calibrate" ? "Start unscored" : "Skip"}<ChevronRight className="w-4 h-4" /></button>
+            {phase !== "calibrate" && (
+              <button onClick={beginEndSessionConfirmation} className="self-center text-xs font-semibold underline-offset-4 hover:underline" style={{ color: "rgba(244, 239, 230, 0.74)" }}>
+                End session
+              </button>
+            )}
+          </div>
         </div>
       </div>
       </div>
+      {endSessionConfirmStep > 0 && (
+        <div className="absolute inset-0 z-[75] flex items-center justify-center p-6" style={{ background: "rgba(12,10,8,0.76)" }} role="dialog" aria-modal="true" aria-labelledby="end-session-confirm-title">
+          <div className="w-full max-w-sm rounded-2xl p-5 shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6", border: "1px solid rgba(212,165,116,0.5)" }}>
+            {endSessionConfirmStep === 1 ? (
+              <>
+                <div id="end-session-confirm-title" className="text-xl mb-2" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>End this session?</div>
+                <p className="text-sm leading-relaxed opacity-80 mb-3">
+                  This stops the routine now, saves completed reps from {current.name}, and opens the session report.
+                </p>
+                <p className="text-sm leading-relaxed opacity-80 mb-5">
+                  {remainingExerciseCount > 0
+                    ? `${remainingExerciseCount} remaining exercise${remainingExerciseCount === 1 ? "" : "s"} will be skipped.`
+                    : "No more exercises will run."}
+                </p>
+                <div className="space-y-2">
+                  <button onClick={closeEndSessionConfirmation} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Keep practicing</button>
+                  <button onClick={() => setEndSessionConfirmStep(2)} className="w-full rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Continue</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div id="end-session-confirm-title" className="text-xl mb-2" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>Confirm end session</div>
+                <p className="text-sm leading-relaxed opacity-80 mb-5">
+                  Final confirmation: Mirror will end this session and show the report. You will not continue to the next exercise.
+                </p>
+                <div className="space-y-2">
+                  <button onClick={() => setEndSessionConfirmStep(1)} className="w-full rounded-full py-3 font-semibold" style={{ background: "rgba(244,239,230,0.12)", color: "#F4EFE6" }}>Back</button>
+                  <button onClick={confirmEndSession} className="w-full rounded-full py-3 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>Yes, end session</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
       {retakePrompt && (
         <div className="absolute inset-0 z-[70] flex items-center justify-center p-6" style={{ background: "rgba(12,10,8,0.72)" }} role="dialog" aria-modal="true" aria-labelledby="baseline-retake-title">
           <div className="w-full max-w-sm rounded-2xl p-5 shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6", border: "1px solid rgba(212,165,116,0.5)" }}>
