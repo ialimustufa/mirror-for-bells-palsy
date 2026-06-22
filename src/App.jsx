@@ -1,17 +1,19 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
 import { EXERCISE_BY_ID } from "./domain/exercises";
+import { trainPersonalRecoveryModel } from "./domain/personalRecoveryModel";
 import {
   DEFAULT_DATA,
   DEFAULT_PERSONAL_PLAN,
+  appendSessionRecord,
   buildSessionExercises,
   computeStreak,
   getComfortDosing,
   isCountedSession,
   todayISO,
 } from "./domain/session";
-import { compactAppDataForStorage, deleteSessionImages, hydrateSessionImages, loadMirrorData, saveMirrorData } from "./storage";
+import { compactAppDataForStorage, createMirrorBrowserDataExportBlob, deleteSessionFrameSamples, deleteSessionImages, exportMirrorBrowserData, hydrateSessionImages, importMirrorBrowserData, loadMirrorData, parseMirrorBrowserDataFile, saveMirrorData } from "./storage";
 import { buildPersonalizedDailyPlan, orderExerciseIdsByRegion } from "./ml/faceMetrics";
 import { primeSpeech } from "./lib/speech";
 import { SessionMode } from "./session/SessionMode";
@@ -33,6 +35,28 @@ import {
   Sidebar,
 } from "./components/appViews";
 
+function withPersonalRecoveryModel(next) {
+  if (next?.prefs?.personalModelEnabled === false) return { ...next, personalRecoveryModel: null };
+  return {
+    ...next,
+    personalRecoveryModel: trainPersonalRecoveryModel({
+      sessions: next?.sessions ?? [],
+      movementProfile: next?.movementProfile ?? null,
+    }),
+  };
+}
+
+function downloadFile(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
 export default function App() {
   // Top-level orchestration only: global persistence, view routing, and modal/session ownership.
   // Feature views own their local form/filter state.
@@ -45,6 +69,10 @@ export default function App() {
   const [exerciseDetail, setExerciseDetail] = useState(null);
   const [viewingReport, setViewingReport] = useState(null);
   const [journalPrompt, setJournalPrompt] = useState(null);
+  const [dataTransferStatus, setDataTransferStatus] = useState(null);
+  const dataRef = useRef(DEFAULT_DATA);
+  const persistQueueRef = useRef(Promise.resolve());
+  const persistSeqRef = useRef(0);
   // Path-based route for the public /try demo. Listening to popstate covers the
   // history-driven nav back from the trial page; the rest of the app remains state-routed.
   const [pathname, setPathname] = useState(() => (typeof window !== "undefined" ? window.location.pathname : "/"));
@@ -60,12 +88,12 @@ export default function App() {
         const stored = await loadMirrorData();
         if (stored) {
           const shouldPersistMigration = needsSideConventionMigration(stored);
-          const normalized = normalizeAppData(stored);
+          const normalized = withPersonalRecoveryModel(normalizeAppData(stored));
           setData(normalized);
           if (shouldPersistMigration) {
             try {
               const saved = await saveMirrorData(normalized);
-              setData(normalizeAppData(saved));
+              setData(withPersonalRecoveryModel(normalizeAppData(saved)));
             } catch (error) {
               console.error("Failed to persist side-convention migration", error);
             }
@@ -85,13 +113,33 @@ export default function App() {
     return () => { try { document.head.removeChild(link); } catch { /* font link may have been removed externally */ } };
   }, []);
 
-  const persist = useCallback(async (next) => {
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
+
+  const persist = useCallback((nextOrUpdater) => {
+    const next = typeof nextOrUpdater === "function" ? nextOrUpdater(dataRef.current) : nextOrUpdater;
+    const seq = persistSeqRef.current + 1;
+    persistSeqRef.current = seq;
     const compactNext = compactAppDataForStorage(next);
+    dataRef.current = compactNext;
     setData(compactNext);
-    try {
-      const saved = await saveMirrorData(next);
-      setData(normalizeAppData(saved));
-    } catch (e) { console.error("Failed to persist app data", e); }
+
+    const write = async () => {
+      try {
+        const saved = await saveMirrorData(next);
+        if (seq === persistSeqRef.current) {
+          const normalized = normalizeAppData(saved);
+          dataRef.current = normalized;
+          setData(normalized);
+        }
+      } catch (e) {
+        console.error("Failed to persist app data", e);
+      }
+    };
+    const queued = persistQueueRef.current.then(write, write);
+    persistQueueRef.current = queued;
+    return queued;
   }, []);
 
   const openStoredReport = useCallback(async (sessionRecord) => {
@@ -115,7 +163,7 @@ export default function App() {
     if (options.retakeExerciseIds?.length && data.movementProfile) {
       const movementProfile = mergeMovementProfileRetake(data.movementProfile, profile);
       const initialMovementProfile = mergeMissingMovementProfileBaselines(data.initialMovementProfile ?? data.movementProfile, profile, options.retakeExerciseIds);
-      persist({ ...data, movementProfile, initialMovementProfile, prefs: { ...data.prefs, onboarded: true } });
+      persist(withPersonalRecoveryModel({ ...data, movementProfile, initialMovementProfile, prefs: { ...data.prefs, onboarded: true } }));
       setProfileAssessment(null);
       return;
     }
@@ -123,11 +171,11 @@ export default function App() {
     const movementProfileHistory = archived
       ? [archived, ...(data.movementProfileHistory ?? [])].slice(0, PROFILE_HISTORY_LIMIT)
       : (data.movementProfileHistory ?? []);
-    persist({ ...data, movementProfile: profile, initialMovementProfile: data.initialMovementProfile ?? profile, movementProfileHistory, prefs: { ...data.prefs, onboarded: true } });
+    persist(withPersonalRecoveryModel({ ...data, movementProfile: profile, initialMovementProfile: data.initialMovementProfile ?? profile, movementProfileHistory, prefs: { ...data.prefs, onboarded: true } }));
     setProfileAssessment(null);
   };
-  const startSession = (ids) => {
-    const exercises = buildSessionExercises(ids, data.movementProfile);
+  const startSession = (ids, repCounts = {}) => {
+    const exercises = buildSessionExercises(ids, data.movementProfile, repCounts);
     const firstExercise = exercises[0];
     const openingCue = data.prefs.symmetryEnabled && data.prefs.mirrorEnabled
       ? "Calibration. Center your face and stay relaxed."
@@ -139,11 +187,14 @@ export default function App() {
     setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
   const completeSession = (rec) => {
-    const existingCountedSessionsToday = data.sessions.filter((s) => s.date === rec.date && isCountedSession(s)).length;
-    const shouldPromptJournal = isCountedSession(rec)
-      && existingCountedSessionsToday === 0
-      && !data.journal.some((entry) => entry.date === rec.date);
-    persist({ ...data, sessions: [...data.sessions, rec] });
+    let shouldPromptJournal = false;
+    persist((currentData) => {
+      const existingCountedSessionsToday = currentData.sessions.filter((s) => s.date === rec.date && isCountedSession(s)).length;
+      shouldPromptJournal = isCountedSession(rec)
+        && existingCountedSessionsToday === 0
+        && !currentData.journal.some((entry) => entry.date === rec.date);
+      return withPersonalRecoveryModel(appendSessionRecord(currentData, rec));
+    });
     setSession(null);
     if (shouldPromptJournal) setJournalPrompt({ session: rec });
   };
@@ -158,12 +209,19 @@ export default function App() {
       return true;
     });
     if (sessions.length === data.sessions.length) return;
-    await persist({ ...data, sessions });
+    await persist(withPersonalRecoveryModel({ ...data, sessions }));
     if (id) deleteSessionImages(id);
+    if (id) deleteSessionFrameSamples(id);
   }, [data, persist]);
   const saveJournal = (entry) => { const filtered = data.journal.filter((j) => j.date !== entry.date); persist({ ...data, journal: [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date)) }); };
-  const togglePref = (key) => persist({ ...data, prefs: { ...data.prefs, [key]: !data.prefs[key] } });
-  const setPref = (key, value) => persist({ ...data, prefs: { ...data.prefs, [key]: value } });
+  const togglePref = (key) => {
+    const next = { ...data, prefs: { ...data.prefs, [key]: !data.prefs[key] } };
+    persist(key === "personalModelEnabled" ? withPersonalRecoveryModel(next) : next);
+  };
+  const setPref = (key, value) => {
+    const next = { ...data, prefs: { ...data.prefs, [key]: value } };
+    persist(key === "personalModelEnabled" ? withPersonalRecoveryModel(next) : next);
+  };
 
   const streak = useMemo(() => computeStreak(data.sessions), [data.sessions]);
   const recommendedPlanIds = useMemo(
@@ -174,7 +232,7 @@ export default function App() {
     () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { personalPlan: data.prefs.personalPlan, orderByRegion: true }),
     [data.movementProfile, data.sessions, data.prefs.personalPlan],
   );
-  const savePersonalPlan = useCallback((selectedExerciseIds, repeatCounts = {}) => {
+  const savePersonalPlan = useCallback((selectedExerciseIds, repeatCounts = {}, repCounts = {}) => {
     const selected = orderExerciseIdsByRegion([...new Set(selectedExerciseIds ?? [])].filter((id) => EXERCISE_BY_ID.has(id)), recommendedPlanIds);
     if (selected.length === 0) return false;
     const selectedSet = new Set(selected);
@@ -185,28 +243,77 @@ export default function App() {
     for (const [id, count] of Object.entries(repeatCounts ?? {})) {
       if (selectedSet.has(id) && count > 1) planRepeatCounts[id] = count;
     }
+    const planRepCounts = {};
+    for (const [id, count] of Object.entries(repCounts ?? {})) {
+      const n = Math.round(Number(count));
+      if (selectedSet.has(id) && Number.isFinite(n) && n > 0) planRepCounts[id] = n;
+    }
     const personalPlan = {
+      selectedExerciseIds: selected,
       addedExerciseIds: selected.filter((id) => !recommendedSet.has(id)),
       removedExerciseIds: recommendedPlanIds.filter((id) => !selectedSet.has(id)),
       repeatCounts: planRepeatCounts,
+      repCounts: planRepCounts,
     };
-    persist({ ...data, prefs: { ...data.prefs, personalPlan } });
+    persist((currentData) => ({ ...currentData, prefs: { ...currentData.prefs, personalPlan } }));
     return true;
-  }, [data, persist, recommendedPlanIds]);
+  }, [persist, recommendedPlanIds]);
   const resetPersonalPlan = useCallback(() => {
-    persist({ ...data, prefs: { ...data.prefs, personalPlan: DEFAULT_PERSONAL_PLAN } });
-  }, [data, persist]);
+    persist((currentData) => ({ ...currentData, prefs: { ...currentData.prefs, personalPlan: DEFAULT_PERSONAL_PLAN } }));
+  }, [persist]);
   const resetMovementBaselines = useCallback((exerciseIds) => {
     const ids = [...new Set((exerciseIds ?? []).filter((id) => EXERCISE_BY_ID.has(id)))];
     if (!ids.length || !data.movementProfile) return;
-    persist({
+    persist(withPersonalRecoveryModel({
       ...data,
       movementProfile: resetMovementProfileBaselines(data.movementProfile, ids),
       initialMovementProfile: resetMovementProfileBaselines(data.initialMovementProfile, ids),
-    });
+    }));
   }, [data, persist]);
+  const exportBrowserData = useCallback(async () => {
+    setDataTransferStatus({ kind: "working", message: "Preparing browser data export..." });
+    try {
+      await persistQueueRef.current.catch(() => {});
+      const payload = await exportMirrorBrowserData();
+      const blob = createMirrorBrowserDataExportBlob(payload);
+      const filename = `mirror-browser-data-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      downloadFile(blob, filename);
+      setDataTransferStatus({ kind: "success", message: `Exported ${payload.summary?.sessions ?? 0} sessions.` });
+    } catch (error) {
+      console.error("Failed to export browser data", error);
+      setDataTransferStatus({ kind: "error", message: "Could not export browser data." });
+    }
+  }, []);
+  const importBrowserData = useCallback(async (file) => {
+    if (!file) return;
+    setDataTransferStatus({ kind: "working", message: "Importing browser data..." });
+    try {
+      await persistQueueRef.current.catch(() => {});
+      const parsed = await parseMirrorBrowserDataFile(file);
+      const imported = await importMirrorBrowserData(parsed);
+      const normalized = withPersonalRecoveryModel(normalizeAppData(imported));
+      persistSeqRef.current += 1;
+      dataRef.current = normalized;
+      setData(normalized);
+      setSession(null);
+      setProfileAssessment(null);
+      setExerciseDetail(null);
+      setViewingReport(null);
+      setJournalPrompt(null);
+      setShowOnboarding(!normalized.prefs?.onboarded);
+      setDataTransferStatus({ kind: "success", message: `Imported ${normalized.sessions.length} sessions.` });
+    } catch (error) {
+      console.error("Failed to import browser data", error);
+      setDataTransferStatus({
+        kind: "error",
+        message: error instanceof SyntaxError
+          ? "Choose a valid JSON export file."
+          : error?.message ?? "Could not import browser data.",
+      });
+    }
+  }, []);
 
-  if (pathname === "/try") return <TrialMode />;
+  if (pathname === "/try") return <TrialMode prefs={data.prefs} />;
   if (loading) return <div className="min-h-screen flex items-center justify-center" style={{ background: "#F4EFE6" }}><div className="text-stone-600">Loading…</div></div>;
 
   return (
@@ -220,10 +327,10 @@ export default function App() {
         <Header view={view} streak={streak} />
         <main className="mt-8 lg:mt-2">
           {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
-          {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} savedRepeatCounts={data.prefs.personalPlan?.repeatCounts} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
+          {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} savedRepeatCounts={data.prefs.personalPlan?.repeatCounts} savedRepCounts={data.prefs.personalPlan?.repCounts} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "baseline" && <BaselineView data={data} onStartProfile={openProfileAssessment} onResetBaselines={resetMovementBaselines} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} dataTransferStatus={dataTransferStatus} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onExportData={exportBrowserData} onImportData={importBrowserData} />}
         </main>
         <footer className="mt-10 text-center text-xs text-stone-500">
           <MadeByFooter />

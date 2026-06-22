@@ -118,3 +118,17 @@ test("returns the original profile when reset has no matching baselines", () => 
 
   assert.equal(resetMovementProfileBaselines(profile, ["closed-smile"], 1234), profile);
 });
+
+test("normalizes scoring noise prefs with safe defaults", () => {
+  const defaults = normalizeAppData({});
+  assert.equal(defaults.prefs.scoringNoiseMode, "normal");
+  assert.equal(defaults.prefs.scoringDiagnosticsEnabled, false);
+
+  const raw = normalizeAppData({ prefs: { scoringNoiseMode: "raw", scoringDiagnosticsEnabled: true } });
+  assert.equal(raw.prefs.scoringNoiseMode, "raw");
+  assert.equal(raw.prefs.scoringDiagnosticsEnabled, true);
+
+  const invalid = normalizeAppData({ prefs: { scoringNoiseMode: "loud", scoringDiagnosticsEnabled: "true" } });
+  assert.equal(invalid.prefs.scoringNoiseMode, "normal");
+  assert.equal(invalid.prefs.scoringDiagnosticsEnabled, false);
+});

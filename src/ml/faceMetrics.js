@@ -28,6 +28,7 @@ const EXERCISE_BLENDSHAPES = {
   "eyebrow-raise": { left: "browOuterUpLeft", right: "browOuterUpRight" },
   "gentle-frown":  { left: "browDownLeft",    right: "browDownRight" },
   "eye-close":     { left: "eyeBlinkLeft",    right: "eyeBlinkRight" },
+  "blink":         { left: "eyeBlinkLeft",    right: "eyeBlinkRight" },
   "nose-wrinkle":  { left: "noseSneerLeft",   right: "noseSneerRight" },
   "cheek-suck":    { left: "cheekSquintLeft", right: "cheekSquintRight" },
   "closed-smile":  { left: "mouthSmileLeft",  right: "mouthSmileRight" },
@@ -44,6 +45,78 @@ const EXERCISE_BLENDSHAPES = {
 
 const MOVEMENT_SIDE_CONVENTION = "user-anatomical-v1";
 const LEGACY_MOVEMENT_SIDE_CONVENTION = "legacy-image-left-v0";
+const DEFAULT_SCORING_NOISE_MODE = "normal";
+const SCORING_NOISE_MODES = ["normal", "soft", "raw"];
+const SCORING_NOISE_MODE_SET = new Set(SCORING_NOISE_MODES);
+const SCORING_ABSOLUTE_MIN_SIGNAL = 0.0007;
+
+const SCORING_NOISE_CONFIG = {
+  normal: {
+    pairwiseNoiseWeight: 1,
+    pairwiseGate: 0.02,
+    directionalNoiseWeight: 1,
+    directionalGateMultiplier: 1.5,
+    directionalGateCap: Infinity,
+    nostrilNoiseWeight: 0.35,
+    nostrilGateMultiplier: 0.35,
+    nostrilGateCap: 0.0012,
+    browNoiseWeight: 1,
+    browGateMultiplier: 1.25,
+    browGateCap: Infinity,
+    browMinSignal: 0.008,
+    frownMinSignal: 0.0035,
+    noseMinSignal: SCORING_ABSOLUTE_MIN_SIGNAL,
+    preserveDirectionalSignal: true,
+  },
+  soft: {
+    pairwiseNoiseWeight: 0.4,
+    pairwiseGate: 0.014,
+    directionalNoiseWeight: 0.35,
+    directionalGateMultiplier: 0.5,
+    directionalGateCap: 0.002,
+    nostrilNoiseWeight: 0.2,
+    nostrilGateMultiplier: 0.2,
+    nostrilGateCap: 0.0009,
+    browNoiseWeight: 0.35,
+    browGateMultiplier: 0.5,
+    browGateCap: 0.002,
+    browMinSignal: 0.004,
+    frownMinSignal: 0.002,
+    noseMinSignal: SCORING_ABSOLUTE_MIN_SIGNAL,
+    preserveDirectionalSignal: true,
+  },
+  raw: {
+    pairwiseNoiseWeight: 0,
+    pairwiseGate: SCORING_ABSOLUTE_MIN_SIGNAL,
+    directionalNoiseWeight: 0,
+    directionalGateMultiplier: 0,
+    directionalGateCap: 0,
+    nostrilNoiseWeight: 0,
+    nostrilGateMultiplier: 0,
+    nostrilGateCap: 0,
+    browNoiseWeight: 0,
+    browGateMultiplier: 0,
+    browGateCap: 0,
+    browMinSignal: SCORING_ABSOLUTE_MIN_SIGNAL,
+    frownMinSignal: SCORING_ABSOLUTE_MIN_SIGNAL,
+    noseMinSignal: SCORING_ABSOLUTE_MIN_SIGNAL,
+    preserveDirectionalSignal: false,
+  },
+};
+
+function normalizeScoringNoiseMode(mode) {
+  const value = typeof mode === "string" ? mode.toLowerCase() : "";
+  return SCORING_NOISE_MODE_SET.has(value) ? value : DEFAULT_SCORING_NOISE_MODE;
+}
+
+function scoringOptionsFrom(options = {}) {
+  const scoringNoiseMode = normalizeScoringNoiseMode(typeof options === "string" ? options : options?.scoringNoiseMode);
+  return {
+    ...SCORING_NOISE_CONFIG[scoringNoiseMode],
+    scoringNoiseMode,
+    scoringDiagnosticsEnabled: Boolean(typeof options === "object" && options?.scoringDiagnosticsEnabled),
+  };
+}
 
 function bsActivation(bsMap, mapping) {
   if (!bsMap || !mapping) return 0;
@@ -96,6 +169,10 @@ const EXERCISE_LANDMARK_PAIRS = {
     left:  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
     right: [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466],
   },
+  "blink":          {
+    left:  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
+    right: [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466],
+  },
   "wink":           {
     left:  [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246],
     right: [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466],
@@ -116,6 +193,14 @@ const EXERCISE_LANDMARK_PAIRS = {
     right: [425, 416, 433, 280, 411, 376, 266, 371, 427, 436],
   },
   "water-swish":    {
+    left:  [205, 192, 213, 50, 187, 147, 36, 142, 207, 216, 61, 84, 91, 146],
+    right: [425, 416, 433, 280, 411, 376, 266, 371, 427, 436, 291, 314, 321, 375],
+  },
+  "water-hold-left": {
+    left:  [205, 192, 213, 50, 187, 147, 36, 142, 207, 216, 61, 84, 91, 146],
+    right: [425, 416, 433, 280, 411, 376, 266, 371, 427, 436, 291, 314, 321, 375],
+  },
+  "water-hold-right": {
     left:  [205, 192, 213, 50, 187, 147, 36, 142, 207, 216, 61, 84, 91, 146],
     right: [425, 416, 433, 280, 411, 376, 266, 371, 427, 436, 291, 314, 321, 375],
   },
@@ -184,6 +269,10 @@ const EXERCISE_LANDMARK_PAIRS = {
     left:  [61, 91, 146, 78, 185, 95, 88, 178, 40, 39, 37, 0],
     right: [291, 321, 375, 308, 409, 324, 318, 402, 270, 269, 267, 0],
   },
+  "emoji-pucker":   {
+    left:  [61, 91, 146, 78, 185, 95, 88, 178, 40, 39, 37, 0],
+    right: [291, 321, 375, 308, 409, 324, 318, 402, 270, 269, 267, 0],
+  },
   "emoji-sad-frown": {
     left:  [70, 63, 105, 66, 107, 61, 84, 91, 146, 78, 95, 88, 178, 39, 181],
     right: [300, 293, 334, 296, 336, 291, 314, 321, 375, 308, 324, 318, 402, 269, 405],
@@ -192,6 +281,17 @@ const EXERCISE_LANDMARK_PAIRS = {
     left:  [49, 48, 64, 102, 219, 218, 122, 33, 7, 163, 144, 145, 159, 160],
     right: [279, 278, 294, 331, 439, 438, 351, 263, 249, 390, 373, 374, 386, 387],
   },
+};
+
+const WATER_HOLD_SIDE_BY_ID = {
+  "water-hold-left": "left",
+  "water-hold-right": "right",
+};
+const WATER_HOLD_OPPOSITE_WEIGHT = 1.25;
+const WATER_HOLD_SEAL_LEAK_WEIGHT = 4;
+const WATER_HOLD_MOUTH_SEAL_LANDMARKS = {
+  left: [61, 84, 91, 146, 78, 95, 88, 178],
+  right: [291, 314, 321, 375, 308, 324, 318, 402],
 };
 
 function facialTransformInfo(matrix) {
@@ -377,37 +477,231 @@ function faceFrameNormalize(lm, facialTransformationMatrix = null) {
   return out;
 }
 
-function sumDisp(lmN, neuN, idxs, noiseFloor) {
+function noiseFloorValue(noiseFloor, index) {
+  if (!noiseFloor) return 0;
+  const values = noiseFloorValues(noiseFloor);
+  const value = values[index];
+  return Number.isFinite(value) ? value : 0;
+}
+
+function noiseFloorValues(noiseFloor) {
+  if (!noiseFloor) return null;
+  if (Array.isArray(noiseFloor) || ArrayBuffer.isView(noiseFloor)) return noiseFloor;
+  if (Array.isArray(noiseFloor.values) || ArrayBuffer.isView(noiseFloor.values)) return noiseFloor.values;
+  return noiseFloor;
+}
+
+function directionalNoiseFloor(noiseFloor) {
+  return noiseFloor?.directional ?? null;
+}
+
+function directionalSideNoise(noiseFloor, key, side, fallback = 0) {
+  const directional = directionalNoiseFloor(noiseFloor);
+  const value = directional?.[key]?.[side] ?? (key === "nostrilOutward" ? noiseFloor?.nostrilOutward?.[side] : null);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function adjustedSignal(rawSignal, noise, noiseWeight) {
+  const raw = Number.isFinite(rawSignal) ? rawSignal : 0;
+  const safeNoise = Number.isFinite(noise) ? Math.max(0, noise) : 0;
+  const penalty = safeNoise * Math.max(0, noiseWeight ?? 0);
+  return {
+    raw,
+    noise: safeNoise,
+    noisePenalty: penalty,
+    adjusted: Math.max(0, raw - penalty),
+  };
+}
+
+function noiseGate(noise, multiplier, cap = Infinity) {
+  const safeNoise = Number.isFinite(noise) ? Math.max(0, noise) : 0;
+  const weighted = safeNoise * Math.max(0, multiplier ?? 0);
+  return Number.isFinite(cap) ? Math.min(weighted, cap) : weighted;
+}
+
+function sumDisp(lmN, neuN, idxs, noiseFloor, scoringOptions = {}) {
   // Sum of per-landmark distance from neutral, with each point's natural at-rest jitter
   // subtracted out. This pulls subtle real movement (e.g. affected-side recruitment in
   // Bell's palsy) above the noise band so it can be scored.
-  let total = 0;
+  const options = scoringOptionsFrom(scoringOptions);
+  let rawTotal = 0;
+  let noisePenaltyTotal = 0;
+  let adjustedTotal = 0;
   for (const i of idxs) {
     const a = lmN[i], b = neuN[i]; if (!a || !b) continue;
     const d = Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0));
-    const noise = noiseFloor ? (noiseFloor[i] ?? 0) : 0;
-    total += Math.max(0, d - noise);
+    const adjusted = adjustedSignal(d, noiseFloorValue(noiseFloor, i), options.pairwiseNoiseWeight);
+    rawTotal += adjusted.raw;
+    noisePenaltyTotal += adjusted.noisePenalty;
+    adjustedTotal += adjusted.adjusted;
   }
-  return total;
+  return { raw: rawTotal, noisePenalty: noisePenaltyTotal, adjusted: adjustedTotal };
 }
 
-function computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
   if (!mapping || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
+  const exerciseId = typeof scoringOptions === "object" ? scoringOptions?.exerciseId ?? "pairwise" : "pairwise";
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
-  if (!lmN || !neuN) return null;
-  const lDisp = sumDisp(lmN, neuN, mapping.left, noiseFloor);
-  const rDisp = sumDisp(lmN, neuN, mapping.right, noiseFloor);
-  const peak = Math.max(lDisp, rDisp);
+  if (!lmN || !neuN) {
+    logScoringDiagnostics(exerciseId, "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
+  const lDisp = sumDisp(lmN, neuN, mapping.left, noiseFloor, options);
+  const rDisp = sumDisp(lmN, neuN, mapping.right, noiseFloor, options);
+  const lAdjusted = lDisp.adjusted;
+  const rAdjusted = rDisp.adjusted;
+  const peak = Math.max(lAdjusted, rAdjusted);
   // Lower threshold than the pre-denoising version (0.04 → 0.02): with per-landmark noise
   // subtracted out, the residual is real motion, so we can score smaller movements.
-  if (peak < 0.02) return null;
-  const symmetry = Math.min(lDisp, rDisp) / peak;
-  return { symmetry, leftDisp: lDisp, rightDisp: rDisp, peak };
+  const debugPayload = {
+    rawImageLeft: {
+      signal: debugMetric(lDisp.raw),
+      noisePenalty: debugMetric(lDisp.noisePenalty),
+      adjusted: debugMetric(lAdjusted),
+      final: debugMetric(lAdjusted),
+    },
+    rawImageRight: {
+      signal: debugMetric(rDisp.raw),
+      noisePenalty: debugMetric(rDisp.noisePenalty),
+      adjusted: debugMetric(rAdjusted),
+      final: debugMetric(rAdjusted),
+    },
+    returnedUserLeftDisp: debugMetric(rAdjusted),
+    returnedUserRightDisp: debugMetric(lAdjusted),
+    peak: debugMetric(peak),
+    gate: debugMetric(options.pairwiseGate),
+    noiseSource: "landmark-distance",
+    activationState: { aboveGate: peak >= options.pairwiseGate },
+  };
+  if (peak < options.pairwiseGate) {
+    logScoringDiagnostics(exerciseId, "below signal gate", debugPayload, options);
+    return null;
+  }
+  const symmetry = Math.min(lAdjusted, rAdjusted) / peak;
+  logScoringDiagnostics(exerciseId, "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
+  return { symmetry, leftDisp: lAdjusted, rightDisp: rAdjusted, peak };
+}
+
+function verticalSpread(frame, idxs) {
+  let minY = Infinity, maxY = -Infinity, count = 0;
+  for (const i of idxs) {
+    const p = frame[i];
+    if (!p) continue;
+    minY = Math.min(minY, p.y);
+    maxY = Math.max(maxY, p.y);
+    count++;
+  }
+  return count ? maxY - minY : null;
+}
+
+function waterHoldSealLeakSignal(frame, neutralFrame, rawSide) {
+  const idxs = WATER_HOLD_MOUTH_SEAL_LANDMARKS[rawSide];
+  const currentSpread = verticalSpread(frame, idxs);
+  const neutralSpread = verticalSpread(neutralFrame, idxs);
+  if (currentSpread == null || neutralSpread == null) return 0;
+  return Math.max(0, currentSpread - neutralSpread);
+}
+
+function computeWaterHoldSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
+  const targetUserSide = WATER_HOLD_SIDE_BY_ID[exerciseId];
+  const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId];
+  if (!targetUserSide || !mapping || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
+  if (!lmN || !neuN) {
+    logScoringDiagnostics(exerciseId, "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
+
+  const rawSignals = {
+    left: sumDisp(lmN, neuN, mapping.left, noiseFloor, options),
+    right: sumDisp(lmN, neuN, mapping.right, noiseFloor, options),
+  };
+  const rawTargetSide = flipLeftRightSide(targetUserSide);
+  const rawOppositeSide = flipLeftRightSide(rawTargetSide);
+  const targetSignal = rawSignals[rawTargetSide]?.adjusted ?? 0;
+  const oppositeSignal = rawSignals[rawOppositeSide]?.adjusted ?? 0;
+  const leakSignal = waterHoldSealLeakSignal(lmN, neuN, rawTargetSide);
+  const isolationPenalty = oppositeSignal * WATER_HOLD_OPPOSITE_WEIGHT;
+  const sealPenalty = leakSignal * WATER_HOLD_SEAL_LEAK_WEIGHT;
+  const penalty = isolationPenalty + sealPenalty;
+  const quality = targetSignal > 0 ? clampNumber(targetSignal / (targetSignal + penalty), 0, 1) : 0;
+  const gate = Math.max(SCORING_ABSOLUTE_MIN_SIGNAL, options.pairwiseGate * 0.5);
+  const debugPayload = {
+    targetUserSide,
+    rawImageLeft: {
+      signal: debugMetric(rawSignals.left.raw),
+      noisePenalty: debugMetric(rawSignals.left.noisePenalty),
+      adjusted: debugMetric(rawSignals.left.adjusted),
+      final: debugMetric(rawSignals.left.adjusted),
+      role: rawTargetSide === "left" ? "target" : "opposite",
+    },
+    rawImageRight: {
+      signal: debugMetric(rawSignals.right.raw),
+      noisePenalty: debugMetric(rawSignals.right.noisePenalty),
+      adjusted: debugMetric(rawSignals.right.adjusted),
+      final: debugMetric(rawSignals.right.adjusted),
+      role: rawTargetSide === "right" ? "target" : "opposite",
+    },
+    targetSignal: debugMetric(targetSignal),
+    oppositeSignal: debugMetric(oppositeSignal),
+    isolationPenalty: debugMetric(isolationPenalty),
+    sealLeakSignal: debugMetric(leakSignal),
+    sealPenalty: debugMetric(sealPenalty),
+    gate: debugMetric(gate),
+    peak: debugMetric(targetSignal),
+    noiseSource: "landmark-distance",
+    activationState: { aboveGate: targetSignal >= gate },
+  };
+  if (targetSignal < gate) {
+    logScoringDiagnostics(exerciseId, "below target gate", debugPayload, options);
+    return null;
+  }
+  logScoringDiagnostics(exerciseId, "scored", { ...debugPayload, symmetry: debugMetric(quality) }, options);
+  return {
+    symmetry: quality,
+    leftDisp: rawSignals.left.adjusted,
+    rightDisp: rawSignals.right.adjusted,
+    peak: targetSignal,
+    scoreType: "side-seal-proxy",
+    targetSide: targetUserSide,
+  };
+}
+
+function emptyDirectionalNoiseSamples() {
+  return {
+    nostrilOutward: { left: [], right: [] },
+    noseScrunchLift: { left: [], right: [] },
+    browGap: { left: [], right: [] },
+    frown: { left: [], right: [] },
+  };
+}
+
+function pushDirectionalSample(samples, key, side, value) {
+  if (Number.isFinite(value)) samples[key]?.[side]?.push(value);
+}
+
+function compactDirectionalSideNoise(samples) {
+  return {
+    left: robustDirectionalNoise(samples.left),
+    right: robustDirectionalNoise(samples.right),
+  };
+}
+
+function directionalNoiseFromSamples(samples) {
+  const directional = {};
+  for (const key of Object.keys(samples)) {
+    const item = compactDirectionalSideNoise(samples[key]);
+    if (item.left != null || item.right != null) directional[key] = item;
+  }
+  return Object.keys(directional).length ? directional : null;
 }
 
 // Per-landmark "noise" = each point's average jitter from the neutral mean across the
 // calibration window. Captured during get-ready, then subtracted from displacement
-// during hold to expose subtle real motion.
+// during hold to expose subtle real motion. Direction-specific jitter is also recorded
+// for low-motion families where generic landmark distance overstates the usable signal.
 function computeNoiseFloor(buffer, neutral, matrixBuffer = null, neutralFacialTransformationMatrix = null) {
   if (!buffer || buffer.length < 5 || !neutral) return null;
   const neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
@@ -415,10 +709,22 @@ function computeNoiseFloor(buffer, neutral, matrixBuffer = null, neutralFacialTr
   const N = neutral.length;
   const sums = new Float32Array(N);
   const counts = new Uint16Array(N);
+  const directionalSamples = emptyDirectionalNoiseSamples();
   for (let sampleIndex = 0; sampleIndex < buffer.length; sampleIndex++) {
     const lm = buffer[sampleIndex];
     const lmN = faceFrameNormalize(lm, matrixBuffer?.[sampleIndex]);
     if (!lmN) continue;
+    const leftOutward = nostrilOutwardSignal(lmN, neuN, "left");
+    const rightOutward = nostrilOutwardSignal(lmN, neuN, "right");
+    if (leftOutward) pushDirectionalSample(directionalSamples, "nostrilOutward", "left", leftOutward.signal);
+    if (rightOutward) pushDirectionalSample(directionalSamples, "nostrilOutward", "right", rightOutward.signal);
+    const noseScrunchLift = noseScrunchLiftSignal(lmN, neuN);
+    pushDirectionalSample(directionalSamples, "noseScrunchLift", "left", noseScrunchLift?.left);
+    pushDirectionalSample(directionalSamples, "noseScrunchLift", "right", noseScrunchLift?.right);
+    pushDirectionalSample(directionalSamples, "browGap", "left", browGapSignal(lmN, neuN, "left"));
+    pushDirectionalSample(directionalSamples, "browGap", "right", browGapSignal(lmN, neuN, "right"));
+    pushDirectionalSample(directionalSamples, "frown", "left", frownSignal(lmN, neuN, "left"));
+    pushDirectionalSample(directionalSamples, "frown", "right", frownSignal(lmN, neuN, "right"));
     for (let i = 0; i < N; i++) {
       const a = lmN[i], b = neuN[i];
       if (!a || !b) continue;
@@ -428,6 +734,13 @@ function computeNoiseFloor(buffer, neutral, matrixBuffer = null, neutralFacialTr
   }
   const noise = new Float32Array(N);
   for (let i = 0; i < N; i++) noise[i] = counts[i] > 0 ? sums[i] / counts[i] : 0;
+  const directional = directionalNoiseFromSamples(directionalSamples);
+  if (directional) {
+    Object.defineProperty(noise, "directional", { value: directional });
+  }
+  if (directional?.nostrilOutward) {
+    Object.defineProperty(noise, "nostrilOutward", { value: directional.nostrilOutward });
+  }
   return noise;
 }
 
@@ -475,7 +788,6 @@ const BROW_LANDMARKS = {
 };
 const BROW_EXERCISES = new Set(["eyebrow-raise", "gentle-frown", "emoji-raised-brow"]);
 const FROWN_EXERCISES = new Set(["gentle-frown"]);
-const FROWN_MIN_SIGNAL = 0.0035;
 const FROWN_INWARD_WEIGHT = 1.15;
 const FROWN_BS_WEIGHT = 0.01;
 
@@ -497,6 +809,27 @@ function browDistanceFromMidline(frame, browIdxs, side) {
   return side === "left" ? mid.x - brow.x : brow.x - mid.x;
 }
 
+function browGapSignal(frame, neutralFrame, side) {
+  const browIdxs = side === "left" ? BROW_LANDMARKS.leftBrow : BROW_LANDMARKS.rightBrow;
+  const eyeIdxs = side === "left" ? BROW_LANDMARKS.leftEyeTop : BROW_LANDMARKS.rightEyeTop;
+  const curGap = browEyeGap(frame, browIdxs, eyeIdxs);
+  const neutralGap = browEyeGap(neutralFrame, browIdxs, eyeIdxs);
+  return curGap == null || neutralGap == null ? null : Math.abs(curGap - neutralGap);
+}
+
+function frownSignal(frame, neutralFrame, side) {
+  const browIdxs = side === "left" ? BROW_LANDMARKS.leftInnerBrow : BROW_LANDMARKS.rightInnerBrow;
+  const eyeIdxs = side === "left" ? BROW_LANDMARKS.leftEyeTop : BROW_LANDMARKS.rightEyeTop;
+  const curGap = browEyeGap(frame, browIdxs, eyeIdxs);
+  const neutralGap = browEyeGap(neutralFrame, browIdxs, eyeIdxs);
+  const curDist = browDistanceFromMidline(frame, browIdxs, side);
+  const neutralDist = browDistanceFromMidline(neutralFrame, browIdxs, side);
+  if ([curGap, neutralGap, curDist, neutralDist].some((value) => value == null)) return null;
+  const down = Math.max(0, neutralGap - curGap);
+  const inward = Math.max(0, neutralDist - curDist);
+  return Math.hypot(down, inward * FROWN_INWARD_WEIGHT);
+}
+
 // Nose tracking separates nostril flare (outward aperture widening) from nose scrunch
 // (upward ala lift / sneer). A centroid-shift-only score can miss true nostril flare
 // because the nostril rim widens while the whole cluster barely translates.
@@ -513,9 +846,8 @@ const NOSE_LANDMARKS = {
 const NOSTRIL_FLARE_EXERCISES = new Set(["nose-wrinkle"]);
 const NOSE_SCRUNCH_EXERCISES = new Set(["emoji-nose-scrunch"]);
 const NOSE_EXERCISES = new Set([...NOSTRIL_FLARE_EXERCISES, ...NOSE_SCRUNCH_EXERCISES]);
-const NOSE_MIN_SIGNAL = 0.0012;
-const NOSE_PROFILE_THRESHOLD_FLOOR = 0.0015;
-const NOSE_PROFILE_THRESHOLD_MAX = 0.0025;
+const NOSE_PROFILE_THRESHOLD_FLOOR = 0.0008;
+const NOSE_PROFILE_THRESHOLD_MAX = 0.0014;
 
 function avgXY(frame, idxs) {
   let sx = 0, sy = 0, c = 0;
@@ -559,6 +891,16 @@ function noseShape(frame) {
   };
 }
 
+function noseScrunchLiftSignal(frame, neutralFrame) {
+  const cur = noseShape(frame);
+  const neutral = noseShape(neutralFrame);
+  if (!cur || !neutral) return null;
+  return {
+    left: Math.max(0, neutral.leftY - cur.leftY),
+    right: Math.max(0, neutral.rightY - cur.rightY),
+  };
+}
+
 // Delta gating intentionally watches mouth corners and chin so talking, jaw motion,
 // and expression changes reset neutral calibration.
 const CALIBRATION_DELTA_POINTS = [1, 4, 10, 33, 61, 152, 199, 263, 291];
@@ -583,7 +925,7 @@ function meanNoise(noiseFloor, idxs) {
   if (!noiseFloor) return 0;
   let s = 0, c = 0;
   for (const i of idxs) {
-    const n = noiseFloor[i];
+    const n = noiseFloorValue(noiseFloor, i);
     if (n == null) continue;
     s += n; c++;
   }
@@ -607,51 +949,196 @@ function averageBlendshapes(buffer) {
 }
 
 // Weight that maps a 1.0 nose-sneer blendshape activation to a strong mesh magnitude
-// (~0.03). Used for nose scrunch only; nostril flare is scored as outward widening.
+// (~0.03). Nostril flare only uses a smaller blendshape assist when there is already
+// outward mesh evidence, so a pure upward scrunch does not count as flare.
 const NOSE_BS_WEIGHT = 0.03;
+const NOSTRIL_FLARE_BS_WEIGHT = 0.012;
+const NOSTRIL_FLARE_BS_MIN_OUTWARD = 0.00018;
+const NOSTRIL_FLARE_MIN_OUTWARD_RATIO = 0.35;
+const SCORING_DEBUG_LOG_INTERVAL_MS = 700;
+let lastScoringDebugLogAt = 0;
 
-function noseSideNoise(noiseFloor) {
+function scoringDiagnosticsEnabled(scoringOptions = {}) {
+  const options = scoringOptionsFrom(scoringOptions);
+  if (options.scoringDiagnosticsEnabled) return true;
+  const win = typeof window !== "undefined" ? window : null;
+  if (!win) return false;
+  if (win.__MIRROR_DEBUG_SCORING__ === true || win.__MIRROR_DEBUG_NOSE__ === true) return true;
+  try {
+    return win.localStorage?.getItem("mirror-debug-scoring") === "1"
+      || win.localStorage?.getItem("mirror-debug-nose") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function debugMetric(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(6)) : value ?? null;
+}
+
+function logScoringDiagnostics(exerciseId, reason, payload = {}, scoringOptions = {}) {
+  const options = scoringOptionsFrom(scoringOptions);
+  if (!scoringDiagnosticsEnabled(options)) return;
+  const win = typeof window !== "undefined" ? window : null;
+  const now = win?.performance?.now?.() ?? Date.now();
+  if (now - lastScoringDebugLogAt < SCORING_DEBUG_LOG_INTERVAL_MS) return;
+  lastScoringDebugLogAt = now;
+  console.log("[Mirror scoring]", reason, {
+    exerciseId,
+    scoringNoiseMode: options.scoringNoiseMode,
+    ...payload,
+  });
+}
+
+function noseSideNoise(noiseFloor, directionalKey = "nostrilOutward") {
   const leftIdxs = [...NOSE_LANDMARKS.leftRim, ...NOSE_LANDMARKS.leftAla];
   const rightIdxs = [...NOSE_LANDMARKS.rightRim, ...NOSE_LANDMARKS.rightAla];
+  const fallbackLeft = meanNoise(noiseFloor, leftIdxs) / Math.sqrt(leftIdxs.length);
+  const fallbackRight = meanNoise(noiseFloor, rightIdxs) / Math.sqrt(rightIdxs.length);
+  const leftSpecific = directionalSideNoise(noiseFloor, directionalKey, "left", null);
+  const rightSpecific = directionalSideNoise(noiseFloor, directionalKey, "right", null);
   return {
-    left: meanNoise(noiseFloor, leftIdxs) / Math.sqrt(leftIdxs.length),
-    right: meanNoise(noiseFloor, rightIdxs) / Math.sqrt(rightIdxs.length),
+    left: leftSpecific ?? fallbackLeft,
+    right: rightSpecific ?? fallbackRight,
+    source: leftSpecific != null || rightSpecific != null ? directionalKey : "landmark-distance",
   };
 }
 
-function computeNostrilFlareSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function nostrilOutwardSignal(frame, neutralFrame, side) {
+  const curMid = avgXY(frame, NOSE_LANDMARKS.midline);
+  const neuMid = avgXY(neutralFrame, NOSE_LANDMARKS.midline);
+  if (!curMid || !neuMid) return null;
+  const groups = side === "left"
+    ? [{ idxs: NOSE_LANDMARKS.leftRim, weight: 1 }, { idxs: NOSE_LANDMARKS.leftAla, weight: 0.55 }]
+    : [{ idxs: NOSE_LANDMARKS.rightRim, weight: 1 }, { idxs: NOSE_LANDMARKS.rightAla, weight: 0.55 }];
+  let total = 0, weight = 0, outwardWeight = 0;
+  for (const group of groups) {
+    for (const i of group.idxs) {
+      const cur = frame[i], neu = neutralFrame[i];
+      if (!cur || !neu) continue;
+      const curWidth = side === "left" ? curMid.x - cur.x : cur.x - curMid.x;
+      const neuWidth = side === "left" ? neuMid.x - neu.x : neu.x - neuMid.x;
+      const delta = curWidth - neuWidth;
+      if (delta > 0) {
+        total += delta * group.weight;
+        outwardWeight += group.weight;
+      }
+      weight += group.weight;
+    }
+  }
+  return weight > 0 ? { signal: total / weight, outwardRatio: outwardWeight / weight } : null;
+}
+
+function robustDirectionalNoise(samples) {
+  const valid = samples.filter((value) => Number.isFinite(value));
+  return valid.length ? percentile(valid, 0.75) : null;
+}
+
+function computeNostrilFlareSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
   if (!lm || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
-  if (!lmN || !neuN) return null;
-  const cur = noseShape(lmN), neu = noseShape(neuN);
-  if (!cur || !neu) return null;
+  if (!lmN || !neuN) {
+    logScoringDiagnostics("nose-wrinkle", "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
+  const lOutward = nostrilOutwardSignal(lmN, neuN, "left");
+  const rOutward = nostrilOutwardSignal(lmN, neuN, "right");
+  if (!lOutward || !rOutward) {
+    logScoringDiagnostics("nose-wrinkle", "outward signal missing", { hasRawImageLeft: Boolean(lOutward), hasRawImageRight: Boolean(rOutward) }, options);
+    return null;
+  }
 
-  const lFlareRaw = Math.max(0, cur.leftWidth - neu.leftWidth);
-  const rFlareRaw = Math.max(0, cur.rightWidth - neu.rightWidth);
+  const lFlareRaw = lOutward.signal;
+  const rFlareRaw = rOutward.signal;
 
-  const { left: leftNoise, right: rightNoise } = noseSideNoise(noiseFloor);
+  const { left: leftNoise, right: rightNoise, source: noiseSource } = noseSideNoise(noiseFloor);
 
-  const lFlare = Math.max(0, lFlareRaw - leftNoise);
-  const rFlare = Math.max(0, rFlareRaw - rightNoise);
+  // Raw image-left is the user's anatomical right, so use the opposite named blendshape.
+  const lBs = bsMap ? Math.max(0, (bsMap.noseSneerRight ?? 0) - (neutralBs?.noseSneerRight ?? 0)) : 0;
+  const rBs = bsMap ? Math.max(0, (bsMap.noseSneerLeft ?? 0) - (neutralBs?.noseSneerLeft ?? 0)) : 0;
+  const lHasOutwardShape = lFlareRaw >= NOSTRIL_FLARE_BS_MIN_OUTWARD && lOutward.outwardRatio >= NOSTRIL_FLARE_MIN_OUTWARD_RATIO;
+  const rHasOutwardShape = rFlareRaw >= NOSTRIL_FLARE_BS_MIN_OUTWARD && rOutward.outwardRatio >= NOSTRIL_FLARE_MIN_OUTWARD_RATIO;
+  const lBsAssist = lHasOutwardShape ? NOSTRIL_FLARE_BS_WEIGHT * lBs : 0;
+  const rBsAssist = rHasOutwardShape ? NOSTRIL_FLARE_BS_WEIGHT * rBs : 0;
+  const lNoisePenalty = leftNoise * options.nostrilNoiseWeight;
+  const rNoisePenalty = rightNoise * options.nostrilNoiseWeight;
+
+  const lNoiseAdjusted = Math.max(0, lFlareRaw - lNoisePenalty) + lBsAssist;
+  const rNoiseAdjusted = Math.max(0, rFlareRaw - rNoisePenalty) + rBsAssist;
+  const lFlare = options.preserveDirectionalSignal && lHasOutwardShape ? Math.max(lNoiseAdjusted, lFlareRaw + lBsAssist) : lNoiseAdjusted;
+  const rFlare = options.preserveDirectionalSignal && rHasOutwardShape ? Math.max(rNoiseAdjusted, rFlareRaw + rBsAssist) : rNoiseAdjusted;
   const peak = Math.max(lFlare, rFlare);
-  const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
-  if (peak < Math.max(NOSE_MIN_SIGNAL, noiseGate)) return null;
+  const maxNoise = Math.max(leftNoise, rightNoise);
+  const noiseGateValue = noiseGate(maxNoise, options.nostrilGateMultiplier, options.nostrilGateCap);
+  const gate = Math.max(options.noseMinSignal, noiseGateValue);
+  const debugPayload = {
+    rawImageLeft: {
+      signal: debugMetric(lFlareRaw),
+      outwardRatio: debugMetric(lOutward.outwardRatio),
+      noise: debugMetric(leftNoise),
+      noisePenalty: debugMetric(lNoisePenalty),
+      blendshape: debugMetric(lBs),
+      blendshapeAssist: debugMetric(lBsAssist),
+      noiseAdjusted: debugMetric(lNoiseAdjusted),
+      final: debugMetric(lFlare),
+      passesShape: lHasOutwardShape,
+    },
+    rawImageRight: {
+      signal: debugMetric(rFlareRaw),
+      outwardRatio: debugMetric(rOutward.outwardRatio),
+      noise: debugMetric(rightNoise),
+      noisePenalty: debugMetric(rNoisePenalty),
+      blendshape: debugMetric(rBs),
+      blendshapeAssist: debugMetric(rBsAssist),
+      noiseAdjusted: debugMetric(rNoiseAdjusted),
+      final: debugMetric(rFlare),
+      passesShape: rHasOutwardShape,
+    },
+    returnedUserLeftDisp: debugMetric(rFlare),
+    returnedUserRightDisp: debugMetric(lFlare),
+    peak: debugMetric(peak),
+    gate: debugMetric(gate),
+    minSignal: debugMetric(options.noseMinSignal),
+    noiseGate: debugMetric(noiseGateValue),
+    noiseSource,
+    profileThresholdMax: debugMetric(NOSE_PROFILE_THRESHOLD_MAX),
+    activationState: {
+      rawImageLeftShapeValid: lHasOutwardShape,
+      rawImageRightShapeValid: rHasOutwardShape,
+      aboveGate: peak >= gate,
+    },
+  };
+  if (peak < gate) {
+    logScoringDiagnostics("nose-wrinkle", "below signal gate", debugPayload, options);
+    return null;
+  }
   const symmetry = Math.min(lFlare, rFlare) / peak;
+  logScoringDiagnostics("nose-wrinkle", "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
   return { symmetry, leftDisp: lFlare, rightDisp: rFlare, peak };
 }
 
-function computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
   if (!lm || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
-  if (!lmN || !neuN) return null;
-  const cur = noseShape(lmN), neu = noseShape(neuN);
-  if (!cur || !neu) return null;
+  if (!lmN || !neuN) {
+    logScoringDiagnostics("emoji-nose-scrunch", "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
+  const lift = noseScrunchLiftSignal(lmN, neuN);
+  if (!lift) {
+    logScoringDiagnostics("emoji-nose-scrunch", "lift signal missing", {}, options);
+    return null;
+  }
 
-  const lLiftRaw = Math.max(0, neu.leftY - cur.leftY);   // smaller y = lifted upward
-  const rLiftRaw = Math.max(0, neu.rightY - cur.rightY);
-  const { left: leftNoise, right: rightNoise } = noseSideNoise(noiseFloor);
-  const lLift = Math.max(0, lLiftRaw - leftNoise);
-  const rLift = Math.max(0, rLiftRaw - rightNoise);
+  const lLiftRaw = lift.left;   // smaller y = lifted upward
+  const rLiftRaw = lift.right;
+  const { left: leftNoise, right: rightNoise, source: noiseSource } = noseSideNoise(noiseFloor, "noseScrunchLift");
+  const lAdjusted = adjustedSignal(lLiftRaw, leftNoise, options.directionalNoiseWeight);
+  const rAdjusted = adjustedSignal(rLiftRaw, rightNoise, options.directionalNoiseWeight);
+  const lLift = lAdjusted.adjusted;
+  const rLift = rAdjusted.adjusted;
 
   // Per-side blendshape activation, with calibration-time neutral subtracted so a slightly
   // raised resting `noseSneer*` doesn't masquerade as movement.
@@ -663,74 +1150,192 @@ function computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, f
   const peak = Math.max(lMag, rMag);
   // Adaptive gate: small absolute floor for real nose signals, but rises with calibration
   // jitter so a noisy session doesn't drift into "scored" territory after denoising.
-  const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
-  if (peak < Math.max(NOSE_MIN_SIGNAL, noiseGate)) return null;
+  const maxNoise = Math.max(leftNoise, rightNoise);
+  const noiseGateValue = noiseGate(maxNoise, options.directionalGateMultiplier, options.directionalGateCap);
+  const gate = Math.max(options.noseMinSignal, noiseGateValue);
+  const debugPayload = {
+    rawImageLeft: {
+      signal: debugMetric(lLiftRaw),
+      noise: debugMetric(leftNoise),
+      noisePenalty: debugMetric(lAdjusted.noisePenalty),
+      adjusted: debugMetric(lLift),
+      blendshape: debugMetric(lBs),
+      final: debugMetric(lMag),
+    },
+    rawImageRight: {
+      signal: debugMetric(rLiftRaw),
+      noise: debugMetric(rightNoise),
+      noisePenalty: debugMetric(rAdjusted.noisePenalty),
+      adjusted: debugMetric(rLift),
+      blendshape: debugMetric(rBs),
+      final: debugMetric(rMag),
+    },
+    returnedUserLeftDisp: debugMetric(rMag),
+    returnedUserRightDisp: debugMetric(lMag),
+    peak: debugMetric(peak),
+    gate: debugMetric(gate),
+    minSignal: debugMetric(options.noseMinSignal),
+    noiseGate: debugMetric(noiseGateValue),
+    noiseSource,
+    profileThresholdMax: debugMetric(NOSE_PROFILE_THRESHOLD_MAX),
+    activationState: { aboveGate: peak >= gate },
+  };
+  if (peak < gate) {
+    logScoringDiagnostics("emoji-nose-scrunch", "below signal gate", debugPayload, options);
+    return null;
+  }
   const symmetry = Math.min(lMag, rMag) / peak;
+  logScoringDiagnostics("emoji-nose-scrunch", "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
   return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
 }
 
-function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
-  return computeNostrilFlareSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix)
-    ?? computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix);
+function computeNoseSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
+  return computeNostrilFlareSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, scoringOptions)
+    ?? computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, scoringOptions);
 }
 
-function computeFrownSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function computeFrownSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
   if (!lm || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
-  if (!lmN || !neuN) return null;
+  if (!lmN || !neuN) {
+    logScoringDiagnostics("gentle-frown", "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
 
-  const lCurGap = browEyeGap(lmN, BROW_LANDMARKS.leftInnerBrow, BROW_LANDMARKS.leftEyeTop);
-  const lNeuGap = browEyeGap(neuN, BROW_LANDMARKS.leftInnerBrow, BROW_LANDMARKS.leftEyeTop);
-  const rCurGap = browEyeGap(lmN, BROW_LANDMARKS.rightInnerBrow, BROW_LANDMARKS.rightEyeTop);
-  const rNeuGap = browEyeGap(neuN, BROW_LANDMARKS.rightInnerBrow, BROW_LANDMARKS.rightEyeTop);
-  const lCurDist = browDistanceFromMidline(lmN, BROW_LANDMARKS.leftInnerBrow, "left");
-  const lNeuDist = browDistanceFromMidline(neuN, BROW_LANDMARKS.leftInnerBrow, "left");
-  const rCurDist = browDistanceFromMidline(lmN, BROW_LANDMARKS.rightInnerBrow, "right");
-  const rNeuDist = browDistanceFromMidline(neuN, BROW_LANDMARKS.rightInnerBrow, "right");
-  if ([lCurGap, lNeuGap, rCurGap, rNeuGap, lCurDist, lNeuDist, rCurDist, rNeuDist].some((value) => value == null)) return null;
-
-  const lDown = Math.max(0, lNeuGap - lCurGap);
-  const rDown = Math.max(0, rNeuGap - rCurGap);
-  const lInward = Math.max(0, lNeuDist - lCurDist);
-  const rInward = Math.max(0, rNeuDist - rCurDist);
+  const lRaw = frownSignal(lmN, neuN, "left");
+  const rRaw = frownSignal(lmN, neuN, "right");
+  if (lRaw == null || rRaw == null) {
+    logScoringDiagnostics("gentle-frown", "frown signal missing", { hasRawImageLeft: lRaw != null, hasRawImageRight: rRaw != null }, options);
+    return null;
+  }
 
   const leftNoiseIdxs = [...BROW_LANDMARKS.leftInnerBrow, ...BROW_LANDMARKS.leftEyeTop];
   const rightNoiseIdxs = [...BROW_LANDMARKS.rightInnerBrow, ...BROW_LANDMARKS.rightEyeTop];
-  const leftNoise = meanNoise(noiseFloor, leftNoiseIdxs) / Math.sqrt(leftNoiseIdxs.length);
-  const rightNoise = meanNoise(noiseFloor, rightNoiseIdxs) / Math.sqrt(rightNoiseIdxs.length);
+  const fallbackLeftNoise = meanNoise(noiseFloor, leftNoiseIdxs) / Math.sqrt(leftNoiseIdxs.length);
+  const fallbackRightNoise = meanNoise(noiseFloor, rightNoiseIdxs) / Math.sqrt(rightNoiseIdxs.length);
+  const leftSpecificNoise = directionalSideNoise(noiseFloor, "frown", "left", null);
+  const rightSpecificNoise = directionalSideNoise(noiseFloor, "frown", "right", null);
+  const leftNoise = leftSpecificNoise ?? fallbackLeftNoise;
+  const rightNoise = rightSpecificNoise ?? fallbackRightNoise;
+  const noiseSource = leftSpecificNoise != null || rightSpecificNoise != null ? "frown" : "landmark-distance";
 
-  const lMesh = Math.max(0, Math.hypot(lDown, lInward * FROWN_INWARD_WEIGHT) - leftNoise);
-  const rMesh = Math.max(0, Math.hypot(rDown, rInward * FROWN_INWARD_WEIGHT) - rightNoise);
+  const lAdjusted = adjustedSignal(lRaw, leftNoise, options.directionalNoiseWeight);
+  const rAdjusted = adjustedSignal(rRaw, rightNoise, options.directionalNoiseWeight);
+  const lMesh = lAdjusted.adjusted;
+  const rMesh = rAdjusted.adjusted;
   // Raw image-left is the user's anatomical right, so use the opposite named blendshape.
   const lBs = bsMap ? Math.max(0, (bsMap.browDownRight ?? 0) - (neutralBs?.browDownRight ?? 0)) : 0;
   const rBs = bsMap ? Math.max(0, (bsMap.browDownLeft ?? 0) - (neutralBs?.browDownLeft ?? 0)) : 0;
   const lMag = lMesh + FROWN_BS_WEIGHT * lBs;
   const rMag = rMesh + FROWN_BS_WEIGHT * rBs;
   const peak = Math.max(lMag, rMag);
-  const noiseGate = Math.max(leftNoise, rightNoise) * 1.5;
-  if (peak < Math.max(FROWN_MIN_SIGNAL, noiseGate)) return null;
+  const maxNoise = Math.max(leftNoise, rightNoise);
+  const noiseGateValue = noiseGate(maxNoise, options.directionalGateMultiplier, options.directionalGateCap);
+  const gate = Math.max(options.frownMinSignal, noiseGateValue);
+  const debugPayload = {
+    rawImageLeft: {
+      signal: debugMetric(lRaw),
+      noise: debugMetric(leftNoise),
+      noisePenalty: debugMetric(lAdjusted.noisePenalty),
+      adjusted: debugMetric(lMesh),
+      blendshape: debugMetric(lBs),
+      final: debugMetric(lMag),
+    },
+    rawImageRight: {
+      signal: debugMetric(rRaw),
+      noise: debugMetric(rightNoise),
+      noisePenalty: debugMetric(rAdjusted.noisePenalty),
+      adjusted: debugMetric(rMesh),
+      blendshape: debugMetric(rBs),
+      final: debugMetric(rMag),
+    },
+    returnedUserLeftDisp: debugMetric(rMag),
+    returnedUserRightDisp: debugMetric(lMag),
+    peak: debugMetric(peak),
+    gate: debugMetric(gate),
+    minSignal: debugMetric(options.frownMinSignal),
+    noiseGate: debugMetric(noiseGateValue),
+    noiseSource,
+    activationState: { aboveGate: peak >= gate },
+  };
+  if (peak < gate) {
+    logScoringDiagnostics("gentle-frown", "below signal gate", debugPayload, options);
+    return null;
+  }
   const symmetry = Math.min(lMag, rMag) / peak;
+  logScoringDiagnostics("gentle-frown", "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
   return { symmetry, leftDisp: lMag, rightDisp: rMag, peak };
 }
 
-function computeBrowSymmetry(lm, neutral, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function computeBrowSymmetry(lm, neutral, noiseFloor = null, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
   if (!lm || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
-  if (!lmN || !neuN) return null;
-  const lCur = browEyeGap(lmN, BROW_LANDMARKS.leftBrow,  BROW_LANDMARKS.leftEyeTop);
-  const lNeu = browEyeGap(neuN, BROW_LANDMARKS.leftBrow,  BROW_LANDMARKS.leftEyeTop);
-  const rCur = browEyeGap(lmN, BROW_LANDMARKS.rightBrow, BROW_LANDMARKS.rightEyeTop);
-  const rNeu = browEyeGap(neuN, BROW_LANDMARKS.rightBrow, BROW_LANDMARKS.rightEyeTop);
-  if (lCur == null || lNeu == null || rCur == null || rNeu == null) return null;
-  const lLift = Math.abs(lCur - lNeu); // frown has a separate direction-specific scorer.
-  const rLift = Math.abs(rCur - rNeu);
+  if (!lmN || !neuN) {
+    logScoringDiagnostics("eyebrow-raise", "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
+  const lRaw = browGapSignal(lmN, neuN, "left"); // frown has a separate direction-specific scorer.
+  const rRaw = browGapSignal(lmN, neuN, "right");
+  if (lRaw == null || rRaw == null) {
+    logScoringDiagnostics("eyebrow-raise", "brow signal missing", { hasRawImageLeft: lRaw != null, hasRawImageRight: rRaw != null }, options);
+    return null;
+  }
+  const leftNoiseIdxs = [...BROW_LANDMARKS.leftBrow, ...BROW_LANDMARKS.leftEyeTop];
+  const rightNoiseIdxs = [...BROW_LANDMARKS.rightBrow, ...BROW_LANDMARKS.rightEyeTop];
+  const fallbackLeftNoise = meanNoise(noiseFloor, leftNoiseIdxs) / Math.sqrt(leftNoiseIdxs.length);
+  const fallbackRightNoise = meanNoise(noiseFloor, rightNoiseIdxs) / Math.sqrt(rightNoiseIdxs.length);
+  const leftSpecificNoise = directionalSideNoise(noiseFloor, "browGap", "left", null);
+  const rightSpecificNoise = directionalSideNoise(noiseFloor, "browGap", "right", null);
+  const leftNoise = leftSpecificNoise ?? fallbackLeftNoise;
+  const rightNoise = rightSpecificNoise ?? fallbackRightNoise;
+  const noiseSource = leftSpecificNoise != null || rightSpecificNoise != null ? "browGap" : "landmark-distance";
+  const lAdjusted = adjustedSignal(lRaw, leftNoise, options.browNoiseWeight);
+  const rAdjusted = adjustedSignal(rRaw, rightNoise, options.browNoiseWeight);
+  const lLift = lAdjusted.adjusted;
+  const rLift = rAdjusted.adjusted;
   const peak = Math.max(lLift, rLift);
-  if (peak < 0.008) return null; // brow noise floor (lowered after denser landmark groups average out more per-point jitter)
+  const maxNoise = Math.max(leftNoise, rightNoise);
+  const noiseGateValue = noiseGate(maxNoise, options.browGateMultiplier, options.browGateCap);
+  const gate = Math.max(options.browMinSignal, noiseGateValue);
+  const debugPayload = {
+    rawImageLeft: {
+      signal: debugMetric(lRaw),
+      noise: debugMetric(leftNoise),
+      noisePenalty: debugMetric(lAdjusted.noisePenalty),
+      adjusted: debugMetric(lLift),
+      final: debugMetric(lLift),
+    },
+    rawImageRight: {
+      signal: debugMetric(rRaw),
+      noise: debugMetric(rightNoise),
+      noisePenalty: debugMetric(rAdjusted.noisePenalty),
+      adjusted: debugMetric(rLift),
+      final: debugMetric(rLift),
+    },
+    returnedUserLeftDisp: debugMetric(rLift),
+    returnedUserRightDisp: debugMetric(lLift),
+    peak: debugMetric(peak),
+    gate: debugMetric(gate),
+    minSignal: debugMetric(options.browMinSignal),
+    noiseGate: debugMetric(noiseGateValue),
+    noiseSource,
+    activationState: { aboveGate: peak >= gate },
+  };
+  if (peak < gate) {
+    logScoringDiagnostics("eyebrow-raise", "below signal gate", debugPayload, options);
+    return null;
+  }
   const symmetry = Math.min(lLift, rLift) / peak;
+  logScoringDiagnostics("eyebrow-raise", "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
   return { symmetry, leftDisp: lLift, rightDisp: rLift, peak };
 }
 
-function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null) {
+function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
+  const options = typeof scoringOptions === "object"
+    ? { ...scoringOptions, exerciseId }
+    : { scoringNoiseMode: scoringOptions, exerciseId };
   // Reject frames where the head has drifted significantly from the neutral pose.
   // When both matrices are present, this is a 3D yaw/pitch/roll check that the 2D
   // alignment gate can't make. If either matrix is null, the deviation is null and
@@ -740,17 +1345,21 @@ function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neu
 
   const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId] ?? null;
   if (FROWN_EXERCISES.has(exerciseId)) {
-    return toUserSideSymmetryResult(computeFrownSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix));
+    return toUserSideSymmetryResult(computeFrownSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
   }
   if (NOSTRIL_FLARE_EXERCISES.has(exerciseId)) {
-    return toUserSideSymmetryResult(computeNostrilFlareSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix));
+    return toUserSideSymmetryResult(computeNostrilFlareSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
   }
   if (NOSE_SCRUNCH_EXERCISES.has(exerciseId)) {
-    return toUserSideSymmetryResult(computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix));
+    return toUserSideSymmetryResult(computeNoseScrunchSymmetry(lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
   }
-  const browResult = BROW_EXERCISES.has(exerciseId) ? computeBrowSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix) : null;
-  const rawResult = browResult
-    ?? computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix)
+  if (BROW_EXERCISES.has(exerciseId)) {
+    return toUserSideSymmetryResult(computeBrowSymmetry(lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
+  }
+  if (WATER_HOLD_SIDE_BY_ID[exerciseId]) {
+    return toUserSideSymmetryResult(computeWaterHoldSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
+  }
+  const rawResult = computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options)
     ?? computeSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix);
   return toUserSideSymmetryResult(rawResult);
 }
@@ -826,9 +1435,22 @@ function compactLandmarks(lm) {
   return lm.map((p) => ({ x: roundMetric(p.x, 5), y: roundMetric(p.y, 5), z: roundMetric(p.z ?? 0, 5) }));
 }
 
+function compactDirectionalNoise(directional) {
+  if (!directional || typeof directional !== "object") return null;
+  const out = {};
+  for (const [key, value] of Object.entries(directional)) {
+    const left = roundMetric(value?.left, 6);
+    const right = roundMetric(value?.right, 6);
+    if (left != null || right != null) out[key] = { left, right };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function compactNoiseFloor(noise) {
   if (!noise) return null;
-  return Array.from(noise, (v) => roundMetric(v, 5));
+  const values = Array.from(noiseFloorValues(noise), (v) => roundMetric(v, 5));
+  const directional = compactDirectionalNoise(directionalNoiseFloor(noise));
+  return directional ? { values, directional } : values;
 }
 
 function inferLimitedSide(left, right) {
@@ -852,7 +1474,7 @@ function effectiveProfileThreshold(exerciseId, threshold) {
   return threshold;
 }
 
-function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatrix, exerciseStats, affectedSide, comfortLevel }) {
+function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatrix, exerciseStats, affectedSide, comfortLevel, scoringNoiseMode = DEFAULT_SCORING_NOISE_MODE }) {
   const exercises = {};
   for (const stat of exerciseStats) {
     const leftBaseline = stat.leftRobustAvg ?? stat.leftAvg;
@@ -898,6 +1520,7 @@ function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatri
     version: PROFILE_VERSION,
     sideConvention: MOVEMENT_SIDE_CONVENTION,
     createdAt: Date.now(),
+    scoringNoiseMode: normalizeScoringNoiseMode(scoringNoiseMode),
     affectedSide,
     comfortLevel,
     neutralLandmarks: compactLandmarks(neutral),
@@ -1140,6 +1763,8 @@ function orderExerciseIdsByRegion(ids, priorityIds = []) {
 }
 
 function applyPersonalPlanOverrides(coreIds, personalPlan) {
+  const selectedPlan = uniqueKnownExerciseIds(personalPlan?.selectedExerciseIds);
+  if (selectedPlan.length) return selectedPlan;
   const core = uniqueKnownExerciseIds(coreIds);
   const removed = new Set(uniqueKnownExerciseIds(personalPlan?.removedExerciseIds));
   const added = uniqueKnownExerciseIds(personalPlan?.addedExerciseIds);
@@ -1159,7 +1784,8 @@ function buildSystemDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.l
 function buildPersonalizedDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length, options = {}) {
   const core = buildSystemDailyPlan(profile, sessions, count);
   const withOverrides = options.personalPlan ? applyPersonalPlanOverrides(core, options.personalPlan) : core;
-  return options.orderByRegion ? orderExerciseIdsByRegion(withOverrides, core) : withOverrides;
+  const priority = uniqueKnownExerciseIds(options.personalPlan?.selectedExerciseIds).length ? withOverrides : core;
+  return options.orderByRegion ? orderExerciseIdsByRegion(withOverrides, priority) : withOverrides;
 }
 
 function latestSessionBaselineProgress(sessions) {
@@ -1505,14 +2131,85 @@ function smoothLandmarks(prev, next) {
   }
   return out;
 }
+
+const LIVE_SCORE_DEFAULTS = {
+  maxFrames: 9,
+  maxAgeMs: 450,
+  alpha: 0.3,
+  invalidHoldMs: 150,
+};
+
+function medianMetric(values) {
+  const valid = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!valid.length) return null;
+  const mid = Math.floor(valid.length / 2);
+  return valid.length % 2 ? valid[mid] : (valid[mid - 1] + valid[mid]) / 2;
+}
+
+function createLiveScoreStabilizer(config = {}) {
+  const options = { ...LIVE_SCORE_DEFAULTS, ...config };
+  const state = { samples: [], display: null, lastValidAt: null };
+
+  const reset = () => {
+    state.samples = [];
+    state.display = null;
+    state.lastValidAt = null;
+  };
+
+  const update = (symResult, now = Date.now()) => {
+    if (!symResult || !Number.isFinite(symResult.leftDisp) || !Number.isFinite(symResult.rightDisp)) {
+      if (state.display && state.lastValidAt != null && now - state.lastValidAt <= options.invalidHoldMs) {
+        return state.display;
+      }
+      reset();
+      return null;
+    }
+
+    state.lastValidAt = now;
+    state.samples.push({
+      ts: now,
+      leftDisp: symResult.leftDisp,
+      rightDisp: symResult.rightDisp,
+      peak: symResult.peak,
+    });
+    state.samples = state.samples
+      .filter((sample) => now - sample.ts <= options.maxAgeMs)
+      .slice(-options.maxFrames);
+
+    const leftDisp = medianMetric(state.samples.map((sample) => sample.leftDisp));
+    const rightDisp = medianMetric(state.samples.map((sample) => sample.rightDisp));
+    if (leftDisp == null || rightDisp == null) return state.display;
+    const peak = Math.max(leftDisp, rightDisp, medianMetric(state.samples.map((sample) => sample.peak)) ?? 0);
+    const symmetry = peak > 0 ? clampNumber(Math.min(leftDisp, rightDisp) / peak, 0, 1) : null;
+    if (symmetry == null) return state.display;
+
+    if (!state.display) {
+      state.display = { symmetry, leftDisp, rightDisp, peak };
+      return state.display;
+    }
+
+    const alpha = clampNumber(options.alpha, 0, 1);
+    state.display = {
+      symmetry: state.display.symmetry + alpha * (symmetry - state.display.symmetry),
+      leftDisp: state.display.leftDisp + alpha * (leftDisp - state.display.leftDisp),
+      rightDisp: state.display.rightDisp + alpha * (rightDisp - state.display.rightDisp),
+      peak: state.display.peak + alpha * (peak - state.display.peak),
+    };
+    return state.display;
+  };
+
+  return { reset, update };
+}
 export {
   BROW_EXERCISES,
   CALIBRATION_DELTA_POINTS,
   CORE_QUALITY_POINTS,
+  DEFAULT_SCORING_NOISE_MODE,
   EXERCISE_BLENDSHAPES,
   LEGACY_MOVEMENT_SIDE_CONVENTION,
   MOVEMENT_SIDE_CONVENTION,
   NOSE_EXERCISES,
+  SCORING_NOISE_MODES,
   activationThresholdForExercise,
   averageFacialTransformationMatrix,
   averageBlendshapes,
@@ -1529,6 +2226,7 @@ export {
   computeBrowSymmetry,
   computeExerciseSymmetry,
   computeFrownSymmetry,
+  createLiveScoreStabilizer,
   computeMovementProgress,
   computeMovementProgressFromDisplacements,
   computeNoiseFloor,
@@ -1547,6 +2245,7 @@ export {
   flipLeftRightSide,
   focusReason,
   formatProfileDate,
+  normalizeScoringNoiseMode,
   formatProfileSide,
   getAdaptiveFocusItems,
   getProfileExercise,
@@ -1575,6 +2274,7 @@ export {
   signedPointDelta,
   smoothFacialTransformationMatrix,
   smoothLandmarks,
+  scoringOptionsFrom,
   summarizeBaselineProgress,
   summarizeMovementProgress,
   summarizeSessionBaselineProgress,

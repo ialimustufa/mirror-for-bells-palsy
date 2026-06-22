@@ -12,6 +12,7 @@ test("catalog includes requested emoji exercises", () => {
     ["emoji-raised-brow", "🤨"],
     ["emoji-wink", "😉"],
     ["emoji-smirk", "😏"],
+    ["emoji-pucker", "😗"],
     ["emoji-nose-scrunch", "😖"],
   ];
 
@@ -23,9 +24,26 @@ test("catalog includes requested emoji exercises", () => {
   }
 });
 
-test("catalog includes water hold swish exercise", () => {
-  const exercise = EXERCISE_BY_ID.get("water-swish");
+test("catalog includes blink exercise", () => {
+  const exercise = EXERCISE_BY_ID.get("blink");
   assert.ok(exercise);
-  assert.equal(exercise.region, "cheeks");
-  assert.match(exercise.instruction, /left to right and right to left/i);
+  assert.equal(exercise.region, "eyes");
+  assert.equal(exercise.reps, 10);
+  assert.equal(exercise.holdSec, 1);
+});
+
+test("catalog replaces water swish with side water holds", () => {
+  assert.equal(EXERCISE_BY_ID.has("water-swish"), false);
+
+  const left = EXERCISE_BY_ID.get("water-hold-left");
+  const right = EXERCISE_BY_ID.get("water-hold-right");
+  assert.ok(left);
+  assert.ok(right);
+  for (const exercise of [left, right]) {
+    assert.equal(exercise.region, "cheeks");
+    assert.equal(exercise.reps, 4);
+    assert.match(exercise.instruction, /small sip of water/i);
+  }
+  assert.match(left.instruction, /left side/i);
+  assert.match(right.instruction, /right side/i);
 });

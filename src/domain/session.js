@@ -1,11 +1,14 @@
-import { COMFORT_DOSING, DAY_END_HOUR, DAY_START_HOUR, HOLD_SEC, REST_SEC } from "./config";
+import { COMFORT_DOSING, DAY_END_HOUR, DAY_START_HOUR, HOLD_SEC, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, REST_SEC } from "./config";
 import { EXERCISES } from "./exercises";
 
 // Persisted app state is intentionally compact and append-only for sessions/journal.
 // Derived trend metrics are recomputed in views instead of stored.
-// repeatCounts maps an exercise id → how many times it repeats in the routine (>= 2;
+// selectedExerciseIds is the canonical saved routine. added/removed are retained so
+// older saved plans can still be interpreted after migration.
+// repCounts maps an exercise id -> the target reps for that exercise in a routine.
+// repeatCounts maps an exercise id -> how many times it repeats in the routine (>= 2;
 // a count of 1 is the default and is omitted). Kept de-duplicated alongside the id lists.
-export const DEFAULT_PERSONAL_PLAN = { addedExerciseIds: [], removedExerciseIds: [], repeatCounts: {} };
+export const DEFAULT_PERSONAL_PLAN = { selectedExerciseIds: [], addedExerciseIds: [], removedExerciseIds: [], repeatCounts: {}, repCounts: {} };
 
 export const DEFAULT_DATA = {
   journal: [],
@@ -13,7 +16,19 @@ export const DEFAULT_DATA = {
   movementProfile: null,
   initialMovementProfile: null,
   movementProfileHistory: [],
-  prefs: { voiceEnabled: true, mirrorEnabled: true, symmetryEnabled: true, dailyGoal: 3, onboarded: false, personalPlan: DEFAULT_PERSONAL_PLAN },
+  personalRecoveryModel: null,
+  prefs: {
+    voiceEnabled: true,
+    mirrorEnabled: true,
+    symmetryEnabled: true,
+    personalModelEnabled: true,
+    dataCaptureEnabled: false,
+    scoringNoiseMode: "normal",
+    scoringDiagnosticsEnabled: false,
+    dailyGoal: 3,
+    onboarded: false,
+    personalPlan: DEFAULT_PERSONAL_PLAN,
+  },
 };
 
 export const todayISO = () => new Date().toISOString().split("T")[0];
@@ -35,15 +50,38 @@ export function clampNumber(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-export function applySessionDose(exercise, profile) {
+export function applySessionDose(exercise, profile, options = {}) {
   const dosing = getComfortDosing(profile);
-  const reps = clampNumber(Math.round(exercise.reps * dosing.repScale), dosing.minReps, dosing.maxReps);
+  const dosedReps = clampNumber(Math.round(exercise.reps * dosing.repScale), dosing.minReps, dosing.maxReps);
+  const customReps = Number(options.reps);
+  const reps = Number.isFinite(customReps)
+    ? clampNumber(Math.round(customReps), MIN_EXERCISE_REPS, MAX_EXERCISE_REPS)
+    : dosedReps;
   const holdSec = clampNumber(Math.round(exercise.holdSec + dosing.holdDeltaSec), dosing.minHoldSec, dosing.maxHoldSec);
-  return { ...exercise, baseReps: exercise.reps, baseHoldSec: exercise.holdSec, reps, holdSec, restSec: dosing.restSec, comfortLevel: dosing.key };
+  return {
+    ...exercise,
+    baseReps: exercise.reps,
+    baseHoldSec: exercise.holdSec,
+    reps,
+    holdSec,
+    restSec: dosing.restSec,
+    comfortLevel: dosing.key,
+    ...(Number.isFinite(customReps) ? { customReps: true } : {}),
+  };
 }
 
-export function buildSessionExercises(ids, profile) {
-  return ids.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean).map((exercise) => applySessionDose(exercise, profile));
+export function buildSessionExercises(ids, profile, repCounts = {}) {
+  return ids
+    .map((id) => EXERCISES.find((e) => e.id === id))
+    .filter(Boolean)
+    .map((exercise) => applySessionDose(exercise, profile, { reps: repCounts?.[exercise.id] }));
+}
+
+export function appendSessionRecord(data = DEFAULT_DATA, rec) {
+  return {
+    ...data,
+    sessions: [...(data.sessions ?? []), rec],
+  };
 }
 
 // Expand a unique, ordered id list by per-id repeat counts, spacing repeats of the
@@ -78,6 +116,16 @@ export function exerciseRestSec(exercise) {
 
 export function exerciseHoldSec(exercise) {
   return exercise?.holdSec ?? HOLD_SEC;
+}
+
+// Wall-clock seconds an exercise occupies: a hold per rep plus reps+1 rests — the
+// entry-settle rest before the first hold, and a recovery rest after each hold
+// (including the last, before the interstitial). Shared so the pre-session estimate
+// and the in-session countdown agree.
+export function exercisePlannedSec(exercise) {
+  if (!exercise) return 0;
+  const reps = Math.max(0, exercise.reps ?? 0);
+  return reps * exerciseHoldSec(exercise) + (reps + 1) * exerciseRestSec(exercise);
 }
 
 export function minCompletedRepsBeforeRetake(totalReps) {

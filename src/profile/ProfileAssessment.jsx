@@ -7,7 +7,7 @@ import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { ExerciseAnimation, ExerciseGlyph, LiveExercisePreview, RealtimeFeedback, TrackerStatusPill } from "../components/appViews";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
-import { averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, buildMovementProfile, calibrationPrompt, computeExerciseSymmetry, computeNoiseFloor, drawOverlay, exerciseBaselineQuality, faceAlignmentFeedback, firstFacialTransformationMatrix, inferLimitedSide, normalizedFrameDelta, robustMovementWindow, smoothFacialTransformationMatrix, smoothLandmarks } from "../ml/faceMetrics";
+import { averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, buildMovementProfile, calibrationPrompt, computeExerciseSymmetry, computeNoiseFloor, createLiveScoreStabilizer, drawOverlay, exerciseBaselineQuality, faceAlignmentFeedback, firstFacialTransformationMatrix, inferLimitedSide, normalizeScoringNoiseMode, normalizedFrameDelta, robustMovementWindow, smoothFacialTransformationMatrix, smoothLandmarks } from "../ml/faceMetrics";
 
 const BASELINE_SETUP_STEPS = [
   { title: "Set up the camera", body: "Use steady light, keep your whole face visible, and sit close enough that the ring can track your brows, eyes, nose, and mouth." },
@@ -57,6 +57,8 @@ function finalizeAssessmentStats(stat, exercise) {
 
 function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onTogglePref, onComplete, onSkip }) {
   const voiceEnabled = prefs?.voiceEnabled ?? false;
+  const scoringNoiseMode = normalizeScoringNoiseMode(prefs?.scoringNoiseMode);
+  const scoringDiagnosticsEnabled = prefs?.scoringDiagnosticsEnabled === true;
   const retakeIds = [...new Set((retakeExerciseIds ?? []).filter((id) => EXERCISE_BY_ID.has(id)))];
   const isPartialRetake = retakeIds.length > 0;
   const isCompletionRetake = isPartialRetake && retakeIds.some((id) => !existingProfile?.exercises?.[id]);
@@ -140,6 +142,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
   const restMatrixBufferRef = useRef([]);
   const restRetryRef = useRef(0);
   const statRef = useRef(emptyAssessmentFrameStats());
+  const liveScoreStabilizerRef = useRef(createLiveScoreStabilizer());
   const activeCamera = phase !== "intro" && phase !== "summary";
   const { stream, cameraError } = useCameraStream(activeCamera);
   const { faceLandmarker, latestRef, status: trackerStatus } = useFaceLandmarker(activeCamera);
@@ -187,6 +190,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
     statRef.current = emptyAssessmentFrameStats();
     statRef.current.neutralFrames = restBufferRef.current.length;
     statRef.current.neutralSource = exerciseNeutralRef.current ? "exercise-rest" : "global";
+    liveScoreStabilizerRef.current.reset();
     setLiveScore(null);
     setLiveBalance(null);
   }, [phase, exIdx]);
@@ -325,6 +329,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
             }
           } else if (phase === "hold") {
             if (!aligned) {
+              liveScoreStabilizerRef.current.reset();
               setLiveScore(null);
               setLiveBalance(null);
             } else {
@@ -335,7 +340,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
               const noise = exerciseNoiseRef.current ?? noiseRef.current;
               const neutralBs = exerciseNeutralBsRef.current ?? neutralBsRef.current;
               const neutralMatrix = exerciseNeutralMatrixRef.current ?? neutralMatrixRef.current;
-              const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs, facialTransformationMatrix, neutralMatrix);
+              const sym = computeExerciseSymmetry(current.id, lm, neutral, noise, bsMap, neutralBs, facialTransformationMatrix, neutralMatrix, { scoringNoiseMode, scoringDiagnosticsEnabled });
               if (sym) {
                 stat.frames++;
                 stat.leftSum += sym.leftDisp;
@@ -345,14 +350,20 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
                 stat.rightPeak = Math.max(stat.rightPeak, sym.rightDisp);
                 stat.symPeak = stat.symPeak == null ? sym.symmetry : Math.max(stat.symPeak, sym.symmetry);
                 stat.samples.push({ left: sym.leftDisp, right: sym.rightDisp, symmetry: sym.symmetry, peak: sym.peak });
-                setLiveScore(sym.symmetry);
-                setLiveBalance({ left: sym.leftDisp, right: sym.rightDisp });
+                const live = liveScoreStabilizerRef.current.update(sym);
+                setLiveScore(live?.symmetry ?? null);
+                setLiveBalance(live ? { left: live.leftDisp, right: live.rightDisp } : null);
+              } else {
+                const live = liveScoreStabilizerRef.current.update(null);
+                setLiveScore(live?.symmetry ?? null);
+                setLiveBalance(live ? { left: live.leftDisp, right: live.rightDisp } : null);
               }
             }
           }
           drawOverlay(overlayRef.current, v, lm, { aligned, phase });
         } else {
           latestRef.current = null;
+          liveScoreStabilizerRef.current.reset();
           setPostureAligned(false);
           setLiveScore(null);
           setLiveBalance(null);
@@ -376,7 +387,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
     };
     raf = requestAnimationFrame(tick);
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [activeCamera, faceLandmarker, latestRef, phase, current.id]);
+  }, [activeCamera, faceLandmarker, latestRef, phase, current.id, scoringDiagnosticsEnabled, scoringNoiseMode]);
 
   const handleBegin = () => {
     setExerciseStats([]);
@@ -411,6 +422,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
       exerciseStats,
       affectedSide: isPartialRetake ? existingProfile?.affectedSide ?? affectedSide : affectedSide,
       comfortLevel: isPartialRetake ? existingProfile?.comfortLevel ?? comfortLevel : comfortLevel,
+      scoringNoiseMode,
     });
     onComplete(profile, { retakeExerciseIds: isPartialRetake ? exerciseIds : null });
   };
