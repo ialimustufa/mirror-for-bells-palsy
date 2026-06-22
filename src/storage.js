@@ -1,11 +1,16 @@
 const DB_NAME = "mirror-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const APP_STATE_STORE = "appState";
 const SESSIONS_STORE = "sessions";
 const SESSION_IMAGES_STORE = "sessionImages";
+const SESSION_FRAME_SAMPLES_STORE = "sessionFrameSamples";
 const APP_STATE_ID = "state";
 const SCHEMA_VERSION = 1;
 const LEGACY_STORAGE_KEY = "mirror-app-data";
+const EXPORT_KIND = "mirror-browser-data";
+const EXPORT_LINES_KIND = "mirror-browser-data-lines";
+const EXPORT_VERSION = 1;
+const EXPORT_APP_ID = "mirror-bells-palsy";
 
 let dbPromise = null;
 
@@ -59,6 +64,14 @@ function openMirrorDb() {
       ensureIndex(imagesStore, "sessionId", "sessionId");
       ensureIndex(imagesStore, "exerciseId", "exerciseId");
       ensureIndex(imagesStore, "role", "role");
+
+      const frameSamplesStore = db.objectStoreNames.contains(SESSION_FRAME_SAMPLES_STORE)
+        ? tx.objectStore(SESSION_FRAME_SAMPLES_STORE)
+        : db.createObjectStore(SESSION_FRAME_SAMPLES_STORE, { keyPath: "id" });
+      ensureIndex(frameSamplesStore, "sessionId", "sessionId");
+      ensureIndex(frameSamplesStore, "exerciseId", "exerciseId");
+      ensureIndex(frameSamplesStore, "phase", "phase");
+      ensureIndex(frameSamplesStore, "ts", "ts");
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => {
@@ -104,7 +117,7 @@ function compactExerciseScoreForStorage(score) {
 
 function compactSessionForStorage(session) {
   if (!session || typeof session !== "object") return session;
-  const { baselineSnapshot, scores, ...compactSession } = session;
+  const { baselineSnapshot, frameSamples, scores, ...compactSession } = session;
   if (Array.isArray(scores)) compactSession.scores = scores.map(compactExerciseScoreForStorage);
   else if (scores !== undefined) compactSession.scores = scores;
 
@@ -113,6 +126,8 @@ function compactSessionForStorage(session) {
     : Number.isFinite(session.snapshotCount) ? session.snapshotCount : 0;
   if (snapshotCount > 0) compactSession.snapshotCount = snapshotCount;
   if (baselineSnapshot || session.hasBaselineSnapshot) compactSession.hasBaselineSnapshot = true;
+  const frameSampleCount = Array.isArray(frameSamples) ? frameSamples.length : session.frameSampleCount;
+  if (Number.isFinite(frameSampleCount) && frameSampleCount > 0) compactSession.frameSampleCount = frameSampleCount;
   return compactSession;
 }
 
@@ -157,6 +172,22 @@ async function makeImageRecord({ id, sessionId, exerciseId, role, scoreIndex, re
     ts,
     mime: parseDataUrlMime(dataUrl),
     blob,
+    createdAt: now,
+    updatedAt: now,
+    syncStatus: "local",
+  };
+}
+
+function makeFrameSampleRecord({ sessionId, sample, index, now }) {
+  if (!sample || typeof sample !== "object") return null;
+  return {
+    ...sample,
+    id: `${sessionId}:frame:${index}`,
+    sessionId,
+    exerciseId: sample.exerciseId ?? "",
+    phase: sample.phase ?? "",
+    ts: sample.ts ?? now,
+    sampleIndex: index,
     createdAt: now,
     updatedAt: now,
     syncStatus: "local",
@@ -227,6 +258,7 @@ async function prepareSessionForIndexedDb(session, now) {
   compactSession.syncStatus = session?.syncStatus ?? "local";
 
   const images = [];
+  const frameSamples = [];
   let hasExerciseBaseline = false;
 
   if (Array.isArray(session?.scores)) {
@@ -258,8 +290,16 @@ async function prepareSessionForIndexedDb(session, now) {
     }
   }
 
+  if (Array.isArray(session?.frameSamples)) {
+    for (const [index, sample] of session.frameSamples.entries()) {
+      const record = makeFrameSampleRecord({ sessionId, sample, index, now });
+      if (record) frameSamples.push(record);
+    }
+    if (frameSamples.length > 0) compactSession.frameSampleCount = frameSamples.length;
+  }
+
   compactSession.imageCount = images.length || compactSession.imageCount || 0;
-  return { session: compactSession, images };
+  return { session: compactSession, images, frameSamples };
 }
 
 function buildAppStateRecord(data, now) {
@@ -292,17 +332,20 @@ async function prepareDataForIndexedDb(next) {
   const appState = buildAppStateRecord(next, now);
   const sessions = [];
   const images = [];
+  const frameSamples = [];
 
   for (const session of next?.sessions ?? []) {
     const prepared = await prepareSessionForIndexedDb(session, now);
     sessions.push(prepared.session);
     images.push(...prepared.images);
+    frameSamples.push(...prepared.frameSamples);
   }
 
   return {
     appState,
     sessions,
     images,
+    frameSamples,
     data: { ...appStateRecordToData(appState), sessions },
   };
 }
@@ -331,20 +374,37 @@ async function readReferencedSessionImages(db, referencedIds, replacementIds) {
   return images.filter((image) => referencedIds.has(image.id) && !replacementIds.has(image.id));
 }
 
+async function readReferencedFrameSamples(db, referencedSessionIds, replacementSessionIds) {
+  if (!referencedSessionIds.size || !db.objectStoreNames.contains(SESSION_FRAME_SAMPLES_STORE)) return [];
+  const tx = db.transaction(SESSION_FRAME_SAMPLES_STORE, "readonly");
+  const done = transactionDone(tx);
+  const request = tx.objectStore(SESSION_FRAME_SAMPLES_STORE).getAll();
+  const samples = await requestToPromise(request);
+  await done;
+  return samples.filter((sample) => referencedSessionIds.has(sample.sessionId) && !replacementSessionIds.has(sample.sessionId));
+}
+
 async function writePreparedDataToIndexedDb(prepared) {
   const db = await openMirrorDb();
   const referencedIds = collectReferencedImageIds(prepared.sessions);
   const replacementIds = new Set(prepared.images.map((image) => image.id));
+  const referencedSessionIds = new Set(prepared.sessions.map((session) => session.id).filter(Boolean));
+  const replacementFrameSampleSessionIds = new Set(prepared.frameSamples.map((sample) => sample.sessionId).filter(Boolean));
   const preservedImages = await readReferencedSessionImages(db, referencedIds, replacementIds);
-  const tx = db.transaction([APP_STATE_STORE, SESSIONS_STORE, SESSION_IMAGES_STORE], "readwrite");
+  const preservedFrameSamples = await readReferencedFrameSamples(db, referencedSessionIds, replacementFrameSampleSessionIds);
+  const tx = db.transaction([APP_STATE_STORE, SESSIONS_STORE, SESSION_IMAGES_STORE, SESSION_FRAME_SAMPLES_STORE], "readwrite");
   const done = transactionDone(tx);
   tx.objectStore(APP_STATE_STORE).put(prepared.appState);
   const sessionsStore = tx.objectStore(SESSIONS_STORE);
   const imagesStore = tx.objectStore(SESSION_IMAGES_STORE);
+  const frameSamplesStore = tx.objectStore(SESSION_FRAME_SAMPLES_STORE);
   sessionsStore.clear();
+  frameSamplesStore.clear();
   for (const session of prepared.sessions) sessionsStore.put(session);
   for (const image of prepared.images) imagesStore.put(image);
   for (const image of preservedImages) imagesStore.put(image);
+  for (const sample of prepared.frameSamples) frameSamplesStore.put(sample);
+  for (const sample of preservedFrameSamples) frameSamplesStore.put(sample);
   await done;
 }
 
@@ -379,6 +439,303 @@ function writeLegacyStorage(data) {
 
 function removeLegacyStorage() {
   try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* best effort cleanup */ }
+}
+
+function plainRecord(record) {
+  if (!record || typeof record !== "object") return null;
+  return { ...record };
+}
+
+function recordArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(plainRecord).filter(Boolean);
+}
+
+async function readIndexedDbStores(storeNames) {
+  const db = await openMirrorDb();
+  const names = storeNames.filter((name) => db.objectStoreNames.contains(name));
+  if (names.length === 0) return {};
+  const tx = db.transaction(names, "readonly");
+  const done = transactionDone(tx);
+  const requests = Object.fromEntries(names.map((name) => [name, tx.objectStore(name).getAll()]));
+  const entries = await Promise.all(Object.entries(requests).map(async ([name, request]) => [name, await requestToPromise(request)]));
+  await done;
+  return Object.fromEntries(entries);
+}
+
+async function exportImageRecord(record) {
+  if (!record || typeof record !== "object") return null;
+  const { blob, ...rest } = record;
+  const dataUrl = typeof record.dataUrl === "string"
+    ? record.dataUrl
+    : blob
+      ? await blobToDataUrl(blob)
+      : null;
+  return dataUrl ? { ...rest, dataUrl } : { ...rest };
+}
+
+function browserDataSummary(stores) {
+  const appState = recordArray(stores.appState).find((record) => record.id === APP_STATE_ID) ?? recordArray(stores.appState)[0] ?? null;
+  const sessionImages = recordArray(stores.sessionImages);
+  const sessionFrameSamples = recordArray(stores.sessionFrameSamples);
+  return {
+    sessions: recordArray(stores.sessions).length,
+    sessionImages: sessionImages.length,
+    sessionFrameSamples: sessionFrameSamples.length,
+    journalEntries: Array.isArray(appState?.journal) ? appState.journal.length : 0,
+    hasMovementProfile: Boolean(appState?.movementProfile),
+  };
+}
+
+export async function exportMirrorBrowserData() {
+  const stores = await readIndexedDbStores([APP_STATE_STORE, SESSIONS_STORE, SESSION_IMAGES_STORE, SESSION_FRAME_SAMPLES_STORE]);
+  const appState = recordArray(stores[APP_STATE_STORE]);
+  const sessions = recordArray(stores[SESSIONS_STORE]);
+  const sessionFrameSamples = recordArray(stores[SESSION_FRAME_SAMPLES_STORE]);
+  const sessionImages = [];
+  for (const image of recordArray(stores[SESSION_IMAGES_STORE])) {
+    const exported = await exportImageRecord(image);
+    if (exported) sessionImages.push(exported);
+  }
+
+  const exportStores = { appState, sessions, sessionImages, sessionFrameSamples };
+  return {
+    kind: EXPORT_KIND,
+    appId: EXPORT_APP_ID,
+    version: EXPORT_VERSION,
+    exportedAt: new Date().toISOString(),
+    storage: {
+      dbName: DB_NAME,
+      dbVersion: DB_VERSION,
+      schemaVersion: SCHEMA_VERSION,
+    },
+    summary: browserDataSummary(exportStores),
+    stores: exportStores,
+    legacyData: readLegacyStorage(),
+  };
+}
+
+export function createMirrorBrowserDataExportBlob(payload) {
+  const manifest = {
+    kind: EXPORT_LINES_KIND,
+    appId: payload?.appId ?? EXPORT_APP_ID,
+    version: payload?.version ?? EXPORT_VERSION,
+    exportedAt: payload?.exportedAt ?? new Date().toISOString(),
+    storage: payload?.storage ?? { dbName: DB_NAME, dbVersion: DB_VERSION, schemaVersion: SCHEMA_VERSION },
+    summary: payload?.summary ?? browserDataSummary(payload?.stores ?? {}),
+  };
+  const parts = [JSON.stringify(manifest), "\n"];
+  for (const store of [APP_STATE_STORE, SESSIONS_STORE, SESSION_IMAGES_STORE, SESSION_FRAME_SAMPLES_STORE]) {
+    for (const record of recordArray(payload?.stores?.[store])) {
+      parts.push(JSON.stringify({ store, record }), "\n");
+    }
+  }
+  if (payload?.legacyData) parts.push(JSON.stringify({ store: "legacyData", record: payload.legacyData }), "\n");
+  return new Blob(parts, { type: "application/x-ndjson" });
+}
+
+async function parseMirrorBrowserDataLines(file) {
+  const stores = { appState: [], sessions: [], sessionImages: [], sessionFrameSamples: [] };
+  let manifest = null;
+  let legacyData = null;
+  const reader = file.stream().getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const parseLine = (line) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    const parsed = JSON.parse(trimmed);
+    if (parsed.kind === EXPORT_LINES_KIND) {
+      manifest = parsed;
+      return;
+    }
+    if (parsed.store === "legacyData") {
+      legacyData = parsed.record ?? null;
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(stores, parsed.store) && parsed.record && typeof parsed.record === "object") {
+      stores[parsed.store].push(parsed.record);
+    }
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let lineEnd = buffer.indexOf("\n");
+    while (lineEnd >= 0) {
+      parseLine(buffer.slice(0, lineEnd));
+      buffer = buffer.slice(lineEnd + 1);
+      lineEnd = buffer.indexOf("\n");
+    }
+  }
+  buffer += decoder.decode();
+  parseLine(buffer);
+
+  if (!manifest) throw new Error("Choose a Mirror browser data JSON export.");
+  return {
+    ...manifest,
+    kind: EXPORT_KIND,
+    stores,
+    legacyData,
+  };
+}
+
+export async function parseMirrorBrowserDataFile(file) {
+  const firstChunk = await file.slice(0, 512).text();
+  const isLineExport = file.name?.toLowerCase().endsWith(".jsonl")
+    || firstChunk.includes(`"kind":"${EXPORT_LINES_KIND}"`)
+    || firstChunk.includes(`"kind": "${EXPORT_LINES_KIND}"`);
+  if (isLineExport) return parseMirrorBrowserDataLines(file);
+  return JSON.parse(await file.text());
+}
+
+function importedStoresFromPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const stores = payload.stores ?? payload.data?.stores ?? null;
+  if (!stores || typeof stores !== "object") return null;
+  const hasKnownStoreShape = payload.kind === EXPORT_KIND
+    || payload.appId === EXPORT_APP_ID
+    || Array.isArray(stores.appState)
+    || Array.isArray(stores.sessions)
+    || Array.isArray(stores.sessionImages)
+    || Array.isArray(stores.sessionFrameSamples)
+    || Array.isArray(stores.images)
+    || Array.isArray(stores.frameSamples);
+  if (!hasKnownStoreShape) return null;
+  return {
+    appState: recordArray(Array.isArray(stores.appState) ? stores.appState : [stores.appState].filter(Boolean)),
+    sessions: recordArray(stores.sessions),
+    sessionImages: recordArray(stores.sessionImages ?? stores.images),
+    sessionFrameSamples: recordArray(stores.sessionFrameSamples ?? stores.frameSamples),
+  };
+}
+
+function appDataFromImportedPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  if (payload.kind === EXPORT_KIND) return payload.legacyData ?? payload.appData ?? payload.data?.appData ?? null;
+  if (payload.appData && typeof payload.appData === "object") return payload.appData;
+  if (payload.data?.appData && typeof payload.data.appData === "object") return payload.data.appData;
+  if (Array.isArray(payload.sessions) || Array.isArray(payload.journal) || payload.prefs || payload.movementProfile) return payload;
+  return null;
+}
+
+function normalizeImportedAppStateRecords(records, now) {
+  return records.map((record, index) => ({
+    ...record,
+    id: record.id ?? (index === 0 ? APP_STATE_ID : createRecordId("appState")),
+    schemaVersion: record.schemaVersion ?? SCHEMA_VERSION,
+    createdAt: record.createdAt ?? now,
+    updatedAt: now,
+    syncStatus: record.syncStatus ?? "local",
+  }));
+}
+
+function normalizeImportedSessionRecords(records, now) {
+  return records.map((record) => ({
+    ...record,
+    id: record.id ?? createRecordId("session"),
+    createdAt: record.createdAt ?? record.ts ?? now,
+    updatedAt: now,
+    syncStatus: record.syncStatus ?? "local",
+  }));
+}
+
+function normalizeImportedFrameSampleRecords(records, now) {
+  return records.map((record, index) => {
+    const sessionId = record.sessionId ?? "";
+    return {
+      ...record,
+      id: record.id ?? `${sessionId}:frame:${index}`,
+      sessionId,
+      exerciseId: record.exerciseId ?? "",
+      phase: record.phase ?? "",
+      ts: record.ts ?? now,
+      createdAt: record.createdAt ?? now,
+      updatedAt: now,
+      syncStatus: record.syncStatus ?? "local",
+    };
+  });
+}
+
+async function normalizeImportedImageRecords(records, now) {
+  const images = [];
+  for (const record of records) {
+    const { dataUrl, blob, ...rest } = record;
+    const imageBlob = blob ?? (typeof dataUrl === "string" ? await dataUrlToBlob(dataUrl) : null);
+    if (!imageBlob) continue;
+    images.push({
+      ...rest,
+      id: rest.id ?? createRecordId("image"),
+      sessionId: rest.sessionId ?? "",
+      exerciseId: rest.exerciseId ?? "",
+      role: rest.role ?? "",
+      scoreIndex: Number.isInteger(rest.scoreIndex) ? rest.scoreIndex : null,
+      repIndex: Number.isInteger(rest.repIndex) ? rest.repIndex : null,
+      mime: rest.mime ?? (typeof dataUrl === "string" ? parseDataUrlMime(dataUrl) : "image/jpeg"),
+      blob: imageBlob,
+      createdAt: rest.createdAt ?? now,
+      updatedAt: now,
+      syncStatus: rest.syncStatus ?? "local",
+    });
+  }
+  return images;
+}
+
+async function replaceIndexedDbStores({ appState, sessions, sessionImages, sessionFrameSamples }) {
+  const db = await openMirrorDb();
+  const tx = db.transaction([APP_STATE_STORE, SESSIONS_STORE, SESSION_IMAGES_STORE, SESSION_FRAME_SAMPLES_STORE], "readwrite");
+  const done = transactionDone(tx);
+  const appStateStore = tx.objectStore(APP_STATE_STORE);
+  const sessionsStore = tx.objectStore(SESSIONS_STORE);
+  const imagesStore = tx.objectStore(SESSION_IMAGES_STORE);
+  const frameSamplesStore = tx.objectStore(SESSION_FRAME_SAMPLES_STORE);
+  appStateStore.clear();
+  sessionsStore.clear();
+  imagesStore.clear();
+  frameSamplesStore.clear();
+  for (const record of appState) appStateStore.put(record);
+  for (const record of sessions) sessionsStore.put(record);
+  for (const record of sessionImages) imagesStore.put(record);
+  for (const record of sessionFrameSamples) frameSamplesStore.put(record);
+  await done;
+}
+
+async function replacePreparedDataInIndexedDb(prepared) {
+  await replaceIndexedDbStores({
+    appState: [prepared.appState],
+    sessions: prepared.sessions,
+    sessionImages: prepared.images,
+    sessionFrameSamples: prepared.frameSamples,
+  });
+}
+
+export async function importMirrorBrowserData(payload) {
+  const now = Date.now();
+  const stores = importedStoresFromPayload(payload);
+  const appData = appDataFromImportedPayload(payload);
+  const hasStoreRecords = stores && (
+    stores.appState.length > 0
+    || stores.sessions.length > 0
+    || stores.sessionImages.length > 0
+    || stores.sessionFrameSamples.length > 0
+  );
+  if (stores && (hasStoreRecords || !appData)) {
+    const appState = normalizeImportedAppStateRecords(stores.appState, now);
+    const sessions = normalizeImportedSessionRecords(stores.sessions, now);
+    const sessionImages = await normalizeImportedImageRecords(stores.sessionImages, now);
+    const sessionFrameSamples = normalizeImportedFrameSampleRecords(stores.sessionFrameSamples, now);
+    await replaceIndexedDbStores({ appState, sessions, sessionImages, sessionFrameSamples });
+    removeLegacyStorage();
+    return await readDataFromIndexedDb() ?? { sessions: [] };
+  }
+
+  if (!appData) throw new Error("Choose a Mirror browser data JSON export.");
+  const prepared = await prepareDataForIndexedDb(appData);
+  await replacePreparedDataInIndexedDb(prepared);
+  removeLegacyStorage();
+  return prepared.data;
 }
 
 function sessionSignature(session) {
@@ -505,6 +862,23 @@ export async function deleteSessionImages(sessionId) {
     // Orphaned blobs are a storage cost only, not a correctness issue, so deletion
     // is best-effort — the next save still drops the session record itself.
     console.error("Failed to delete session images", error);
+  }
+}
+
+export async function deleteSessionFrameSamples(sessionId) {
+  if (!sessionId) return;
+  try {
+    const db = await openMirrorDb();
+    if (!db.objectStoreNames.contains(SESSION_FRAME_SAMPLES_STORE)) return;
+    const tx = db.transaction(SESSION_FRAME_SAMPLES_STORE, "readwrite");
+    const done = transactionDone(tx);
+    const store = tx.objectStore(SESSION_FRAME_SAMPLES_STORE);
+    const keysRequest = store.index("sessionId").getAllKeys(sessionId);
+    const keys = await requestToPromise(keysRequest);
+    for (const key of keys) store.delete(key);
+    await done;
+  } catch (error) {
+    console.error("Failed to delete session frame samples", error);
   }
 }
 

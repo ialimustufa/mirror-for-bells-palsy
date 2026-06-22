@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus } from "lucide-react";
+import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus, Download, Upload } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
+import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
-import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exerciseRestSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
+import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
+import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exercisePlannedSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
-import { baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionMovementProgress, movementBalanceLabel, movementProgressLabel, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, preferredMovementProgress, profileExerciseEntries, profileStatus, progressUsesLegacySideConvention, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
+import { SCORING_NOISE_MODES, baselineProgressLabel, compareMovementProfiles, focusReason, formatProfileDate, formatProfileSide, getAdaptiveFocusItems, latestExerciseProgressById, latestSessionMovementProgress, movementBalanceLabel, movementProgressLabel, objectCoverTransform, orderExerciseIdsByRegion, preferredBaselineProgress, preferredMovementProgress, profileExerciseEntries, profileStatus, progressUsesLegacySideConvention, sessionFocusRecommendation, signedPointDelta } from "../ml/faceMetrics";
 import { flushSpeech, primeSpeech, warmSpeechVoices } from "../lib/speech";
 
 const NAV_ITEMS = [
@@ -16,6 +17,20 @@ const NAV_ITEMS = [
   { key: "journal", label: "Journal", icon: BookOpen },
   { key: "progress", label: "Progress", icon: TrendingUp },
 ];
+
+const EMPTY_COUNTS = Object.freeze({});
+
+const SCORING_NOISE_MODE_LABELS = {
+  normal: "Normal",
+  soft: "Soft",
+  raw: "Raw",
+};
+
+const SCORING_NOISE_MODE_DESCRIPTIONS = {
+  normal: "Production calibrated noise handling.",
+  soft: "Reduced penalties for low movement testing.",
+  raw: "No noise subtraction; minimum gates only.",
+};
 
 function Header({ view, streak }) {
   const titles = { home: "Today", practice: "Practice", baseline: "Baseline", journal: "Journal", progress: "Progress" };
@@ -259,18 +274,24 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
   const todaysJournal = data.journal.find((j) => j.date === todayISO());
   const dailyGoal = data.prefs.dailyGoal ?? 3;
   const todaysPlan = useMemo(() => personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []), [personalizedPlanIds, recommendedPlanIds]);
-  const hasCustomPlan = !sameExerciseIds(todaysPlan, recommendedPlanIds ?? []);
+  const planRepeatCounts = data.prefs.personalPlan?.repeatCounts ?? EMPTY_COUNTS;
+  const planRepCounts = data.prefs.personalPlan?.repCounts ?? EMPTY_COUNTS;
+  const hasCustomPlan = !sameExerciseIds(todaysPlan, recommendedPlanIds ?? [])
+    || Object.keys(planRepeatCounts).length > 0
+    || Object.keys(planRepCounts).length > 0;
   const focusItems = getAdaptiveFocusItems(data.movementProfile, data.sessions, 3);
   const planExercises = todaysPlan.map((id) => EXERCISES.find((e) => e.id === id)).filter(Boolean);
+  const planStartIds = useMemo(() => spreadRepeatedExercises(todaysPlan, planRepeatCounts), [todaysPlan, planRepeatCounts]);
   const planMissingBaselineIds = data.movementProfile
     ? todaysPlan.filter((id) => !data.movementProfile.exercises?.[id])
     : [];
-  const planSessionExercises = useMemo(() => buildSessionExercises(todaysPlan, data.movementProfile), [todaysPlan, data.movementProfile]);
+  const planSessionExercises = useMemo(() => buildSessionExercises(planStartIds, data.movementProfile, planRepCounts), [planStartIds, data.movementProfile, planRepCounts]);
   const planDurationSec = useMemo(
-    () => planSessionExercises.reduce((sum, ex) => sum + ex.reps * (exerciseHoldSec(ex) + exerciseRestSec(ex)), 0)
+    () => planSessionExercises.reduce((sum, ex) => sum + exercisePlannedSec(ex), 0)
       + Math.max(0, planSessionExercises.length - 1) * INTERSTITIAL_SEC,
     [planSessionExercises]
   );
+  const planTargetRepCount = planSessionExercises.reduce((sum, ex) => sum + (ex.reps ?? 0), 0);
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -321,7 +342,7 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
               ? (nextLabel === "Now" ? "Time for your next session" : `Next at ${nextLabel}`)
               : "Beautifully done. Rest and return tomorrow."}
           </div>
-          <button onClick={() => onStartSession(todaysPlan)} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+          <button onClick={() => onStartSession(planStartIds, planRepCounts)} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>
             <Play className="w-4 h-4 fill-current" />{remaining > 0 ? "Start session" : "Practice again"}
           </button>
         </div>
@@ -335,7 +356,7 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
             </div>
             <div className="flex flex-wrap justify-end gap-2">
               {baselineStatus && <div className="text-xs rounded-full px-2.5 py-1" style={{ background: `${baselineStatus.quality.color}26`, color: baselineStatus.quality.color }}>{baselineStatus.quality.label}</div>}
-              <div className="text-xs rounded-full px-2.5 py-1 tabular-nums" style={{ background: "rgba(244,239,230,0.08)" }} title="Estimated session length">{planExercises.length} moves · ~{formatDuration(planDurationSec)}</div>
+              <div className="text-xs rounded-full px-2.5 py-1 tabular-nums" style={{ background: "rgba(244,239,230,0.08)" }} title="Estimated session length">{planSessionExercises.length} moves · {planTargetRepCount} reps · ~{formatDuration(planDurationSec)}</div>
             </div>
           </div>
           {(() => {
@@ -344,15 +365,16 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
             const visible = overflow > 0 ? planExercises.slice(0, PLAN_PREVIEW_CAP - 1) : planExercises;
             return (
               <div className="grid grid-cols-4 gap-1.5">
-                {visible.map((ex) => {
-                  const needsBaseline = planMissingBaselineIds.includes(ex.id);
-                  return (
-                    <div key={ex.id} title={needsBaseline ? `${ex.name} · needs baseline` : ex.name} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 min-w-0" style={{ background: "rgba(244,239,230,0.08)", border: needsBaseline ? "1px solid rgba(212,165,116,0.45)" : "1px solid rgba(244,239,230,0.08)" }}>
-                      <ExerciseGlyph exercise={ex} size="xs" tone="dark" />
-                      <div className="text-[11px] font-semibold truncate min-w-0">{ex.name}</div>
-                    </div>
-                  );
-                })}
+	                {visible.map((ex) => {
+	                  const needsBaseline = planMissingBaselineIds.includes(ex.id);
+	                  const reps = planRepCounts[ex.id];
+	                  return (
+	                    <div key={ex.id} title={needsBaseline ? `${ex.name} · needs baseline` : ex.name} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 min-w-0" style={{ background: "rgba(244,239,230,0.08)", border: needsBaseline ? "1px solid rgba(212,165,116,0.45)" : "1px solid rgba(244,239,230,0.08)" }}>
+	                      <ExerciseGlyph exercise={ex} size="xs" tone="dark" />
+	                      <div className="text-[11px] font-semibold truncate min-w-0">{ex.name}{reps ? ` · ${reps} reps` : ""}</div>
+	                    </div>
+	                  );
+	                })}
                 {overflow > 0 && (
                   <button onClick={() => onGo("practice")} title={`${overflow + 1} more in your plan`} className="inline-flex items-center justify-center rounded-lg px-2 py-1.5 text-[11px] font-semibold" style={{ background: "rgba(244,239,230,0.06)", border: "1px dashed rgba(244,239,230,0.22)", color: "#F4EFE6" }}>
                     +{overflow + 1} more
@@ -549,6 +571,10 @@ function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
       drawArrow(ctx, quiet.x, quiet.y, "ringDashed", "Relax", dpr, SECONDARY, 1);
       break;
     }
+    case "blink":
+      drawArrow(ctx, eyeL.x, eyeL.y, "ring", "Blink softly", dpr, PRIMARY, pulse);
+      drawArrow(ctx, eyeR.x, eyeR.y, "ring", null, dpr, PRIMARY, pulse);
+      break;
     case "eye-close":
       drawArrow(ctx, eyeL.x, eyeL.y, "ring", "Close softly", dpr, PRIMARY, pulse);
       drawArrow(ctx, eyeR.x, eyeR.y, "ring", null, dpr, PRIMARY, pulse);
@@ -577,6 +603,14 @@ function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
       drawArrow(ctx, cheekL.x, cheekL.y, alt ? "out" : "in", "Move water", dpr, PRIMARY, pulse, "left");
       drawArrow(ctx, cheekR.x, cheekR.y, alt ? "in" : "out", null, dpr, PRIMARY, pulse, "right");
       break;
+    case "water-hold-left":
+      drawArrow(ctx, cheekL.x, cheekL.y, "out", "Hold left", dpr, PRIMARY, pulse, "left");
+      drawArrow(ctx, cheekR.x, cheekR.y, "ringDashed", "Quiet", dpr, SECONDARY, 1);
+      break;
+    case "water-hold-right":
+      drawArrow(ctx, cheekR.x, cheekR.y, "out", "Hold right", dpr, PRIMARY, pulse, "right");
+      drawArrow(ctx, cheekL.x, cheekL.y, "ringDashed", "Quiet", dpr, SECONDARY, 1);
+      break;
     case "cheek-suck":
       drawArrow(ctx, cheekL.x, cheekL.y, "in", "Pull in", dpr, PRIMARY, pulse, "left");
       drawArrow(ctx, cheekR.x, cheekR.y, "in", null, dpr, PRIMARY, pulse, "right");
@@ -603,6 +637,7 @@ function drawArrowMarkers(canvas, video, lm, mirrorEnabled, exerciseId) {
       break;
     }
     case "pucker":
+    case "emoji-pucker":
     case "emoji-kiss":
       drawArrow(ctx, mouthC.x, mouthC.y, "ring", "Pucker forward", dpr, PRIMARY, pulse);
       break;
@@ -843,7 +878,7 @@ function ExerciseGlyph({ exercise, exerciseId, region, size = "sm", tone = "ligh
   );
 }
 
-function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommendedPlanIds, savedRepeatCounts, onStartSession, onShowDetail, onSavePersonalPlan, onResetPersonalPlan }) {
+function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommendedPlanIds, savedRepeatCounts, savedRepCounts, onStartSession, onShowDetail, onSavePersonalPlan, onResetPersonalPlan }) {
   // Library state stays local until the user starts or explicitly saves, keeping
   // one-off custom routines separate from the persisted daily plan.
   const profilePlan = useMemo(() => personalizedPlanIds?.length ? personalizedPlanIds : (recommendedPlanIds ?? []), [personalizedPlanIds, recommendedPlanIds]);
@@ -861,39 +896,84 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
     }
     return result;
   }, [savedRepeatCounts, profilePlan]);
+  const planRepCounts = useMemo(() => {
+    if (!savedRepCounts) return {};
+    const planSet = new Set(profilePlan);
+    const result = {};
+    for (const [id, count] of Object.entries(savedRepCounts)) {
+      if (planSet.has(id) && count >= MIN_EXERCISE_REPS) result[id] = clampNumber(Math.round(count), MIN_EXERCISE_REPS, MAX_EXERCISE_REPS);
+    }
+    return result;
+  }, [savedRepCounts, profilePlan]);
+  const defaultRepCounts = useMemo(() => {
+    const result = {};
+    for (const exercise of EXERCISES) result[exercise.id] = applySessionDose(exercise, movementProfile).reps;
+    return result;
+  }, [movementProfile]);
   const [region, setRegion] = useState("all");
   const [selected, setSelected] = useState(() => new Set(profilePlan));
   // Per-exercise repeat count for one-off routines — lets the same exercise be queued
   // multiple times in a single session. Counts of 1 are omitted; the saved plan stays
   // de-duplicated (savePersonalPlan collapses ids through a Set) but keeps each count.
   const [repeatCounts, setRepeatCounts] = useState(planRepeatCounts);
-  useEffect(() => { setSelected(new Set(profilePlan)); setRepeatCounts(planRepeatCounts); }, [profilePlan, planRepeatCounts]);
+  const [repCounts, setRepCounts] = useState(planRepCounts);
+  const [hasDraftSelection, setHasDraftSelection] = useState(false);
+  const selectionMatchesSavedPlan = (ids, counts = repeatCounts, reps = repCounts) => {
+    const idList = Array.isArray(ids) ? ids : [...ids];
+    if (!sameExerciseSet(idList, profilePlan)) return false;
+    const countIds = new Set([...Object.keys(counts ?? {}), ...Object.keys(planRepeatCounts)]);
+    for (const id of countIds) {
+      if ((counts?.[id] ?? 1) !== (planRepeatCounts[id] ?? 1)) return false;
+    }
+    const repIds = new Set([...Object.keys(reps ?? {}), ...Object.keys(planRepCounts)]);
+    for (const id of repIds) {
+      if ((reps?.[id] ?? null) !== (planRepCounts[id] ?? null)) return false;
+    }
+    return true;
+  };
+  useEffect(() => {
+    if (hasDraftSelection) return;
+    setSelected(new Set(profilePlan));
+    setRepeatCounts(planRepeatCounts);
+    setRepCounts(planRepCounts);
+  }, [profilePlan, planRepeatCounts, planRepCounts, hasDraftSelection]);
   const filtered = region === "all" ? EXERCISES : EXERCISES.filter((e) => e.region === region);
   const repeatOf = (id) => repeatCounts[id] ?? 1;
+  const repOf = (id) => repCounts[id] ?? defaultRepCounts[id] ?? 1;
   const toggle = (id) => {
     const next = new Set(selected);
+    let nextRepeatCounts = repeatCounts;
+    let nextRepCounts = repCounts;
     if (next.has(id)) {
       next.delete(id);
-      setRepeatCounts((prev) => {
-        const rest = { ...prev };
-        delete rest[id];
-        return rest;
-      });
+      nextRepeatCounts = { ...repeatCounts };
+      delete nextRepeatCounts[id];
+      nextRepCounts = { ...repCounts };
+      delete nextRepCounts[id];
+      setRepeatCounts(nextRepeatCounts);
+      setRepCounts(nextRepCounts);
     } else {
       next.add(id);
     }
     setSelected(next);
+    setHasDraftSelection(!selectionMatchesSavedPlan(next, nextRepeatCounts, nextRepCounts));
   };
   const setRepeat = (id, count) => {
     const clamped = clampNumber(Math.round(count), 1, MAX_EXERCISE_REPEATS);
-    setRepeatCounts((prev) => {
-      if (clamped <= 1) {
-        const rest = { ...prev };
-        delete rest[id];
-        return rest;
-      }
-      return { ...prev, [id]: clamped };
-    });
+    const nextRepeatCounts = { ...repeatCounts };
+    if (clamped <= 1) delete nextRepeatCounts[id];
+    else nextRepeatCounts[id] = clamped;
+    setRepeatCounts(nextRepeatCounts);
+    setHasDraftSelection(!selectionMatchesSavedPlan(selected, nextRepeatCounts, repCounts));
+  };
+  const setExerciseReps = (id, count) => {
+    const clamped = clampNumber(Math.round(count), MIN_EXERCISE_REPS, MAX_EXERCISE_REPS);
+    const defaultReps = defaultRepCounts[id] ?? 1;
+    const nextRepCounts = { ...repCounts };
+    if (clamped === defaultReps) delete nextRepCounts[id];
+    else nextRepCounts[id] = clamped;
+    setRepCounts(nextRepCounts);
+    setHasDraftSelection(!selectionMatchesSavedPlan(selected, repeatCounts, nextRepCounts));
   };
   const shownIds = filtered.map((exercise) => exercise.id);
   const orderedSelectedIds = useMemo(() => orderExerciseIdsByRegion([...selected], recommendedPlan), [selected, recommendedPlan]);
@@ -908,9 +988,9 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
     : [];
   const selectedShownCount = shownIds.filter((id) => selected.has(id)).length;
   const allShownSelected = shownIds.length > 0 && selectedShownCount === shownIds.length;
-  const startSessionExercises = useMemo(() => buildSessionExercises(startIds, movementProfile), [startIds, movementProfile]);
+  const startSessionExercises = useMemo(() => buildSessionExercises(startIds, movementProfile, repCounts), [startIds, movementProfile, repCounts]);
   const selectedDurationSec = useMemo(
-    () => startSessionExercises.reduce((sum, ex) => sum + ex.reps * (exerciseHoldSec(ex) + exerciseRestSec(ex)), 0)
+    () => startSessionExercises.reduce((sum, ex) => sum + exercisePlannedSec(ex), 0)
       + Math.max(0, startSessionExercises.length - 1) * INTERSTITIAL_SEC,
     [startSessionExercises]
   );
@@ -923,23 +1003,48 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
     }
     return true;
   }, [repeatCounts, planRepeatCounts]);
-  const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan) && repeatCountsMatchSaved;
-  const recommendedSelected = sameExerciseSet(orderedSelectedIds, recommendedPlan);
-  const hasCustomPlan = !sameExerciseIds(profilePlan, recommendedPlan) || Object.keys(planRepeatCounts).length > 0;
+  const repCountsMatchSaved = useMemo(() => {
+    const ids = new Set([...Object.keys(repCounts), ...Object.keys(planRepCounts)]);
+    for (const id of ids) {
+      if ((repCounts[id] ?? null) !== (planRepCounts[id] ?? null)) return false;
+    }
+    return true;
+  }, [repCounts, planRepCounts]);
+  const savedPlanSelected = sameExerciseSet(orderedSelectedIds, profilePlan) && repeatCountsMatchSaved && repCountsMatchSaved;
+  const recommendedSelected = sameExerciseSet(orderedSelectedIds, recommendedPlan) && Object.keys(repeatCounts).length === 0 && Object.keys(repCounts).length === 0;
+  const hasCustomPlan = !sameExerciseIds(profilePlan, recommendedPlan) || Object.keys(planRepeatCounts).length > 0 || Object.keys(planRepCounts).length > 0;
   const canSavePlan = selected.size > 0 && !savedPlanSelected;
-  const selectSavedPlan = () => { setSelected(new Set(profilePlan)); setRepeatCounts(planRepeatCounts); };
-  const selectRecommended = () => { setSelected(new Set(recommendedPlan)); setRepeatCounts({}); };
-  const selectAllShown = () => setSelected((prev) => new Set([...prev, ...shownIds]));
-  const clearSelection = () => { setSelected(new Set()); setRepeatCounts({}); };
-  const totalReps = startIds.length;
+  const selectSavedPlan = () => { setSelected(new Set(profilePlan)); setRepeatCounts(planRepeatCounts); setRepCounts(planRepCounts); setHasDraftSelection(false); };
+  const selectRecommended = () => {
+    setSelected(new Set(recommendedPlan));
+    setRepeatCounts({});
+    setRepCounts({});
+    setHasDraftSelection(!selectionMatchesSavedPlan(recommendedPlan, {}, {}));
+  };
+  const selectAllShown = () => {
+    const next = new Set([...selected, ...shownIds]);
+    setSelected(next);
+    setHasDraftSelection(!selectionMatchesSavedPlan(next, repeatCounts, repCounts));
+  };
+  const clearSelection = () => {
+    setSelected(new Set());
+    setRepeatCounts({});
+    setRepCounts({});
+    setHasDraftSelection(!selectionMatchesSavedPlan([], {}, {}));
+  };
+  const routineExerciseCount = startIds.length;
+  const totalReps = startSessionExercises.reduce((sum, exercise) => sum + (exercise.reps ?? 0), 0);
   const handleSavePlan = () => {
     if (!canSavePlan) return;
-    onSavePersonalPlan?.(orderedSelectedIds, repeatCounts);
+    const saved = onSavePersonalPlan?.(orderedSelectedIds, repeatCounts, repCounts);
+    if (saved) setHasDraftSelection(false);
   };
   const handleResetPlan = () => {
     onResetPersonalPlan?.();
     setSelected(new Set(recommendedPlan));
     setRepeatCounts({});
+    setRepCounts({});
+    setHasDraftSelection(false);
   };
 
   return (
@@ -960,21 +1065,22 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
               : <button onClick={selectRecommended} className="rounded-full px-3 py-1.5 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>Recommended</button>}
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
-            {profilePlan.map((id) => {
-              const exercise = EXERCISES.find((item) => item.id === id);
-              if (!exercise) return null;
-              const needsBaseline = !movementProfile.exercises?.[id];
-              const repeat = planRepeatCounts[id] ?? 1;
-              return (
-                <div key={id} className="shrink-0 inline-flex items-center gap-2 rounded-xl px-2.5 py-2 max-w-[14rem]" style={{ background: "rgba(255,255,255,0.42)", border: needsBaseline ? "1px solid rgba(154,106,50,0.35)" : "1px solid rgba(122,143,115,0.16)" }}>
-                  <ExerciseGlyph exercise={exercise} size="xs" />
-                  <div className="min-w-0">
-                    <div className="text-xs font-semibold truncate">{exercise.name}{repeat > 1 ? ` ×${repeat}` : ""}</div>
-                    {needsBaseline && <div className="text-[10px] mt-0.5" style={{ color: "#8B5A1E" }}>Needs baseline</div>}
-                  </div>
-                </div>
-              );
-            })}
+	            {profilePlan.map((id) => {
+	              const exercise = EXERCISES.find((item) => item.id === id);
+	              if (!exercise) return null;
+	              const needsBaseline = !movementProfile.exercises?.[id];
+	              const repeat = planRepeatCounts[id] ?? 1;
+	              const reps = planRepCounts[id];
+	              return (
+	                <div key={id} className="shrink-0 inline-flex items-center gap-2 rounded-xl px-2.5 py-2 max-w-[14rem]" style={{ background: "rgba(255,255,255,0.42)", border: needsBaseline ? "1px solid rgba(154,106,50,0.35)" : "1px solid rgba(122,143,115,0.16)" }}>
+	                  <ExerciseGlyph exercise={exercise} size="xs" />
+	                  <div className="min-w-0">
+	                    <div className="text-xs font-semibold truncate">{exercise.name}{repeat > 1 ? ` ×${repeat}` : ""}{reps ? ` · ${reps} reps` : ""}</div>
+	                    {needsBaseline && <div className="text-[10px] mt-0.5" style={{ color: "#8B5A1E" }}>Needs baseline</div>}
+	                  </div>
+	                </div>
+	              );
+	            })}
           </div>
           {focusItems.length > 0 && (
             <div className="space-y-2 mt-3">
@@ -998,7 +1104,7 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
       </div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl px-4 py-3" style={{ background: "rgba(255,255,255,0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
         <div className="text-xs text-stone-600">
-          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}{totalReps !== selected.size ? ` · ${totalReps} in routine` : ""}{selected.size > 0 ? ` · ~${formatDuration(selectedDurationSec)}` : ""}</div>
+          <div>{selectedShownCount} of {filtered.length} shown selected{selected.size !== selectedShownCount ? ` · ${selected.size} total` : ""}{routineExerciseCount !== selected.size ? ` · ${routineExerciseCount} in routine` : ""}{selected.size > 0 ? ` · ${totalReps} reps · ~${formatDuration(selectedDurationSec)}` : ""}</div>
           {selectedMissingBaselineIds.length > 0 && <div className="mt-0.5" style={{ color: "#9A6A32" }}>{selectedMissingBaselineIds.length} selected need baseline</div>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1018,9 +1124,12 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
             selected={selected.has(ex.id)}
             needsBaseline={Boolean(movementProfile && selected.has(ex.id) && !movementProfile.exercises?.[ex.id])}
             repeat={repeatOf(ex.id)}
+            reps={repOf(ex.id)}
+            defaultReps={defaultRepCounts[ex.id]}
             maxRepeat={MAX_EXERCISE_REPEATS}
             onToggle={() => toggle(ex.id)}
             onRepeatChange={(count) => setRepeat(ex.id, count)}
+            onRepsChange={(count) => setExerciseReps(ex.id, count)}
             onShow={() => onShowDetail(ex)}
           />
         ))}
@@ -1033,8 +1142,8 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
                 <Save className="w-4 h-4" />Save plan
               </button>
             )}
-            <button onClick={() => onStartSession(startIds)} className="flex-1 rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
-              <Play className="w-4 h-4 fill-current" />Start with {totalReps} exercise{totalReps > 1 ? "s" : ""}<span className="opacity-70 font-normal tabular-nums">· ~{formatDuration(selectedDurationSec)}</span>
+            <button onClick={() => onStartSession(startIds, repCounts)} className="flex-1 rounded-full py-3.5 px-6 flex items-center justify-center gap-2 font-semibold shadow-lg" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+              <Play className="w-4 h-4 fill-current" />Start with {routineExerciseCount} exercise{routineExerciseCount > 1 ? "s" : ""}<span className="opacity-70 font-normal tabular-nums">· {totalReps} reps · ~{formatDuration(selectedDurationSec)}</span>
             </button>
           </div>
         </div>
@@ -1043,8 +1152,37 @@ function PracticeView({ movementProfile, sessions, personalizedPlanIds, recommen
   );
 }
 
-function ExerciseRow({ exercise, sessionExercise, selected, needsBaseline, repeat = 1, maxRepeat = 5, onToggle, onRepeatChange, onShow }) {
+function CountStepper({ label, value, min, max, onChange, ariaLabel }) {
+  return (
+    <div className="flex items-center gap-1.5" role="group" aria-label={ariaLabel ?? label}>
+      <span className="w-8 text-[10px] uppercase tracking-wider text-stone-500 text-right">{label}</span>
+      <button
+        onClick={() => onChange?.(value - 1)}
+        disabled={value <= min}
+        className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-35"
+        style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}
+        aria-label={`Decrease ${label.toLowerCase()}`}
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <span className="w-5 text-center text-sm font-semibold tabular-nums" aria-label={`${value} ${label.toLowerCase()}`}>{value}</span>
+      <button
+        onClick={() => onChange?.(value + 1)}
+        disabled={value >= max}
+        className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-35"
+        style={{ background: "rgba(184, 84, 58, 0.16)", color: "#8F3C2A" }}
+        aria-label={`Increase ${label.toLowerCase()}`}
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
+function ExerciseRow({ exercise, sessionExercise, selected, needsBaseline, repeat = 1, reps = null, defaultReps = null, maxRepeat = 5, onToggle, onRepeatChange, onRepsChange, onShow }) {
   const dose = sessionExercise ?? exercise;
+  const displayReps = selected ? (reps ?? dose.reps) : dose.reps;
+  const hasCustomReps = selected && defaultReps != null && displayReps !== defaultReps;
   return (
     <div className="rounded-2xl p-4 flex items-center gap-3" style={{ background: selected ? "rgba(184, 84, 58, 0.08)" : "rgba(255,255,255,0.5)", border: selected ? "1px solid rgba(184, 84, 58, 0.3)" : "1px solid rgba(31, 27, 22, 0.06)" }}>
       <button onClick={onToggle} className="w-6 h-6 rounded-full flex items-center justify-center shrink-0" style={{ background: selected ? "#B8543A" : "transparent", border: selected ? "none" : "1.5px solid rgba(31, 27, 22, 0.2)" }} aria-label={selected ? "Deselect" : "Select"}>
@@ -1055,33 +1193,17 @@ function ExerciseRow({ exercise, sessionExercise, selected, needsBaseline, repea
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-[15px] truncate">{exercise.name}{repeat > 1 ? <span className="text-stone-400 font-normal"> ×{repeat}</span> : null}</div>
           <div className="text-xs text-stone-500 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1">
-            <span>{dose.reps} reps · {dose.holdSec}s hold · <span className="capitalize">{exercise.region}</span></span>
+            <span>{displayReps} reps · {dose.holdSec}s hold · <span className="capitalize">{exercise.region}</span></span>
+            {hasCustomReps && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(122,143,115,0.14)", color: "#4A6B47" }}>Custom reps</span>}
             {needsBaseline && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "rgba(212,165,116,0.18)", color: "#8B5A1E" }}>Needs baseline</span>}
           </div>
         </div>
         {!selected && <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />}
       </button>
       {selected && (
-        <div className="flex items-center gap-1.5 shrink-0" role="group" aria-label={`${exercise.name} times in routine`}>
-          <button
-            onClick={() => onRepeatChange?.(repeat - 1)}
-            disabled={repeat <= 1}
-            className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-35"
-            style={{ background: "rgba(31, 27, 22, 0.06)", color: "#1F1B16" }}
-            aria-label={`Remove one ${exercise.name}`}
-          >
-            <Minus className="w-3.5 h-3.5" />
-          </button>
-          <span className="w-5 text-center text-sm font-semibold tabular-nums" aria-label={`${repeat} times`}>{repeat}</span>
-          <button
-            onClick={() => onRepeatChange?.(repeat + 1)}
-            disabled={repeat >= maxRepeat}
-            className="w-7 h-7 rounded-full flex items-center justify-center disabled:opacity-35"
-            style={{ background: "rgba(184, 84, 58, 0.16)", color: "#8F3C2A" }}
-            aria-label={`Add another ${exercise.name}`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
+          <CountStepper label="Reps" value={displayReps} min={MIN_EXERCISE_REPS} max={MAX_EXERCISE_REPS} onChange={onRepsChange} ariaLabel={`${exercise.name} reps`} />
+          <CountStepper label="Sets" value={repeat} min={1} max={maxRepeat} onChange={onRepeatChange} ariaLabel={`${exercise.name} times in routine`} />
         </div>
       )}
     </div>
@@ -1414,7 +1536,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
             const scoreBaseline = usableProgress(s.baselineProgress);
             const scoreInitialBaseline = usableProgress(s.initialBaselineProgress);
             return (
-              <div key={s.exerciseId} className="rounded-2xl p-4" style={{ background: "rgba(244, 239, 230, 0.06)" }}>
+              <div key={`${s.exerciseId}-${exIdx}`} className="rounded-2xl p-4" style={{ background: "rgba(244, 239, 230, 0.06)" }}>
               <div className="flex items-center gap-3">
                 <ExerciseGlyph exerciseId={s.exerciseId} region={s.region} size="xs" tone="dark" />
                 <div className="flex-1 min-w-0">
@@ -1882,11 +2004,21 @@ function BaselineView({ data, onStartProfile, onResetBaselines }) {
   );
 }
 
-function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenReport, onDeleteSession }) {
+function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onExportData, onImportData }) {
   // Progress charts are projections of journal/session history. Keeping them derived
   // avoids migration work when scoring or display rules change.
   const totalSessions = data.sessions.length;
   const last7DaysSessions = data.sessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
+  const personalModelDisabled = prefs.personalModelEnabled === false;
+  const personalModel = personalModelDisabled ? null : data.personalRecoveryModel;
+  const personalModelEntries = Object.values(personalModel?.exercises ?? {}).filter((entry) => entry.currentRatio != null);
+  const trainedEntries = personalModelEntries.filter((entry) => entry.confidence !== "collecting");
+  const personalCurrentRatio = trainedEntries.length
+    ? trainedEntries.reduce((sum, entry) => sum + entry.currentRatio, 0) / trainedEntries.length
+    : null;
+  const personalFocusItems = useMemo(() => personalRecoveryFocusItems(personalModel, 3), [personalModel]);
+  const modelStatus = personalModelDisabled ? "disabled" : personalModel?.status ?? "collecting";
+  const modelStatusColor = modelStatus === "high" ? "#7A8F73" : modelStatus === "medium" ? "#6E7F59" : modelStatus === "low" ? "#D4A574" : modelStatus === "disabled" ? "#A8A29E" : "#A8A29E";
   const journalChartData = useMemo(() => data.journal.length === 0 ? [] : data.journal.slice(-21).map((j) => ({ date: new Date(j.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), symmetry: j.symmetry })), [data.journal]);
   const aiSymmetryData = useMemo(() => data.sessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [data.sessions]);
   const baselineProgressData = useMemo(() => data.sessions.map((s) => {
@@ -1917,6 +2049,61 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
         <StatCard label="Streak" value={streak} unit={streak === 1 ? "day" : "days"} />
         <StatCard label="Last 7 days" value={last7DaysSessions} unit="sessions" />
         <StatCard label="All time" value={totalSessions} unit="sessions" />
+      </div>
+      <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div>
+            <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Personal recovery model</div></div>
+            <div className="text-xs text-stone-500">{personalModelDisabled ? "Enable it in preferences to train local recovery trends." : "Local trend model from your own affected-side movement history."}</div>
+          </div>
+          <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ background: `${modelStatusColor}22`, color: modelStatusColor }}>
+            {modelStatus}
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <div>
+            <div className="text-2xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: "#7A8F73" }}>{personalCurrentRatio != null ? Math.round(personalCurrentRatio * 100) : "—"}</div>
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">{personalCurrentRatio != null ? "% baseline" : "collecting"}</div>
+          </div>
+          <div>
+            <div className="text-2xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{trainedEntries.length}</div>
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">/{personalModelEntries.length || 0} ready</div>
+          </div>
+          <div>
+            <div className="text-2xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{personalModelEntries.reduce((sum, entry) => sum + (entry.sampleCount ?? 0), 0)}</div>
+            <div className="text-[10px] uppercase tracking-wider text-stone-500">scored</div>
+          </div>
+        </div>
+        {!personalModelDisabled && personalFocusItems.length > 0 ? (
+          <div className="space-y-2">
+            {personalFocusItems.map((item) => {
+              const exercise = EXERCISES.find((ex) => ex.id === item.exerciseId);
+              const trend = item.trendSlopePctPerWeek;
+              const trendLabel = trend == null ? "trend collecting" : `${trend >= 0 ? "+" : ""}${Math.round(trend)} pts/week`;
+              const detailParts = [`${Math.round((item.currentRatio ?? 0) * 100)}% of first baseline`];
+              if (item.currentBalanceRatio != null) detailParts.push(`balance ${Math.round(item.currentBalanceRatio * 100)}%`);
+              detailParts.push(trendLabel);
+              if (item.isCurrentStale && item.currentRatioAsOf) detailParts.push(`as of ${item.currentRatioAsOf}`);
+              return (
+                <div key={item.exerciseId} className="rounded-xl px-3 py-2 flex items-center justify-between gap-3" style={{ background: "rgba(31, 27, 22, 0.04)" }}>
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{exercise?.name ?? item.exerciseId}</div>
+                    <div className="text-xs text-stone-500">{detailParts.join(" · ")}</div>
+                  </div>
+                  <div className="text-[10px] uppercase tracking-wider text-stone-500 shrink-0">{item.confidence}</div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-stone-500">
+            {personalModelDisabled
+              ? "Personal recovery modeling is turned off."
+              : personalModelEntries.length === 0 && (personalModel?.legacyExcludedSampleCount ?? 0) > 0
+                ? "Your older sessions used a previous movement format and can't train the model yet. New sessions will build it."
+                : "Complete at least 5 scored sessions across 3 different dates for an exercise to train its recovery trend."}
+          </div>
+        )}
       </div>
       {aiSymmetryData.length > 1 ? (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
@@ -2006,11 +2193,16 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
           </div>
         </div>
       )}
+      <BrowserDataControls status={dataTransferStatus} onExport={onExportData} onImport={onImportData} />
       <div>
         <div className="text-sm uppercase tracking-wider text-stone-500 mb-3">Preferences</div>
         <div className="space-y-2">
           <DailyGoalSelector value={prefs.dailyGoal ?? 3} onChange={(v) => onSetPref("dailyGoal", v)} />
           <ToggleRow label="Symmetry tracking" description="Auto-measure symmetry during exercises" value={prefs.symmetryEnabled} onToggle={() => onTogglePref("symmetryEnabled")} />
+          <ToggleRow label="Personal recovery model" description="Train local trend estimates from your saved sessions" value={prefs.personalModelEnabled !== false} onToggle={() => onTogglePref("personalModelEnabled")} />
+          <ToggleRow label="Local data capture" description="Store sampled landmarks for debugging and future model work" value={prefs.dataCaptureEnabled === true} onToggle={() => onTogglePref("dataCaptureEnabled")} />
+          <ScoringNoiseModeSelector value={prefs.scoringNoiseMode ?? "normal"} onChange={(mode) => onSetPref("scoringNoiseMode", mode)} />
+          <ToggleRow label="Scoring diagnostics" description="Log scoring signals in the browser console" value={prefs.scoringDiagnosticsEnabled === true} onToggle={() => onSetPref("scoringDiagnosticsEnabled", !(prefs.scoringDiagnosticsEnabled === true))} />
           <ToggleRow label="Voice cues during practice" description="Spoken prompts for each rep" value={prefs.voiceEnabled} onToggle={() => { if (prefs.voiceEnabled) flushSpeech(); else primeSpeech(true, { text: "Voice cues on." }); onTogglePref("voiceEnabled"); }} />
           <ToggleRow label="Mirror camera" description="Front camera during sessions" value={prefs.mirrorEnabled} onToggle={() => onTogglePref("mirrorEnabled")} />
         </div>
@@ -2018,6 +2210,51 @@ function ProgressView({ data, streak, prefs, onTogglePref, onSetPref, onOpenRepo
       <div className="rounded-2xl p-4 text-xs text-stone-600 leading-relaxed" style={{ background: "rgba(122, 143, 115, 0.1)" }}>
         Mirror is a practice companion, not medical care. Always work with your neurologist and physical therapist on your specific recovery plan. Discontinue any exercise that causes pain.
       </div>
+    </div>
+  );
+}
+
+function BrowserDataControls({ status, onExport, onImport }) {
+  const inputRef = useRef(null);
+  const [pendingImportFile, setPendingImportFile] = useState(null);
+  const busy = status?.kind === "working";
+  const statusColor = status?.kind === "error" ? "#B8543A" : status?.kind === "success" ? "#7A8F73" : "#7C7066";
+  const handleImportPick = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) setPendingImportFile(file);
+  };
+  return (
+    <div>
+      <div className="text-sm uppercase tracking-wider text-stone-500 mb-3">Browser data</div>
+      <div className="rounded-2xl p-4" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+        <div className="text-sm font-medium mb-1">Local backup</div>
+        <div className="text-xs text-stone-500 mb-4">Sessions, baselines, journal, preferences, report images, and local capture samples.</div>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={busy} onClick={onExport} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+            <Download className="w-3.5 h-3.5" />Export data
+          </button>
+          <button disabled={busy} onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(31,27,22,0.08)", color: "#1F1B16", border: "1px solid rgba(31,27,22,0.08)" }}>
+            <Upload className="w-3.5 h-3.5" />Import data
+          </button>
+          <input ref={inputRef} type="file" accept="application/json,application/x-ndjson,.json,.jsonl" className="hidden" onChange={handleImportPick} />
+        </div>
+        {status?.message && <div className="text-xs mt-3" style={{ color: statusColor }}>{status.message}</div>}
+      </div>
+      {pendingImportFile && (
+        <ConfirmAlert
+          title="Import browser data?"
+          message={`This replaces the saved browser data on this device with ${pendingImportFile.name}.`}
+          confirmLabel="Import data"
+          cancelLabel="Keep current data"
+          onConfirm={() => {
+            const file = pendingImportFile;
+            setPendingImportFile(null);
+            onImport?.(file);
+          }}
+          onCancel={() => setPendingImportFile(null)}
+        />
+      )}
     </div>
   );
 }
@@ -2039,6 +2276,31 @@ function DailyGoalSelector({ value, onChange }) {
         })}
       </div>
       <div className="text-xs text-stone-500 mt-3">Sessions spread evenly between {DAY_START_HOUR > 12 ? DAY_START_HOUR - 12 : DAY_START_HOUR}{DAY_START_HOUR >= 12 ? " PM" : " AM"} and {DAY_END_HOUR > 12 ? DAY_END_HOUR - 12 : DAY_END_HOUR}{DAY_END_HOUR >= 12 ? " PM" : " AM"}.</div>
+    </div>
+  );
+}
+
+function ScoringNoiseModeSelector({ value, onChange }) {
+  const current = SCORING_NOISE_MODES.includes(value) ? value : "normal";
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-sm font-medium">Scoring noise mode</div>
+          <div className="text-xs text-stone-500 mt-0.5">{SCORING_NOISE_MODE_DESCRIPTIONS[current]}</div>
+        </div>
+        <div className="text-[10px] uppercase tracking-wider text-stone-500 shrink-0">Testing</div>
+      </div>
+      <div className="grid grid-cols-3 rounded-full p-1 gap-1" style={{ background: "rgba(31, 27, 22, 0.06)" }}>
+        {SCORING_NOISE_MODES.map((mode) => {
+          const active = current === mode;
+          return (
+            <button key={mode} onClick={() => onChange(mode)} className="py-2 rounded-full text-xs font-semibold" style={{ background: active ? "#1F1B16" : "transparent", color: active ? "#F4EFE6" : "#1F1B16", transition: "background 0.15s, color 0.15s" }}>
+              {SCORING_NOISE_MODE_LABELS[mode]}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

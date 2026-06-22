@@ -1,6 +1,6 @@
 # Data Privacy Policy
 
-Effective date: May 15, 2026
+Effective date: June 9, 2026
 
 Mirror for Bell's Palsy is designed as a local-first practice companion. The app does not require an account, does not upload camera video, and does not include an application backend for collecting user practice data.
 
@@ -15,6 +15,7 @@ Mirror for Bell's Palsy is designed as a local-first practice companion. The app
 - Video frames, face landmarks, movement scores, profile baselines, journal entries, and session history are stored locally in your browser storage.
 - The app uses IndexedDB under `mirror-db` for app state, sessions, and report images.
 - Older local data may be migrated from the legacy `mirror-app-data` localStorage key into IndexedDB.
+- The personal recovery model trains locally from sessions already saved on your device and is on by default; optional debug data capture (sampled landmarks and scoring metadata, never raw video) is off by default. Both can be toggled in the app's preferences.
 
 ## What Mirror Does Not Collect
 

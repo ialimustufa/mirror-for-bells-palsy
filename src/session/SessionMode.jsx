@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, X, ChevronRight, Volume2, VolumeX, Camera, CameraOff } from "lucide-react";
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, INTERSTITIAL_SEC } from "../domain/config";
-import { canPromptRetakeAfterRep, exerciseHoldSec, exerciseRestSec, todayISO } from "../domain/session";
+import { canPromptRetakeAfterRep, exerciseHoldSec, exercisePlannedSec, exerciseRestSec, todayISO } from "../domain/session";
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
-import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeMovementProgressFromDisplacements, computeNoiseFloor, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
+import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeMovementProgressFromDisplacements, computeNoiseFloor, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
   faceMissing: "Find your face in the camera.",
@@ -37,10 +37,135 @@ function lowSignalIssue(exercise) {
   return `${exercise?.name ?? "This exercise"} is below your saved baseline.`;
 }
 
-function exercisePlannedSec(exercise) {
-  if (!exercise) return 0;
-  const reps = Math.max(0, exercise.reps ?? 0);
-  return reps * exerciseHoldSec(exercise) + (reps + 1) * exerciseRestSec(exercise);
+const SCORING_SESSION_DEBUG_LOG_INTERVAL_MS = 700;
+let lastScoringSessionDebugLogAt = 0;
+
+function scoringSessionDebugEnabled(scoringOptions = {}) {
+  if (scoringOptions.scoringDiagnosticsEnabled) return true;
+  const win = typeof window !== "undefined" ? window : null;
+  if (!win) return false;
+  if (win.__MIRROR_DEBUG_SCORING__ === true || win.__MIRROR_DEBUG_NOSE__ === true) return true;
+  try {
+    return win.localStorage?.getItem("mirror-debug-scoring") === "1"
+      || win.localStorage?.getItem("mirror-debug-nose") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function debugSessionMetric(value) {
+  return Number.isFinite(value) ? Number(value.toFixed(6)) : value ?? null;
+}
+
+function logScoringSessionDebug(reason, payload = {}, scoringOptions = {}) {
+  if (!scoringSessionDebugEnabled(scoringOptions)) return;
+  const win = typeof window !== "undefined" ? window : null;
+  const now = win?.performance?.now?.() ?? Date.now();
+  if (now - lastScoringSessionDebugLogAt < SCORING_SESSION_DEBUG_LOG_INTERVAL_MS) return;
+  lastScoringSessionDebugLogAt = now;
+  console.log("[Mirror scoring session]", reason, {
+    scoringNoiseMode: scoringOptions.scoringNoiseMode,
+    ...payload,
+  });
+}
+
+function compactNumber(value, digits = 5) {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function compactLandmarksForCapture(landmarks) {
+  if (!Array.isArray(landmarks)) return null;
+  return landmarks.map((point) => point ? {
+    x: compactNumber(point.x),
+    y: compactNumber(point.y),
+    z: compactNumber(point.z ?? 0),
+  } : null);
+}
+
+function compactBlendshapesForCapture(blendshapes) {
+  if (!blendshapes || typeof blendshapes !== "object") return null;
+  const out = {};
+  for (const [key, value] of Object.entries(blendshapes)) {
+    const compact = compactNumber(value, 5);
+    if (compact != null) out[key] = compact;
+  }
+  return out;
+}
+
+function compactMatrixForCapture(matrix) {
+  if (!matrix?.data) return null;
+  return {
+    rows: matrix.rows,
+    columns: matrix.columns,
+    data: Array.from(matrix.data, (value) => compactNumber(value, 5)),
+  };
+}
+
+function movementFeaturesFromHold({
+  current,
+  leftAvg,
+  rightAvg,
+  movementProgress,
+  initialMovementProgress,
+  holdScoreCount,
+  holdFaceFrames,
+  holdAlignedFrames,
+  activationPeak,
+  profileThreshold,
+  scoringNoiseMode,
+}) {
+  const progress = initialMovementProgress ?? movementProgress;
+  const alignedFrameRatio = holdFaceFrames > 0 ? holdAlignedFrames / holdFaceFrames : null;
+  return {
+    exerciseId: current.id,
+    affectedMovement: compactNumber(progress?.affectedMovement),
+    properMovement: compactNumber(progress?.properMovement),
+    affectedToProperRatio: compactNumber(progress?.affectedToProperRatio),
+    affectedProgressRatio: compactNumber(progress?.affectedProgressRatio),
+    leftMovement: compactNumber(leftAvg),
+    rightMovement: compactNumber(rightAvg),
+    activationPeak: compactNumber(activationPeak),
+    validScoredFrameCount: holdScoreCount,
+    holdFrameCount: holdFaceFrames,
+    alignedFrameRatio: compactNumber(alignedFrameRatio, 4),
+    profileThreshold: compactNumber(profileThreshold),
+    scoringNoiseMode,
+  };
+}
+
+function summarizeMovementFeatures(features = []) {
+  const valid = features.filter(Boolean);
+  if (!valid.length) return null;
+  const weightedAverage = (key) => {
+    let sum = 0, weight = 0;
+    for (const item of valid) {
+      const value = item[key];
+      if (!Number.isFinite(value)) continue;
+      const w = Math.max(1, item.validScoredFrameCount ?? 1);
+      sum += value * w;
+      weight += w;
+    }
+    return weight ? compactNumber(sum / weight) : null;
+  };
+  const totalValidFrames = valid.reduce((sum, item) => sum + (item.validScoredFrameCount ?? 0), 0);
+  const totalHoldFrames = valid.reduce((sum, item) => sum + (item.holdFrameCount ?? 0), 0);
+  const alignedFrames = valid.reduce((sum, item) => sum + ((item.alignedFrameRatio ?? 0) * (item.holdFrameCount ?? 0)), 0);
+  return {
+    exerciseId: valid[0].exerciseId,
+    affectedMovement: weightedAverage("affectedMovement"),
+    properMovement: weightedAverage("properMovement"),
+    affectedToProperRatio: weightedAverage("affectedToProperRatio"),
+    affectedProgressRatio: weightedAverage("affectedProgressRatio"),
+    leftMovement: weightedAverage("leftMovement"),
+    rightMovement: weightedAverage("rightMovement"),
+    activationPeak: compactNumber(Math.max(...valid.map((item) => item.activationPeak ?? 0))),
+    validScoredFrameCount: totalValidFrames,
+    holdFrameCount: totalHoldFrames,
+    alignedFrameRatio: totalHoldFrames > 0 ? compactNumber(alignedFrames / totalHoldFrames, 4) : null,
+    profileThreshold: weightedAverage("profileThreshold"),
+    scoringNoiseMode: valid[0].scoringNoiseMode,
+    reps: valid.length,
+  };
 }
 
 function formatRemainingTime(seconds) {
@@ -251,6 +376,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const baselineSnapshotRef = useRef(null);
 
   const symEnabled = prefs.symmetryEnabled && prefs.mirrorEnabled;
+  const scoringNoiseMode = normalizeScoringNoiseMode(prefs.scoringNoiseMode);
+  const scoringDiagnosticsEnabled = prefs.scoringDiagnosticsEnabled === true;
   const { faceLandmarker, latestRef, status: trackerStatus } = useFaceLandmarker(symEnabled);
 
   const calibBufferRef = useRef([]);
@@ -284,6 +411,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const holdScoreCountRef = useRef(0);
   const holdLeftSumRef = useRef(0);
   const holdRightSumRef = useRef(0);
+  const holdFaceFramesRef = useRef(0);
+  const holdAlignedFramesRef = useRef(0);
+  const holdActivationPeakRef = useRef(0);
+  const liveScoreStabilizerRef = useRef(createLiveScoreStabilizer());
+  const repMovementFeaturesRef = useRef([]);
+  const frameSamplesRef = useRef([]);
+  const lastFrameSampleAtRef = useRef(0);
   const holdTrackingRef = useRef(createHoldTracking());
   const [trackingIssue, setTrackingIssue] = useState(null);
   const [retakePrompt, setRetakePrompt] = useState(null);
@@ -298,6 +432,25 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const currentHoldSec = exerciseHoldSec(current);
   const autoPaused = symEnabled && trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
   const timerPaused = paused || autoPaused || Boolean(retakePrompt) || endSessionConfirmStep > 0;
+  const dataCaptureEnabled = prefs.dataCaptureEnabled === true;
+
+  const captureFrameSample = useCallback((sample) => {
+    if (!dataCaptureEnabled) return;
+    const now = Date.now();
+    if (now - lastFrameSampleAtRef.current < 100) return;
+    lastFrameSampleAtRef.current = now;
+    frameSamplesRef.current.push({
+      exerciseId: current.id,
+      exerciseIndex: exIdx,
+      repIndex: repIdx,
+      phase,
+      ts: now,
+      elapsedMs: Math.max(0, now - startTimeRef.current),
+      scoringNoiseMode,
+      ...sample,
+    });
+    if (frameSamplesRef.current.length > 5000) frameSamplesRef.current.shift();
+  }, [current.id, dataCaptureEnabled, exIdx, phase, repIdx, scoringNoiseMode]);
 
   useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
 
@@ -343,6 +496,10 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       holdScoreCountRef.current = 0;
       holdLeftSumRef.current = 0;
       holdRightSumRef.current = 0;
+      holdFaceFramesRef.current = 0;
+      holdAlignedFramesRef.current = 0;
+      holdActivationPeakRef.current = 0;
+      liveScoreStabilizerRef.current.reset();
       holdTrackingRef.current = createHoldTracking(current.id, profileActivationThreshold(movementProfile, current.id));
       setTrackingIssue(null);
       setLiveScore(null);
@@ -371,6 +528,19 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           if (initialProgress) repInitialBaselineProgressRef.current = [...repInitialBaselineProgressRef.current, initialProgress];
           if (movementProgress) repMovementProgressRef.current = [...repMovementProgressRef.current, movementProgress];
           if (initialMovementProgress) repInitialMovementProgressRef.current = [...repInitialMovementProgressRef.current, initialMovementProgress];
+          repMovementFeaturesRef.current = [...repMovementFeaturesRef.current, movementFeaturesFromHold({
+            current,
+            leftAvg,
+            rightAvg,
+            movementProgress,
+            initialMovementProgress,
+            holdScoreCount: holdScoreCountRef.current,
+            holdFaceFrames: holdFaceFramesRef.current,
+            holdAlignedFrames: holdAlignedFramesRef.current,
+            activationPeak: holdActivationPeakRef.current,
+            profileThreshold: profileActivationThreshold(movementProfile, current.id),
+            scoringNoiseMode,
+          })];
         }
         const snap = peakSnapshotRef.current ?? captureSnapshot(videoRef.current, snapshotCanvasRef.current);
         if (snap) repSnapshotsRef.current = [...repSnapshotsRef.current, { ts: Date.now(), score: avgScore, dataUrl: snap }];
@@ -383,7 +553,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       setTrackingIssue(null);
       speak(prefs.voiceEnabled, `Up next: ${current.name}. ${current.instruction}`);
     }
-  }, [phase, exIdx, repIdx]);
+  }, [phase, exIdx, repIdx, current, initialMovementProfile, movementProfile, paused, prefs.voiceEnabled, scoringNoiseMode]);
 
   useEffect(() => {
     if (timerPaused || phase === "summary" || phase === "calibrate" || phase === "preview") return;
@@ -428,13 +598,15 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           const movementProgress = summarizeMovementProgress(repMovementProgressRef.current);
           const initialMovementProgress = summarizeMovementProgress(repInitialMovementProgressRef.current);
           const snapshots = repSnapshotsRef.current;
+          const movementFeatures = summarizeMovementFeatures(repMovementFeaturesRef.current);
           const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress }]);
+          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, movementFeatures }]);
           repScoresRef.current = [];
           repBaselineProgressRef.current = [];
           repInitialBaselineProgressRef.current = [];
           repMovementProgressRef.current = [];
           repInitialMovementProgressRef.current = [];
+          repMovementFeaturesRef.current = [];
           repSnapshotsRef.current = [];
           if (exIdx + 1 < totalExercises) {
             setPhase("interstitial");
@@ -455,7 +627,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     }
     const t = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
     return () => clearTimeout(t);
-  }, [secondsLeft, timerPaused, phase]);
+  }, [current, currentHoldSec, currentReps, currentRestSec, exIdx, phase, prefs.voiceEnabled, repIdx, secondsLeft, timerPaused, totalExercises]);
 
   // FaceLandmarker detection + overlay loop — synchronous detectForVideo, runs continuously so the overlay stays live
   useEffect(() => {
@@ -491,6 +663,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           const alignment = faceAlignmentFeedback(lm);
           const aligned = alignment.aligned;
           setPostureAligned((prev) => (prev === aligned ? prev : aligned));
+          let captureScoring = null;
 
           if (phase === "calibrate") {
             if (!neutralRef.current) {
@@ -537,14 +710,18 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               }
             }
           } else if (phase === "hold") {
+            holdFaceFramesRef.current++;
             if (!aligned) {
+              liveScoreStabilizerRef.current.reset();
               setLiveScore(null);
               setLiveBalance(null);
               setLiveBaselineProgress(null);
+              captureScoring = { activated: false, reason: "alignment" };
               if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                 setTrackingIssue((prev) => (prev === TRACKING_ISSUES.alignment ? prev : TRACKING_ISSUES.alignment));
               }
             } else {
+              holdAlignedFramesRef.current++;
               if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                 holdTrackingRef.current.alignedFrames++;
               }
@@ -553,10 +730,39 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               // Nose exercises: direction-specific nostril flare or nose scrunch.
               // Other exercises: face-local landmark-pair displacement with per-landmark noise
               // subtracted out. Fallback: generic 9-pair.
-              symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current, facialTransformationMatrix, neutralMatrixRef.current);
+              const scoringOptions = { scoringNoiseMode, scoringDiagnosticsEnabled };
+              symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current, facialTransformationMatrix, neutralMatrixRef.current, scoringOptions);
               if (symResult != null) {
-                const profileThreshold = effectiveProfileThreshold(current.id, getProfileExercise(movementProfile, current.id)?.activationThreshold);
+                const profileExercise = getProfileExercise(movementProfile, current.id);
+                const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
+                captureScoring = {
+                  rawSymmetry: compactNumber(symResult.symmetry, 5),
+                  leftDisp: compactNumber(symResult.leftDisp),
+                  rightDisp: compactNumber(symResult.rightDisp),
+                  peak: compactNumber(symResult.peak),
+                  profileThreshold: compactNumber(profileThreshold),
+                  activated,
+                };
+                logScoringSessionDebug("hold frame", {
+                  exerciseId: current.id,
+                  symmetry: debugSessionMetric(symResult.symmetry),
+                  peak: debugSessionMetric(symResult.peak),
+                  userLeftDisp: debugSessionMetric(symResult.leftDisp),
+                  userRightDisp: debugSessionMetric(symResult.rightDisp),
+                  rawProfileThreshold: debugSessionMetric(profileExercise?.activationThreshold),
+                  effectiveProfileThreshold: debugSessionMetric(profileThreshold),
+                  activationState: {
+                    activated,
+                    holdScoreCount: holdScoreCountRef.current,
+                  },
+                  blendshapes: {
+                    noseSneerLeft: debugSessionMetric(bsMap.noseSneerLeft),
+                    noseSneerRight: debugSessionMetric(bsMap.noseSneerRight),
+                    neutralNoseSneerLeft: debugSessionMetric(neutralBsRef.current?.noseSneerLeft),
+                    neutralNoseSneerRight: debugSessionMetric(neutralBsRef.current?.noseSneerRight),
+                  },
+                }, scoringOptions);
                 if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                   const tracker = holdTrackingRef.current;
                   tracker.signalFrames++;
@@ -565,15 +771,20 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                   if (activated) tracker.activatedFrames++;
                 }
                 if (activated) {
-                  setLiveScore(symResult.symmetry);
-                  setLiveBalance({ left: symResult.leftDisp, right: symResult.rightDisp });
+                  holdActivationPeakRef.current = Math.max(holdActivationPeakRef.current, symResult.peak ?? 0);
+                  const liveResult = liveScoreStabilizerRef.current.update(symResult);
+                  captureScoring.displaySymmetry = compactNumber(liveResult?.symmetry, 5);
+                  captureScoring.displayLeftDisp = compactNumber(liveResult?.leftDisp);
+                  captureScoring.displayRightDisp = compactNumber(liveResult?.rightDisp);
+                  setLiveScore(liveResult?.symmetry ?? null);
+                  setLiveBalance(liveResult ? { left: liveResult.leftDisp, right: liveResult.rightDisp } : null);
                   // Time-average accumulator — every valid frame contributes equally to the rep score.
                   // A saved movement profile raises this from generic movement to user-scaled movement.
                   holdScoreSumRef.current += symResult.symmetry;
                   holdScoreCountRef.current++;
                   holdLeftSumRef.current += symResult.leftDisp;
                   holdRightSumRef.current += symResult.rightDisp;
-                  setLiveBaselineProgress(computeBaselineProgress(current.id, symResult, movementProfile));
+                  setLiveBaselineProgress(computeBaselineProgress(current.id, liveResult ?? symResult, movementProfile));
                   if (peakRepScoreRef.current == null || symResult.symmetry > peakRepScoreRef.current) {
                     peakRepScoreRef.current = symResult.symmetry;
                   }
@@ -581,21 +792,51 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                     setTrackingIssue((prev) => (prev == null ? prev : null));
                   }
                 } else {
-                  setLiveScore(null);
-                  setLiveBalance(null);
-                  setLiveBaselineProgress(null);
+                  const liveResult = liveScoreStabilizerRef.current.update(null);
+                  captureScoring.displaySymmetry = compactNumber(liveResult?.symmetry, 5);
+                  captureScoring.displayLeftDisp = compactNumber(liveResult?.leftDisp);
+                  captureScoring.displayRightDisp = compactNumber(liveResult?.rightDisp);
+                  setLiveScore(liveResult?.symmetry ?? null);
+                  setLiveBalance(liveResult ? { left: liveResult.leftDisp, right: liveResult.rightDisp } : null);
+                  setLiveBaselineProgress(liveResult ? computeBaselineProgress(current.id, liveResult, movementProfile) : null);
                   if (hasRetakeGate(holdTrackingRef.current, current.id) && profileThreshold != null) {
                     const issue = lowSignalIssue(current);
                     setTrackingIssue((prev) => (prev === issue ? prev : issue));
                   }
                 }
-              } else if (hasRetakeGate(holdTrackingRef.current, current.id)) {
-                if (holdTrackingRef.current.threshold != null) {
+              } else {
+                const profileExercise = getProfileExercise(movementProfile, current.id);
+                const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                captureScoring = {
+                  activated: false,
+                  profileThreshold: compactNumber(profileThreshold),
+                  reason: "no-symmetry-result",
+                };
+                logScoringSessionDebug("no symmetry result", {
+                  exerciseId: current.id,
+                  rawProfileThreshold: debugSessionMetric(profileExercise?.activationThreshold),
+                  effectiveProfileThreshold: debugSessionMetric(profileThreshold),
+                  blendshapes: {
+                    noseSneerLeft: debugSessionMetric(bsMap.noseSneerLeft),
+                    noseSneerRight: debugSessionMetric(bsMap.noseSneerRight),
+                    neutralNoseSneerLeft: debugSessionMetric(neutralBsRef.current?.noseSneerLeft),
+                    neutralNoseSneerRight: debugSessionMetric(neutralBsRef.current?.noseSneerRight),
+                  },
+                  activationState: { activated: false },
+                }, scoringOptions);
+                if (hasRetakeGate(holdTrackingRef.current, current.id) && holdTrackingRef.current.threshold != null) {
                   const issue = lowSignalIssue(current);
                   setTrackingIssue((prev) => (prev === issue ? prev : issue));
-                } else {
+                } else if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                   setTrackingIssue((prev) => (prev == null ? prev : null));
                 }
+                const liveResult = liveScoreStabilizerRef.current.update(null);
+                captureScoring.displaySymmetry = compactNumber(liveResult?.symmetry, 5);
+                captureScoring.displayLeftDisp = compactNumber(liveResult?.leftDisp);
+                captureScoring.displayRightDisp = compactNumber(liveResult?.rightDisp);
+                setLiveScore(liveResult?.symmetry ?? null);
+                setLiveBalance(liveResult ? { left: liveResult.leftDisp, right: liveResult.rightDisp } : null);
+                setLiveBaselineProgress(liveResult ? computeBaselineProgress(current.id, liveResult, movementProfile) : null);
               }
               // Auto-advance gate AND snapshot trigger. For brow exercises, the brow-lift magnitude is more
               // precise than the blendshape (subtle lifts saturate browOuterUp poorly).
@@ -613,9 +854,20 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
             // We still track peak for snapshot capture, just don't end the phase early.
           }
 
+          captureFrameSample({
+            aligned,
+            alignmentIssue: alignment.issue,
+            rawLandmarks: compactLandmarksForCapture(rawLm),
+            landmarks: compactLandmarksForCapture(lm),
+            blendshapes: compactBlendshapesForCapture(bsMap),
+            rawFacialTransformationMatrix: compactMatrixForCapture(rawMatrix),
+            facialTransformationMatrix: compactMatrixForCapture(facialTransformationMatrix),
+            scoring: captureScoring,
+          });
           drawOverlay(overlayRef.current, v, lm, { aligned, phase });
         } else {
           latestRef.current = null;
+          liveScoreStabilizerRef.current.reset();
           setPostureAligned(false);
           setLiveScore(null);
           setLiveBalance(null);
@@ -642,7 +894,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     };
     raf = requestAnimationFrame(tick);
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [faceLandmarker, phase, current.id, currentRestSec, movementProfile]);
+  }, [captureFrameSample, current, dataCaptureEnabled, exIdx, faceLandmarker, latestRef, phase, repIdx, currentRestSec, movementProfile, scoringDiagnosticsEnabled, scoringNoiseMode]);
 
   const finalizeCurrentExercise = () => {
     const scores = repScoresRef.current;
@@ -651,13 +903,15 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const movementProgress = summarizeMovementProgress(repMovementProgressRef.current);
     const initialMovementProgress = summarizeMovementProgress(repInitialMovementProgressRef.current);
     const snapshots = repSnapshotsRef.current;
+    const movementFeatures = summarizeMovementFeatures(repMovementFeaturesRef.current);
     const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress }]);
+    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, movementFeatures }]);
     repScoresRef.current = [];
     repBaselineProgressRef.current = [];
     repInitialBaselineProgressRef.current = [];
     repMovementProgressRef.current = [];
     repInitialMovementProgressRef.current = [];
+    repMovementFeaturesRef.current = [];
     repSnapshotsRef.current = [];
   };
 
@@ -740,7 +994,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const initialBaselineProgress = summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress");
     const movementProgress = summarizeSessionMovementProgress(exerciseScores);
     const initialMovementProgress = summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress");
-    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, baselineSnapshot: baselineSnapshotRef.current, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
+    const frameSamples = dataCaptureEnabled && frameSamplesRef.current.length ? frameSamplesRef.current : undefined;
+    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, scoringNoiseMode, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, baselineSnapshot: baselineSnapshotRef.current, frameSamples, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
   };
 
   if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} movementProgress={summarizeSessionMovementProgress(exerciseScores)} initialMovementProgress={summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress")} onFinish={handleFinish} />;

@@ -1,8 +1,9 @@
 import { compactAppDataForStorage } from "../storage";
-import { LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION, flipLeftRightSide, roundMetric } from "../ml/faceMetrics";
+import { LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION, flipLeftRightSide, normalizeScoringNoiseMode, roundMetric } from "../ml/faceMetrics";
 import { EXERCISE_BY_ID } from "./exercises";
+import { normalizePersonalRecoveryModel } from "./personalRecoveryModel";
 import { DEFAULT_DATA } from "./session";
-import { MAX_EXERCISE_REPEATS } from "./config";
+import { MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS } from "./config";
 
 export const APP_SIDE_CONVENTION_VERSION = 2;
 
@@ -36,11 +37,32 @@ function normalizeRepeatCounts(counts) {
   return result;
 }
 
+function normalizeRepCounts(counts) {
+  if (!counts || typeof counts !== "object") return {};
+  const result = {};
+  for (const [id, value] of Object.entries(counts)) {
+    if (!EXERCISE_BY_ID.has(id)) continue;
+    const n = Math.round(Number(value));
+    if (Number.isFinite(n) && n >= MIN_EXERCISE_REPS) result[id] = Math.min(n, MAX_EXERCISE_REPS);
+  }
+  return result;
+}
+
 function normalizePersonalPlan(plan) {
+  const selectedExerciseIds = normalizeExerciseIds(plan?.selectedExerciseIds);
+  const repeatCounts = normalizeRepeatCounts(plan?.repeatCounts);
+  const repCounts = normalizeRepCounts(plan?.repCounts);
+  const selectedSet = new Set(selectedExerciseIds);
   return {
+    selectedExerciseIds,
     addedExerciseIds: normalizeExerciseIds(plan?.addedExerciseIds),
     removedExerciseIds: normalizeExerciseIds(plan?.removedExerciseIds),
-    repeatCounts: normalizeRepeatCounts(plan?.repeatCounts),
+    repeatCounts: selectedExerciseIds.length
+      ? Object.fromEntries(Object.entries(repeatCounts).filter(([id]) => selectedSet.has(id)))
+      : repeatCounts,
+    repCounts: selectedExerciseIds.length
+      ? Object.fromEntries(Object.entries(repCounts).filter(([id]) => selectedSet.has(id)))
+      : repCounts,
   };
 }
 
@@ -59,7 +81,15 @@ export function normalizeAppData(parsed = {}) {
     ...DEFAULT_DATA,
     ...migratedParsed,
     movementProfileHistory,
-    prefs: { ...prefs, personalPlan: normalizePersonalPlan(prefs.personalPlan) },
+    personalRecoveryModel: normalizePersonalRecoveryModel(migratedParsed.personalRecoveryModel),
+    prefs: {
+      ...prefs,
+      personalModelEnabled: prefs.personalModelEnabled !== false,
+      dataCaptureEnabled: prefs.dataCaptureEnabled === true,
+      scoringNoiseMode: normalizeScoringNoiseMode(prefs.scoringNoiseMode),
+      scoringDiagnosticsEnabled: prefs.scoringDiagnosticsEnabled === true,
+      personalPlan: normalizePersonalPlan(prefs.personalPlan),
+    },
   };
 }
 

@@ -37,6 +37,7 @@ import {
   faceAlignmentFeedback,
   firstFacialTransformationMatrix,
   headPoseDeviationRad,
+  normalizeScoringNoiseMode,
   normalizedFrameDelta,
   objectCoverTransform,
   smoothFacialTransformationMatrix,
@@ -284,7 +285,7 @@ function drawActivationGlow(canvas, video, lm, bsMap) {
   ctx.restore();
 }
 
-function TrialMode() {
+function TrialMode({ prefs = {} }) {
   const [cameraOn, setCameraOn] = useState(true);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationStatus, setCalibrationStatus] = useState("Center your face to begin");
@@ -296,6 +297,8 @@ function TrialMode() {
 
   const { stream, cameraError } = useCameraStream(cameraOn);
   const { faceLandmarker, latestRef, status: trackerStatus } = useFaceLandmarker(cameraOn);
+  const scoringNoiseMode = normalizeScoringNoiseMode(prefs?.scoringNoiseMode);
+  const scoringDiagnosticsEnabled = prefs?.scoringDiagnosticsEnabled === true;
 
   const videoRef = useRef(null);
   const overlayRef = useRef(null);
@@ -478,7 +481,7 @@ function TrialMode() {
               </h1>
             </div>
           </div>
-          <TrackerBadge status={trackerStatus} fps={fps} />
+          <TrackerBadge status={trackerStatus} fps={fps} scoringNoiseMode={scoringNoiseMode} scoringDiagnosticsEnabled={scoringDiagnosticsEnabled} />
         </header>
 
         <div className="grid lg:grid-cols-[1.25fr_1fr] gap-5 lg:gap-7">
@@ -572,14 +575,15 @@ function TrialMode() {
   );
 }
 
-function TrackerBadge({ status, fps }) {
+function TrackerBadge({ status, fps, scoringNoiseMode, scoringDiagnosticsEnabled }) {
   let icon, label, color;
   if (status === "loading") { icon = <Loader2 className="w-3.5 h-3.5 animate-spin" />; label = "Loading model"; color = "#D4A574"; }
   else if (status === "error") { icon = <AlertCircle className="w-3.5 h-3.5" />; label = "Tracker unavailable"; color = "#B8543A"; }
   else if (status === "ready") { icon = <div className="w-2 h-2 rounded-full" style={{ background: "#7A8F73", boxShadow: "0 0 8px #7A8F73" }} />; label = fps ? `Tracking · ${fps} fps` : "Tracking"; color = "#7A8F73"; }
   else { icon = <Loader2 className="w-3.5 h-3.5 animate-spin" />; label = "Idle"; color = "#A8A29E"; }
+  const title = `Scoring noise mode: ${scoringNoiseMode}${scoringDiagnosticsEnabled ? " · diagnostics on" : ""}`;
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "rgba(31,27,22,0.06)", color, border: `1px solid ${color}55` }}>
+    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: "rgba(31,27,22,0.06)", color, border: `1px solid ${color}55` }} title={title}>
       {icon}<span>{label}</span>
     </div>
   );
