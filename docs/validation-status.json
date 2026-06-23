@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-06-23",
+  "status": "tooling-ready-needs-reviewed-data",
+  "reviewedDatasetCount": 0,
+  "reviewedFrameCount": 0,
+  "readyExerciseCount": 0,
+  "thresholdCalibrationReports": [],
+  "productionThresholdConstantsCalibrated": false,
+  "clinicalFacingScoresAllowed": false,
+  "notes": [
+    "Validation export, label-sheet, merge, evaluation, and threshold calibration report tooling are implemented.",
+    "No clinician-reviewed validation dataset is committed in this repository.",
+    "Production threshold constants should not be changed from calibration reports until reviewed datasets are available."
+  ]
+}

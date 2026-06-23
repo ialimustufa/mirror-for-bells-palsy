@@ -6,6 +6,7 @@ const COMMANDS = [
   ["npm", ["run", "lint"]],
   ["npm", ["test"]],
   ["npm", ["run", "build"]],
+  ["npm", ["run", "validation:status"]],
 ];
 
 const REQUIRED_DOC_CHECKS = [
@@ -20,6 +21,10 @@ const REQUIRED_DOC_CHECKS = [
   {
     path: "docs/algorithm-upgrade-roadmap.md",
     patterns: [/validation coverage/i, /release gates/i, /not a medical-device specification/i],
+  },
+  {
+    path: "docs/validation-status.json",
+    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i],
   },
 ];
 

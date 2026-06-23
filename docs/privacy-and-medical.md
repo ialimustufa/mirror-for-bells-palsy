@@ -14,6 +14,7 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 - Movement profiles include neutral landmark data, noise floor data, and per-exercise baseline metrics.
 - Personal recovery models are trained locally from saved session movement progress. They store compact per-exercise trend metrics, not a replacement face model.
 - Journal safety prompts are generated locally from the user's own note text and are stored/exported only as part of local app data or an explicit clinician bundle.
+- Validation status is tracked in `docs/validation-status.json`; clinical-facing scores remain disabled unless reviewed validation coverage and calibrated threshold reports are documented there.
 - Optional local data capture can store sampled landmarks, blendshapes, pose matrices, and scoring metadata for debugging/future model work. It is off by default and does not store raw video.
 - The first saved profile is kept as `initialMovementProfile` for long-term recovery comparison; the current `movementProfile` can be updated through full or partial retakes.
 - When the full profile is retaken, the previous profile is kept as a compact history record. Raw neutral landmarks and noise-floor arrays are not duplicated into history.

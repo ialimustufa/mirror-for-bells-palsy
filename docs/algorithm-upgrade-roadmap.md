@@ -27,7 +27,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
 - Phase 4 validation label workflow: implemented CSV label-sheet export and label merge scripts so clinician/user/developer-reviewed labels can be attached to validation JSONL datasets.
 - Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, and score drift. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`.
-- Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, and documentation checks for medical, privacy, and validation status.
+- Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, a machine-readable `docs/validation-status.json`, and documentation checks for medical, privacy, and validation status.
 - Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets and applying reviewed calibration reports to production constants.
 
 ## Product Features Worth Adding
@@ -241,7 +241,7 @@ Work:
 - Require explicit export for any data sharing.
 - Version every data schema migration.
 - Add rollback-safe import handling for old backups. Status: covered by parser compatibility tests for legacy JSON backups, JSONL backups, and non-backup JSONL rejection.
-- Add a release checklist for medical disclaimer copy, privacy copy, and validation status. Status: implemented as `npm run release:check`.
+- Add a release checklist for medical disclaimer copy, privacy copy, and validation status. Status: implemented as `npm run release:check` plus `docs/validation-status.json`.
 
 Exit criteria:
 

@@ -962,6 +962,11 @@ projected false-positive/false-negative rates at the recommended reliable thresh
 The report does not change production constants; a human review step is still
 required before changing scoring behavior.
 
+`docs/validation-status.json` is the machine-readable release status for validation.
+It currently records that validation tooling exists but no clinician-reviewed dataset
+is committed, production thresholds are not clinically calibrated, and clinical-facing
+scores are not allowed.
+
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside
 peak-movement rep snapshots so the immediate PDF can show a side-by-side comparison.

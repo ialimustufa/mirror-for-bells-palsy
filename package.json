@@ -12,6 +12,7 @@
     "validation:label-sheet": "node scripts/export-validation-label-sheet.mjs",
     "validation:merge-labels": "node scripts/merge-validation-labels.mjs",
     "validation:calibrate-thresholds": "node scripts/calibrate-thresholds.mjs",
+    "validation:status": "node scripts/validation-status-check.mjs",
     "release:check": "node scripts/release-check.mjs",
     "build": "vite build",
     "lint": "eslint .",

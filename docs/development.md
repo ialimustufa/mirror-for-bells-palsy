@@ -13,6 +13,7 @@ npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
+npm run validation:status
 npm run release:check # lint + tests + build + release doc checks
 ```
 
@@ -49,6 +50,7 @@ checks for:
 - Medical disclaimer and non-diagnostic wording.
 - Privacy/local-first wording for browser data, clinician bundle, and validation exports.
 - Current validation status and remaining release risks in the roadmap.
+- `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, and whether clinical-facing scores are allowed.
 
 Backup compatibility must remain rollback-safe:
 
