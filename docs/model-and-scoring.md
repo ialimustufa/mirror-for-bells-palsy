@@ -901,6 +901,28 @@ shareable review package, not a restore backup. The bundle includes:
 The full device backup still uses `Export data`; the clinician bundle is a
 separate explicit export so sharing remains user-controlled.
 
+### Validation Dataset Export
+
+The Progress view can export an opt-in local JSONL validation dataset when local
+data capture has saved frame samples. This export is for review and tuning work,
+not restore.
+
+The first JSONL line is a manifest with `kind: "mirror-validation-dataset-jsonl"`,
+dataset version, summary counts, and a label schema. Subsequent lines include:
+
+- `sessionContext` records with compact session date, type, scoring version, setup
+  quality, capture quality, and exercise ids.
+- `frameSample` records with the original sampled frame payload, including
+  landmarks/blendshapes/pose/scoring metadata when those fields were captured.
+- A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
+  `quality`, `visibleMovementLevel`, `coactivationNotes`, `reviewerRole`,
+  `reviewedAt`, and free-text `notes`.
+
+Label fields start empty except for values Mirror can infer locally, such as the
+sample's intended exercise and the profile affected side. A reviewed validation set
+can then be used to report replay accuracy, false-positive rate, false-negative
+rate, and measurement drift against the same examples.
+
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside
 peak-movement rep snapshots so the immediate PDF can show a side-by-side comparison.

@@ -10,6 +10,7 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 - Standard assessment summaries are stored locally in app state and keep compact rest/zone metrics plus a source session timestamp.
 - Report images are stored locally in IndexedDB as separate image blobs so past physiotherapy PDFs can be regenerated without bloating session JSON.
 - Browser data exports are explicit local files. The full backup is for restore, while the clinician bundle is a separate JSONL review package that may include assessment trends, selected report images, journal notes, quality flags, and frame samples when the user chooses to export it.
+- Validation dataset exports are separate opt-in JSONL files. They can include sampled landmarks, blendshapes, pose matrices, scoring metadata, and empty label templates when local data capture was enabled.
 - Movement profiles include neutral landmark data, noise floor data, and per-exercise baseline metrics.
 - Personal recovery models are trained locally from saved session movement progress. They store compact per-exercise trend metrics, not a replacement face model.
 - Journal safety prompts are generated locally from the user's own note text and are stored/exported only as part of local app data or an explicit clinician bundle.

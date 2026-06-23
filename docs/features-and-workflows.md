@@ -17,6 +17,7 @@ This document collects the product behavior that used to live in the main README
 - Resting asymmetry metrics for assessment reports, including eye aperture, midface proxy, and mouth-corner position.
 - Printable session report that can be saved as a PDF for a physiotherapist.
 - Local clinician bundle export with assessment trends, selected report images, journal notes, diagnostics, and replay frame samples when available.
+- Opt-in validation dataset export with frame-sample records and label templates for later user, clinician, or developer review.
 - Session-level scoring diagnostics with capture quality, rejected-frame reasons, quiet-region movement flags, and conservative safety notes.
 - Recent journal-note safety prompts for eye dryness, pain or strain, significant fatigue, and new or worsening symptoms.
 - A live `/try` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.
@@ -38,10 +39,11 @@ These prompts are not diagnoses. They tell the user when to keep practice gentle
 
 ## Local Data Exports
 
-The Progress view's Browser Data panel has two explicit local exports:
+The Progress view's Browser Data panel has three explicit local exports:
 
 - `Export data`: a full local backup for restoring Mirror data on this device.
 - `Clinician bundle`: a JSONL review package for sharing assessment trends, recent/source sessions, selected report images, journal notes, quality flags, and replay frame samples with a clinician when the user chooses.
+- `Validation set`: a JSONL frame-sample package for opt-in validation work. It includes session context, raw sampled landmarks/blendshapes when local data capture was enabled, and empty label fields for intended movement, affected side, quality, visible movement level, and coactivation notes.
 
 ## Live Demo Page
 

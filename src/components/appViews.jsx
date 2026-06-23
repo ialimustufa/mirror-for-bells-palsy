@@ -2246,7 +2246,7 @@ function BaselineView({ data, onStartProfile, onResetBaselines }) {
   );
 }
 
-function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onExportData, onExportClinicianBundle, onImportData }) {
+function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onExportData, onExportClinicianBundle, onExportValidationDataset, onImportData }) {
   // Progress charts are projections of journal/session history. Keeping them derived
   // avoids migration work when scoring or display rules change.
   const practiceSessions = useMemo(() => data.sessions.filter((session) => session.kind !== "assessment"), [data.sessions]);
@@ -2459,7 +2459,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           </div>
         </div>
       )}
-      <BrowserDataControls status={dataTransferStatus} onExport={onExportData} onExportClinicianBundle={onExportClinicianBundle} onImport={onImportData} />
+      <BrowserDataControls status={dataTransferStatus} onExport={onExportData} onExportClinicianBundle={onExportClinicianBundle} onExportValidationDataset={onExportValidationDataset} onImport={onImportData} />
       <div>
         <div className="text-sm uppercase tracking-wider text-stone-500 mb-3">Preferences</div>
         <div className="space-y-2">
@@ -2480,7 +2480,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
   );
 }
 
-function BrowserDataControls({ status, onExport, onExportClinicianBundle, onImport }) {
+function BrowserDataControls({ status, onExport, onExportClinicianBundle, onExportValidationDataset, onImport }) {
   const inputRef = useRef(null);
   const [pendingImportFile, setPendingImportFile] = useState(null);
   const busy = status?.kind === "working";
@@ -2502,6 +2502,9 @@ function BrowserDataControls({ status, onExport, onExportClinicianBundle, onImpo
           </button>
           <button disabled={busy} onClick={onExportClinicianBundle} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(122,143,115,0.16)", color: "#4A6B47", border: "1px solid rgba(122,143,115,0.24)" }}>
             <Download className="w-3.5 h-3.5" />Clinician bundle
+          </button>
+          <button disabled={busy} onClick={onExportValidationDataset} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(212,165,116,0.16)", color: "#7C5528", border: "1px solid rgba(212,165,116,0.3)" }}>
+            <Download className="w-3.5 h-3.5" />Validation set
           </button>
           <button disabled={busy} onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(31,27,22,0.08)", color: "#1F1B16", border: "1px solid rgba(31,27,22,0.08)" }}>
             <Upload className="w-3.5 h-3.5" />Import data

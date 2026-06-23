@@ -23,7 +23,8 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
-- Still pending in Phases 4-5: validation dataset format and rollback/release gates.
+- Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
+- Still pending in Phases 4-5: validation coverage and rollback/release gates.
 
 ## Product Features Worth Adding
 
@@ -216,7 +217,7 @@ Goal: stop tuning only against anecdotal captures.
 
 Work:
 
-- Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples.
+- Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local frame-sample JSONL exports.
 - Label movement attempts with: intended movement, affected side, quality, visible movement level, and coactivation notes.
 - Compare MediaPipe landmark output on Bell's palsy faces against clinician-reviewed landmarks or region movement labels.
 - Evaluate whether a lightweight correction model or clinical-domain landmark model is justified.
@@ -254,7 +255,7 @@ Priority order:
 5. Move face inference into a Web Worker. Done with fallback.
 6. Add capture-quality setup before calibration.
 7. Add uncertainty bands to the personal recovery model.
-8. Create an opt-in labeled validation dataset format.
+8. Create an opt-in labeled validation dataset format. Done with JSONL frame-sample exports and label schema.
 
 ## Evidence And References
 
