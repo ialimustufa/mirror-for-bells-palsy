@@ -765,6 +765,21 @@ advanced -> 115% reps, catalog holds, 2s rest
 Hold durations are clamped so advanced mode does not push longer sustained contractions by default.
 `SessionMode` reads `current.reps`, `current.holdSec`, and `current.restSec`, so scoring and timers follow the same session-specific dose shown in the UI.
 
+### Pre-Calibration Setup Quality
+
+Before calibration, scored sessions run a short camera setup check. This phase does
+not create a clinical score. It records a compact `setupQuality` summary with:
+
+- Face-present frame ratio.
+- Centered/level alignment ratio.
+- Landmark stability ratio.
+- Approximate camera FPS.
+- Small-frame brightness and contrast.
+- Eye-distance proxy for camera distance.
+
+The setup quality appears in session diagnostics and reports so weak lighting,
+distance, or camera stability can be separated from true movement change.
+
 ### Standard Assessment Records
 
 Standard assessments are saved separately from daily practice trend records. The
@@ -792,6 +807,7 @@ practice streaks.
 The report includes:
 
 - Session date, time, duration, type, and comfort level.
+- Pre-calibration setup quality, when available.
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Affected-side movement from the user's first saved baseline, when available.

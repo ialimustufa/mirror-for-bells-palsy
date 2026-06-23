@@ -53,6 +53,7 @@ function buildSessionReportHtml(s) {
   const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
   const quality = diagnostics.captureQuality;
   const diagnosticFlags = [
+    diagnostics.setupQuality ? `Setup quality: ${diagnostics.setupQuality.label ?? diagnostics.setupQuality.key}${diagnostics.setupQuality.score != null ? ` (${Math.round(diagnostics.setupQuality.score * 100)}%)` : ""}` : null,
     quality ? `Capture quality: ${quality.label ?? quality.key} (${formatRatioPct(quality.validFrameRatio)} valid frames, ${quality.rejectedFrameCount ?? 0} rejected)` : null,
     diagnostics.topDropReasons.length ? `Top rejected frames: ${diagnostics.topDropReasons.map((item) => `${item.label} x${item.count}`).join(", ")}` : null,
     diagnostics.coactivation && diagnostics.coactivation.risk !== "low" ? `Quiet-region movement: ${diagnostics.coactivation.risk}` : null,

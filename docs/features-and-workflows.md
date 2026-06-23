@@ -6,6 +6,7 @@ This document collects the product behavior that used to live in the main README
 
 - Guided exercises across forehead, eyes, nose, cheeks, mouth, and emoji-style facial reactions.
 - Neutral calibration with frame-stability gating and per-landmark noise estimation.
+- Pre-calibration camera setup quality checks for face presence, alignment, stability, lighting, distance, and frame rate.
 - Exercise-specific symmetry scoring plus affected-side progress against the user's own baseline.
 - Optional personal movement profile that personalizes dosing, focus, and progress tracking.
 - Local personal recovery model that learns affected-side recovery trends from the user's own saved sessions.
@@ -18,7 +19,7 @@ This document collects the product behavior that used to live in the main README
 
 ## Main Practice Flow
 
-The main app route at `/` guides a user through calibration, exercise preview, rest, hold, interstitial feedback, and summary. It can score holds when the model and camera are available, and it still supports unscored guided practice when they are not.
+The main app route at `/` guides a user through camera setup, calibration, exercise preview, rest, hold, interstitial feedback, and summary. It can score holds when the model and camera are available, and it still supports unscored guided practice when they are not.
 
 Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends.
 
@@ -63,3 +64,4 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - The Baseline menu lets users select individual movement baselines to redo or reset. Redo uses the partial-retake flow; reset clears those movements from the current and first-baseline profiles until they are captured again.
 - After the first counted daily session, Mirror prompts for a journal entry if today is not logged yet. The progress rating is prefilled from detected session symmetry or movement progress and can be edited before saving.
 - Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.
+- Session reports retain the pre-calibration setup quality summary so weak lighting, distance, or stability is visible later.

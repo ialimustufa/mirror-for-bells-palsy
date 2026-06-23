@@ -1474,6 +1474,7 @@ function percentLabel(value) {
 function SessionDiagnosticsPanel({ diagnostics }) {
   if (!diagnostics?.hasDiagnostics) return null;
   const quality = diagnostics.captureQuality;
+  const setupQuality = diagnostics.setupQuality;
   const validRatio = percentLabel(quality?.validFrameRatio);
   const rejectedRatio = percentLabel(quality?.rejectionRatio);
   const coactivation = diagnostics.coactivation;
@@ -1508,6 +1509,12 @@ function SessionDiagnosticsPanel({ diagnostics }) {
         </div>
       )}
       {diagnostics.captureQualityNote && <div className="text-xs leading-relaxed opacity-70 mb-3">{diagnostics.captureQualityNote}</div>}
+      {setupQuality && (
+        <div className="rounded-xl px-3 py-2 mb-3" style={{ background: `${qualityColor(setupQuality.key)}1F`, color: qualityColor(setupQuality.key) }}>
+          <div className="text-xs font-semibold">Setup: {setupQuality.label ?? setupQuality.key}</div>
+          {setupQuality.actionItems?.length > 0 && <div className="text-[11px] opacity-75 mt-0.5">{setupQuality.actionItems[0]}</div>}
+        </div>
+      )}
       {diagnostics.topDropReasons.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-3">
           {diagnostics.topDropReasons.map((item) => (

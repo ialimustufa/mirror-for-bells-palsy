@@ -74,6 +74,22 @@ test("session diagnostics raises weak quality and coactivation caveats", () => {
   assert.ok(diagnostics.safetyPrompts.some((text) => text.includes("eye-protection")));
 });
 
+test("session diagnostics includes weak setup quality safety prompts", () => {
+  const diagnostics = summarizeSessionDiagnostics({
+    setupQuality: {
+      key: "weak",
+      label: "Setup needs attention",
+      score: 0.42,
+      actionItems: ["Add light to your face before starting."],
+    },
+    scores: [],
+  });
+
+  assert.equal(diagnostics.setupQuality.key, "weak");
+  assert.equal(diagnostics.hasDiagnostics, true);
+  assert.ok(diagnostics.safetyPrompts.some((text) => text.includes("Camera setup was weak")));
+});
+
 test("diagnostic reason labels fall back safely", () => {
   assert.equal(diagnosticReasonLabel("head-pose"), "Head pose");
   assert.equal(diagnosticReasonLabel("future-reason"), "future-reason");

@@ -112,6 +112,7 @@ function summarizeExerciseDiagnostics(score) {
 function summarizeSessionDiagnostics(sessionLike = {}) {
   const scores = Array.isArray(sessionLike) ? sessionLike : (sessionLike?.scores ?? []);
   const exercises = scores.map(summarizeExerciseDiagnostics);
+  const setupQuality = Array.isArray(sessionLike) ? null : sessionLike.setupQuality ?? null;
   const captureQuality = Array.isArray(sessionLike)
     ? summarizeSessionCaptureQuality(scores)
     : sessionLike.captureQuality ?? summarizeSessionCaptureQuality(scores);
@@ -123,6 +124,9 @@ function summarizeSessionDiagnostics(sessionLike = {}) {
     || ["weak", "unscored"].includes(eyeClosureScore.captureQuality?.key)
   );
   const safetyPrompts = [];
+  if (setupQuality?.key === "weak") {
+    safetyPrompts.push("Camera setup was weak before calibration; repeat the session if the score looks inconsistent.");
+  }
   if (["weak", "unscored"].includes(captureQuality?.key)) {
     safetyPrompts.push("Data quality was low; use this session as practice context, not a progress signal.");
   }
@@ -134,6 +138,7 @@ function summarizeSessionDiagnostics(sessionLike = {}) {
   }
   return {
     scoringModelVersion: sessionLike?.scoringModelVersion ?? exercises.find((item) => item.scoringModelVersion)?.scoringModelVersion ?? null,
+    setupQuality,
     captureQuality,
     captureQualityNote: CAPTURE_QUALITY_NOTES[captureQuality?.key] ?? null,
     dropReasonCounts,
@@ -141,7 +146,7 @@ function summarizeSessionDiagnostics(sessionLike = {}) {
     coactivation,
     exercises,
     safetyPrompts,
-    hasDiagnostics: Boolean(captureQuality || dropReasonCounts || coactivation || exercises.some((item) => item.captureQuality || item.coactivation || item.dropReasonCounts)),
+    hasDiagnostics: Boolean(setupQuality || captureQuality || dropReasonCounts || coactivation || exercises.some((item) => item.captureQuality || item.coactivation || item.dropReasonCounts)),
   };
 }
 

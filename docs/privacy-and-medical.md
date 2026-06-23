@@ -6,6 +6,7 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 
 - Camera frames are processed in the browser by the MediaPipe model. No video, landmarks, or scores are sent to any server.
 - Session records persist exercise scores, timestamps, dose settings, and snapshot counts.
+- Session records may include compact pre-calibration setup-quality metrics such as face presence, alignment ratio, frame rate, brightness, and camera-distance proxy.
 - Standard assessment summaries are stored locally in app state and keep compact zone metrics plus a source session timestamp.
 - Report images are stored locally in IndexedDB as separate image blobs so past physiotherapy PDFs can be regenerated without bloating session JSON.
 - Movement profiles include neutral landmark data, noise floor data, and per-exercise baseline metrics.
