@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { evaluateValidationFrameSamples, extractValidationFrameRecords, movementClassFromLabel } from "../src/ml/validationEvaluation.js";
+import { calibrateThresholdsFromValidationSamples, evaluateValidationFrameSamples, extractValidationFrameRecords, movementClassFromLabel } from "../src/ml/validationEvaluation.js";
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
@@ -118,4 +118,29 @@ test("validation evaluation extracts frame records from JSONL records", () => {
   assert.equal(samples[0].label.visibleMovementLevel, "trace");
   assert.equal(movementClassFromLabel(samples[0].label), true);
   assert.equal(movementClassFromLabel({ quality: "unusable", visibleMovementLevel: "strong" }), null);
+});
+
+test("threshold calibration recommends bands from reviewed positive and negative peaks", () => {
+  const samples = [
+    { id: "neg-1", phase: "hold", exerciseId: "closed-smile", ts: 1, scoring: { peak: 0.001 }, label: { quality: "strong", visibleMovementLevel: "none" } },
+    { id: "neg-2", phase: "hold", exerciseId: "closed-smile", ts: 2, scoring: { peak: 0.002 }, label: { quality: "strong", visibleMovementLevel: "none" } },
+    { id: "neg-3", phase: "hold", exerciseId: "closed-smile", ts: 3, scoring: { peak: 0.003 }, label: { quality: "strong", visibleMovementLevel: "none" } },
+    { id: "pos-1", phase: "hold", exerciseId: "closed-smile", ts: 4, scoring: { peak: 0.012, thresholdBands: { reliableMovement: 0.006 } }, label: { quality: "strong", visibleMovementLevel: "low" } },
+    { id: "pos-2", phase: "hold", exerciseId: "closed-smile", ts: 5, scoring: { peak: 0.014, thresholdBands: { reliableMovement: 0.006 } }, label: { quality: "strong", visibleMovementLevel: "moderate" } },
+    { id: "pos-3", phase: "hold", exerciseId: "closed-smile", ts: 6, scoring: { peak: 0.016, thresholdBands: { reliableMovement: 0.006 } }, label: { quality: "strong", visibleMovementLevel: "strong" } },
+  ];
+
+  const report = calibrateThresholdsFromValidationSamples(samples, { generatedAt: "2026-06-23T00:00:00.000Z" });
+  const exercise = report.exercises[0];
+
+  assert.equal(report.summary.readyExercises, 1);
+  assert.equal(exercise.status, "ready");
+  assert.deepEqual(exercise.recommendedThresholdBands, {
+    minimumVisible: 0.0075,
+    reliableMovement: 0.0075,
+    baselineTarget: 0.016,
+  });
+  assert.equal(exercise.currentReliableThreshold, 0.006);
+  assert.equal(exercise.projectedAtRecommended.falsePositiveRate, 0);
+  assert.equal(exercise.projectedAtRecommended.falseNegativeRate, 0);
 });

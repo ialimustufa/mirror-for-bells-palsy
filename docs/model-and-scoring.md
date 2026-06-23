@@ -940,6 +940,7 @@ Run:
 npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
+npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 ```
 
 The label-sheet command creates a CSV for clinician, user, or developer review.
@@ -953,6 +954,13 @@ are treated as positive examples unless the label quality is `unusable` or
 `uncertain`. When frame samples contain threshold bands, the evaluator also reports
 how many labeled frames landed above minimum-visible, reliable, and baseline-target
 movement, plus how many stayed below minimum-visible movement.
+
+The threshold calibration command groups reviewed labels by exercise and writes a
+recommendation report. It includes current reliable thresholds, positive/negative
+peak summaries, recommended minimum-visible/reliable/baseline-target bands, and
+projected false-positive/false-negative rates at the recommended reliable threshold.
+The report does not change production constants; a human review step is still
+required before changing scoring behavior.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

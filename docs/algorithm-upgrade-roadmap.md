@@ -19,16 +19,16 @@ The next upgrade should make the algorithm more clinically legible, safer around
 
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
 - Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
-- Still pending in Phase 1: apply clinician-reviewed replay results to production threshold constants.
+- Still pending in Phase 1: collect reviewed validation datasets and use threshold calibration reports to decide production constant changes.
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
 - Threshold personalization: new movement profiles store per-exercise threshold bands for minimum visible movement, reliable movement, and baseline target movement; saved movement features and validation replay now expose those bands for tuning.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
 - Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
 - Phase 4 validation label workflow: implemented CSV label-sheet export and label merge scripts so clinician/user/developer-reviewed labels can be attached to validation JSONL datasets.
-- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, and score drift.
+- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, and score drift. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`.
 - Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, and documentation checks for medical, privacy, and validation status.
-- Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets and using them to calibrate production threshold constants.
+- Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets and applying reviewed calibration reports to production constants.
 
 ## Product Features Worth Adding
 
