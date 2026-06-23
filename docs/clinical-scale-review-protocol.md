@@ -1,0 +1,131 @@
+# Clinical Scale Review Protocol
+
+This protocol defines how Mirror clinical-scale estimates can be reviewed before
+any release status claims that House-Brackmann, Sunnybrook, or eFACE-style values
+are ready for broader availability. It is a validation workflow for Mirror
+estimates, not a medical-device protocol and not a substitute for clinician
+assessment.
+
+## Scope
+
+The protocol applies to validation datasets exported from standard assessment
+sessions. It covers:
+
+- House-Brackmann grade target labels.
+- Sunnybrook composite target labels.
+- eFACE total target labels.
+- Optional eFACE static, dynamic, and synkinesis domain labels.
+
+Mirror estimates remain estimates unless the release status explicitly says
+otherwise. Even a passing readiness report does not turn an estimate into a
+clinician-assigned grade.
+
+## Reviewer Materials
+
+Use a blinded label sheet for primary review:
+
+```bash
+npm run validation:label-sheet -- validation-dataset.jsonl blinded-labels.csv --blinded
+```
+
+The blinded sheet preserves record ids and empty target columns but hides Mirror's
+estimate columns. This reduces reviewer anchoring on the algorithm output. The
+unblinded sheet may be generated after labels are merged for audit and error
+analysis, but it must not be used for initial target assignment.
+
+Reviewer labels are merged back into a reviewed dataset:
+
+```bash
+npm run validation:merge-labels -- validation-dataset.jsonl blinded-labels.csv reviewed-dataset.jsonl
+```
+
+## Inclusion Criteria
+
+An assessment can be used for clinical-scale agreement only when:
+
+- It is a standard assessment export row with `section: "assessmentClinicalScale"`.
+- The source session has enough visual evidence for a reviewer to assign the
+  requested target labels.
+- The reviewer can identify the intended movement set and affected side from the
+  dataset context or accompanying review package.
+- The row is labeled by a clinician, or by a non-clinician only for development
+  rehearsal clearly excluded from clinical readiness counts.
+
+## Exclusion Criteria
+
+Exclude an assessment row from clinical readiness counts when:
+
+- The reviewer marks confidence as `uncertain`.
+- The visible assessment is incomplete or not interpretable.
+- The reviewer could see Mirror's estimate before assigning the primary target.
+- The label was copied from the Mirror estimate rather than independently
+  assigned.
+- The row lacks all primary targets: `houseBrackmannGrade`,
+  `sunnybrookComposite`, and `efaceTotal`.
+
+## Review Process
+
+1. Export a validation dataset from Progress after local data capture has been
+   enabled during standard assessments.
+2. Generate the blinded label sheet with `--blinded`.
+3. Assign target labels from the blinded sheet and the review materials.
+4. Merge the labels back into a reviewed JSONL dataset.
+5. Run:
+
+```bash
+npm run validate:dataset -- reviewed-dataset.jsonl validation-report.json
+npm run validation:clinical-readiness -- validation-report.json clinical-readiness-report.json
+```
+
+6. Inspect the clinical readiness report. Passing requires all primary scales to
+   meet the configured observed agreement standard.
+7. Only after human review of the dataset, label process, and readiness report
+   should `docs/validation-status.json` be updated.
+
+## Minimum Standard
+
+Clinical-scale readiness uses the machine-readable standard in
+`docs/validation-status.json`:
+
+- At least 30 reviewed clinical-scale assessment labels.
+- At least 80% House-Brackmann agreement within one grade.
+- At least 80% Sunnybrook composite agreement within 10 points.
+- At least 80% eFACE total agreement within 10 points.
+- Wilson 95% confidence interval reported for each primary agreement rate.
+
+The Wilson interval is reported because a raw observed percentage can hide
+uncertainty in small validation sets. The 30-assessment floor is a local release
+gate, not a universal clinical sample-size claim.
+
+## Adjudication
+
+If multiple reviewers label the same assessment:
+
+- Keep each raw reviewer sheet outside the production dataset until adjudication.
+- Resolve disagreements in a separate adjudicated sheet.
+- Document the adjudication rule in the readiness report notes.
+- Do not mix raw reviewer rows and adjudicated rows for the same assessment in a
+  single readiness dataset.
+
+## Required Artifacts Before Enabling Clinical-Facing Scores
+
+Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
+
+- A reviewed dataset summary with at least 30 eligible assessment labels.
+- A clinical-scale validation report from `npm run validate:dataset`.
+- A clinical-scale readiness report from
+  `npm run validation:clinical-readiness`.
+- Documentation of whether labels were blinded and whether adjudication was used.
+- A human-reviewed update to `docs/validation-status.json` referencing the
+  agreement report artifacts.
+
+Until those artifacts exist, Mirror must keep clinical-scale values labeled as
+Mirror estimates only.
+
+## References
+
+- House-Brackmann protocol summary: https://iowaprotocols.medicine.uiowa.edu/protocols/house-brackmann-facial-paralysis-scale
+- Sunnybrook scoring form: https://ehandboken.ous-hf.no/api/File/GetFile?entityId=230422&isLastVersion=false
+- eFACE validation abstract: https://pubmed.ncbi.nlm.nih.gov/26218397/
+- Wilson score interval: https://www.tandfonline.com/doi/abs/10.1080/01621459.1927.10502953
+- External validation sample-size guidance: https://www.bmj.com/content/384/bmj-2023-074821

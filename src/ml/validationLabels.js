@@ -160,11 +160,12 @@ function frameLabelRowFromRecord(line) {
   };
 }
 
-function assessmentClinicalLabelRowFromRecord(line) {
+function assessmentClinicalLabelRowFromRecord(line, options = {}) {
+  const includeEstimateColumns = options.includeEstimateColumns !== false;
   const record = line.record;
   const label = record.label ?? {};
   const estimate = record.estimate ?? {};
-  const scales = estimate.status === "estimated" ? estimate.scales ?? {} : {};
+  const scales = includeEstimateColumns && estimate.status === "estimated" ? estimate.scales ?? {} : {};
   const houseBrackmann = scales.houseBrackmann ?? {};
   const sunnybrook = scales.sunnybrook ?? {};
   const eface = scales.eface ?? {};
@@ -185,7 +186,7 @@ function assessmentClinicalLabelRowFromRecord(line) {
     quality: "",
     visibleMovementLevel: "",
     coactivationNotes: "",
-    estimateStatus: estimate.status ?? "",
+    estimateStatus: includeEstimateColumns ? estimate.status ?? "" : "",
     estimatedHouseBrackmannGrade: houseBrackmann.grade ?? "",
     estimatedHouseBrackmannNumericGrade: houseBrackmann.numericGrade ?? "",
     estimatedSunnybrookComposite: formatNumber(sunnybrook.compositeScore),
@@ -206,15 +207,15 @@ function assessmentClinicalLabelRowFromRecord(line) {
   };
 }
 
-function validationLabelRows(records = []) {
+function validationLabelRows(records = [], options = {}) {
   return [
     ...frameSampleRecords(records).map(frameLabelRowFromRecord),
-    ...assessmentClinicalScaleRecords(records).map(assessmentClinicalLabelRowFromRecord),
+    ...assessmentClinicalScaleRecords(records).map((line) => assessmentClinicalLabelRowFromRecord(line, options)),
   ];
 }
 
-function createValidationLabelCsv(records = []) {
-  const rows = [LABEL_COLUMNS, ...validationLabelRows(records).map((row) => LABEL_COLUMNS.map((column) => row[column] ?? ""))];
+function createValidationLabelCsv(records = [], options = {}) {
+  const rows = [LABEL_COLUMNS, ...validationLabelRows(records, options).map((row) => LABEL_COLUMNS.map((column) => row[column] ?? ""))];
   return `${rows.map((row) => row.map(csvEscape).join(",")).join("\n")}\n`;
 }
 

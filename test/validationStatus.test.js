@@ -14,6 +14,7 @@ const BASE_STATUS = {
     minAgreementRate: 0.8,
     minReviewedAssessments: 30,
     confidenceInterval: "wilson-95",
+    reviewProtocol: "docs/clinical-scale-review-protocol.md",
   },
   clinicalScaleAgreementReports: [],
   thresholdCalibrationReports: [],
@@ -73,9 +74,24 @@ test("validation status rejects weak clinical scale minimum standards", () => {
         minAgreementRate: 0.8,
         minReviewedAssessments: 12,
         confidenceInterval: "wilson-95",
+        reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
     }),
     /at least 30/,
+  );
+});
+
+test("validation status rejects missing clinical scale review protocol", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        minAgreementRate: 0.8,
+        minReviewedAssessments: 30,
+        confidenceInterval: "wilson-95",
+      },
+    }),
+    /reviewProtocol/,
   );
 });
 

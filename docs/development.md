@@ -11,6 +11,7 @@ npm run lint
 npm run replay:frames -- backup.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
+npm run validation:label-sheet -- validation-dataset.jsonl blinded-labels.csv --blinded
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json

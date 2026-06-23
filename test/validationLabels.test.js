@@ -71,6 +71,25 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(parsed[2][0], "assessmentClinicalScale");
 });
 
+test("validation label sheet can hide Mirror estimates for blinded review", () => {
+  const rows = validationLabelRows(sampleRecords(), { includeEstimateColumns: false });
+  const csv = createValidationLabelCsv(sampleRecords(), { includeEstimateColumns: false });
+  const parsed = parseCsv(csv);
+  const header = parsed[0];
+  const clinicalRow = parsed[2];
+  const index = Object.fromEntries(header.map((column, columnIndex) => [column, columnIndex]));
+
+  assert.equal(rows[1].rowType, "assessmentClinicalScale");
+  assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
+  assert.equal(rows[1].estimateStatus, "");
+  assert.equal(rows[1].estimatedHouseBrackmannGrade, "");
+  assert.equal(rows[1].estimatedSunnybrookComposite, "");
+  assert.equal(rows[1].houseBrackmannGrade, "");
+  assert.equal(clinicalRow[index.estimatedHouseBrackmannGrade], "");
+  assert.equal(clinicalRow[index.estimatedSunnybrookComposite], "");
+  assert.equal(clinicalRow[index.houseBrackmannGrade], "");
+});
+
 test("validation label merge updates reviewed fields from CSV", () => {
   const csv = [
     "rowType,sampleId,assessmentId,quality,visibleMovementLevel,coactivationNotes,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,reviewerRole,reviewedAt,notes",

@@ -56,8 +56,11 @@ Before these estimates can be presented as validated clinical grades, the repo n
 
 Validation dataset exports now include assessment-level `assessmentClinicalScale`
 records whenever an included frame-sample session is a standard assessment. The
-label sheet has `assessmentClinicalScale` rows with Mirror's current estimates in
-read-only reference columns and empty target columns for reviewer-entered:
+primary review workflow uses a blinded label sheet as described in
+`docs/clinical-scale-review-protocol.md`. The normal label sheet can include
+Mirror's current estimates in read-only reference columns for audit, but the
+`--blinded` export hides those estimates for target assignment. The sheet has
+`assessmentClinicalScale` rows with empty target columns for reviewer-entered:
 
 - `houseBrackmannGrade`
 - `sunnybrookComposite`

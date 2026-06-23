@@ -9,7 +9,8 @@
   "clinicalScaleMinimumStandard": {
     "minAgreementRate": 0.8,
     "minReviewedAssessments": 30,
-    "confidenceInterval": "wilson-95"
+    "confidenceInterval": "wilson-95",
+    "reviewProtocol": "docs/clinical-scale-review-protocol.md"
   },
   "clinicalScaleAgreementReports": [],
   "thresholdCalibrationReports": [],
@@ -19,6 +20,7 @@
     "Validation export, label-sheet, merge, frame evaluation, clinical-scale agreement evaluation, threshold calibration, and model-readiness report tooling are implemented.",
     "No clinician-reviewed validation dataset is committed in this repository.",
     "House-Brackmann, Sunnybrook, and eFACE-style estimates remain Mirror estimates until reviewed assessment labels meet the documented 80% agreement standard.",
+    "Primary clinical-scale target assignment should use the blinded label sheet workflow in docs/clinical-scale-review-protocol.md.",
     "Production threshold constants should not be changed from calibration reports until reviewed datasets are available."
   ]
 }

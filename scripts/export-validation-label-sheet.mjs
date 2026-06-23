@@ -7,12 +7,13 @@ async function readJsonl(path) {
   return text.split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
 }
 
-const [inputPath, outputPath] = process.argv.slice(2);
+const [inputPath, outputPath, ...flags] = process.argv.slice(2);
 if (!inputPath || !outputPath) {
-  console.error("Usage: npm run validation:label-sheet -- <validation-dataset.jsonl> <labels.csv>");
+  console.error("Usage: npm run validation:label-sheet -- <validation-dataset.jsonl> <labels.csv> [--blinded]");
   process.exit(1);
 }
 
 const records = await readJsonl(inputPath);
-await writeFile(outputPath, createValidationLabelCsv(records), "utf8");
-console.log(`Wrote validation label sheet: ${outputPath}`);
+const blinded = flags.includes("--blinded");
+await writeFile(outputPath, createValidationLabelCsv(records, { includeEstimateColumns: !blinded }), "utf8");
+console.log(`Wrote ${blinded ? "blinded " : ""}validation label sheet: ${outputPath}`);

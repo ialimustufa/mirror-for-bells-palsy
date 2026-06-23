@@ -980,9 +980,11 @@ npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readine
 ```
 
 The label-sheet command creates a CSV for clinician, user, or developer review.
-The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. The
-merge command copies reviewed label fields back into a new JSONL dataset without
-changing the original export. The evaluator replays labeled frame samples through
+The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. Use
+`--blinded` for primary clinical-scale review so Mirror estimate columns are left
+blank during target assignment. The merge command copies reviewed label fields
+back into a new JSONL dataset without changing the original export. The evaluator
+replays labeled frame samples through
 the current scorer and reports
 scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
 mean absolute stored-vs-replayed score drift. Frames labeled with
@@ -1027,7 +1029,8 @@ clinical-scale estimates. It requires the primary House-Brackmann, Sunnybrook
 composite, and eFACE total checks to meet the 30-assessment / 80% observed
 agreement standard. Passing this report still does not flip
 `clinicalFacingScoresAllowed`; a human-reviewed status update is required because
-Mirror values remain estimates rather than clinician-assigned grades.
+Mirror values remain estimates rather than clinician-assigned grades. The full
+review protocol is documented in `docs/clinical-scale-review-protocol.md`.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset
