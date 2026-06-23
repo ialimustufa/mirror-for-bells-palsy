@@ -48,7 +48,7 @@ function createWorkerRequest(worker, pending, type, payload = {}, transfer = [])
 
 async function createWorkerFaceLandmarker() {
   if (!supportsWorkerFaceLandmarker()) throw new Error("Worker face landmarker is not supported in this browser");
-  const worker = new Worker(new URL("../workers/faceLandmarker.worker.js", import.meta.url), { type: "module" });
+  const worker = new Worker(new URL("../workers/faceLandmarker.worker.js", import.meta.url));
   const pending = new Map();
   let closed = false;
 
