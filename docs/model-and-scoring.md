@@ -687,6 +687,7 @@ The profile is used in normal app behavior after it is saved:
 
 - `buildPersonalizedDailyPlan` prioritizes daily-session exercises with lower initial symmetry and affected-side focus.
 - `getAdaptiveFocusItems` exposes the highest-priority movements for Home, Practice, and Progress UI by combining baseline profile data, affected-side progress, affected/proper balance, and recent symmetry.
+- Adaptive plan ranking also uses local journal fatigue/pain prompts, missed counted-session days, weak capture quality, and quiet-region coactivation risk so stale or risky evidence does not increase plan intensity by itself.
 - `PracticeView` preselects the baseline-derived focus plan instead of starting empty when a profile exists.
 - `SessionMode` uses `activationThreshold` to decide whether a hold-frame movement is strong enough to count.
 - `buildSessionExercises` applies comfort-level dosing before a session starts.

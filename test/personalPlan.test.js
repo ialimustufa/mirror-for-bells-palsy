@@ -3,7 +3,7 @@ import test from "node:test";
 import { normalizeAppData } from "../src/domain/appData.js";
 import { DAILY_ESSENTIALS } from "../src/domain/exercises.js";
 import { DEFAULT_PERSONAL_PLAN, appendSessionRecord, buildSessionExercises } from "../src/domain/session.js";
-import { buildPersonalizedDailyPlan } from "../src/ml/faceMetrics.js";
+import { buildPersonalizedDailyPlan, getAdaptiveFocusItems } from "../src/ml/faceMetrics.js";
 
 test("saved selectedExerciseIds stay fixed when recommendations change", () => {
   const personalPlan = {
@@ -109,6 +109,58 @@ test("default reset plan clears selected exercises and returns to recommendation
 
   assert.deepEqual(normalized.prefs.personalPlan.selectedExerciseIds, []);
   assert.deepEqual(resolved, DAILY_ESSENTIALS);
+});
+
+test("adaptive plan demotes weak capture and coactivation after fatigue notes", () => {
+  const profile = {
+    exercises: {
+      "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.05 },
+      "eye-close": { exerciseId: "eye-close", initialSymmetry: 0.3 },
+      pucker: { exerciseId: "pucker", initialSymmetry: 0.35 },
+    },
+  };
+  const sessions = [{
+    date: "2026-06-22",
+    ts: Date.parse("2026-06-22T10:00:00.000Z"),
+    scores: [
+      {
+        exerciseId: "closed-smile",
+        avg: 0.4,
+        captureQuality: { key: "weak" },
+        movementFeatures: { coactivation: { risk: "high" } },
+      },
+      { exerciseId: "eye-close", avg: 0.5, captureQuality: { key: "strong" } },
+      { exerciseId: "pucker", avg: 0.45, captureQuality: { key: "strong" } },
+    ],
+  }];
+
+  const plan = buildPersonalizedDailyPlan(profile, sessions, 2, {
+    journal: [{ date: "2026-06-23", notes: "Very tired and fatigued after practice." }],
+    referenceDate: "2026-06-23",
+    orderByRegion: false,
+  });
+
+  assert.deepEqual(plan, ["eye-close", "pucker"]);
+});
+
+test("adaptive focus stops boosting no-recent-data exercises after missed practice", () => {
+  const profile = {
+    exercises: {
+      "eye-close": { exerciseId: "eye-close", initialSymmetry: 0.45 },
+      pucker: { exerciseId: "pucker", initialSymmetry: 0.45 },
+    },
+  };
+  const sessions = [{
+    date: "2026-06-10",
+    ts: Date.parse("2026-06-10T10:00:00.000Z"),
+    scores: [{ exerciseId: "eye-close", avg: 0.6 }],
+  }];
+
+  const focusItems = getAdaptiveFocusItems(profile, sessions, 2, { referenceDate: "2026-06-23" });
+  const pucker = focusItems.find((item) => item.id === "pucker");
+
+  assert.equal(pucker.noRecentData, 0);
+  assert.equal(pucker.planContext.stalePractice, true);
 });
 
 test("buildSessionExercises applies custom rep targets without changing hold dosing", () => {

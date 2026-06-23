@@ -21,7 +21,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
 - Still pending in Phase 1: collect reviewed validation datasets and use threshold calibration reports to decide production constant changes.
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
-- Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
+- Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses; it downweights weak capture quality and coactivation risk, and adaptive plans now avoid boosting stale/fatigue contexts or high-risk recent evidence.
 - Threshold personalization: new movement profiles store per-exercise threshold bands for minimum visible movement, reliable movement, and baseline target movement; saved movement features and validation replay now expose those bands for tuning.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
 - Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
@@ -208,7 +208,7 @@ Work:
 - Replace single activation-threshold heuristics with per-exercise threshold bands: minimum visible movement, reliable movement, and baseline target movement. Status: implemented for new movement profiles and saved movement-feature summaries.
 - Train the local personal recovery model on weighted daily assessment points before normal practice sessions.
 - Add uncertainty bands to trend displays instead of a single recovery number.
-- Make adaptive plans consider fatigue, missed days, low-quality captures, and coactivation risk.
+- Make adaptive plans consider fatigue, missed days, low-quality captures, and coactivation risk. Status: implemented by passing local journal context into plan ranking, suppressing stale no-recent-data boosts, and demoting weak-capture or high-coactivation recent evidence.
 
 Exit criteria:
 

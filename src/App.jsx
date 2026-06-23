@@ -247,12 +247,12 @@ export default function App() {
 
   const streak = useMemo(() => computeStreak(data.sessions), [data.sessions]);
   const recommendedPlanIds = useMemo(
-    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { orderByRegion: true }),
-    [data.movementProfile, data.sessions],
+    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { journal: data.journal, orderByRegion: true }),
+    [data.movementProfile, data.sessions, data.journal],
   );
   const personalizedPlanIds = useMemo(
-    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { personalPlan: data.prefs.personalPlan, orderByRegion: true }),
-    [data.movementProfile, data.sessions, data.prefs.personalPlan],
+    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { journal: data.journal, personalPlan: data.prefs.personalPlan, orderByRegion: true }),
+    [data.movementProfile, data.sessions, data.journal, data.prefs.personalPlan],
   );
   const savePersonalPlan = useCallback((selectedExerciseIds, repeatCounts = {}, repCounts = {}) => {
     const selected = orderExerciseIdsByRegion([...new Set(selectedExerciseIds ?? [])].filter((id) => EXERCISE_BY_ID.has(id)), recommendedPlanIds);

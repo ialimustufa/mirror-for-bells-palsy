@@ -17,7 +17,8 @@ import {
   REPORT_SNAPSHOT_WIDTH,
 } from "../domain/config";
 import { DAILY_ESSENTIALS, EXERCISES, PLAN_REGION_ORDER, PROFILE_ASSESSMENT_EXERCISES } from "../domain/exercises";
-import { clampNumber } from "../domain/session";
+import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
+import { clampNumber, daysBetween, isCountedSession } from "../domain/session";
 
 const SYMMETRY_PAIRS = [[105, 334], [70, 300], [159, 386], [145, 374], [50, 280], [205, 425], [61, 291], [37, 267], [84, 314]];
 
@@ -2209,6 +2210,9 @@ function preferredMovementProgress(record) {
 
 const EXERCISE_CATALOG_INDEX = new Map(EXERCISES.map((exercise, index) => [exercise.id, index]));
 const PLAN_REGION_INDEX = new Map(PLAN_REGION_ORDER.map((region, index) => [region, index]));
+const PLAN_STALE_SESSION_DAYS = 3;
+const PLAN_CAPTURE_QUALITY_PENALTY = { unscored: 0.22, weak: 0.14, usable: 0.04 };
+const PLAN_COACTIVATION_PENALTY = { high: 0.18, medium: 0.08 };
 
 function uniqueKnownExerciseIds(ids) {
   const out = [];
@@ -2249,14 +2253,46 @@ function applyPersonalPlanOverrides(coreIds, personalPlan) {
   return selected.length ? selected : core;
 }
 
-function buildSystemDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length) {
+function latestRecordDate(records = []) {
+  const dated = records
+    .map((record) => record?.date ?? (Number.isFinite(record?.ts) ? new Date(record.ts).toISOString().slice(0, 10) : null))
+    .filter(Boolean)
+    .sort();
+  return dated.at(-1) ?? null;
+}
+
+function adaptivePlanContext(sessions = [], options = {}) {
+  const countedSessions = (sessions ?? []).filter(isCountedSession);
+  const latestSessionDate = latestRecordDate(countedSessions);
+  const latestJournalDate = latestRecordDate(options.journal ?? []);
+  const referenceDate = options.referenceDate ?? latestJournalDate ?? latestSessionDate ?? new Date().toISOString().slice(0, 10);
+  const missedDays = latestSessionDate ? daysBetween(latestSessionDate, referenceDate) : null;
+  const journalPrompts = summarizeJournalSafetyPrompts(options.journal ?? [], { referenceDate });
+  const fatigueOrPainPrompt = journalPrompts.some((prompt) => prompt.id === "significant-fatigue" || prompt.id === "pain-or-strain");
+  return {
+    referenceDate,
+    missedDays,
+    stalePractice: missedDays != null && missedDays >= PLAN_STALE_SESSION_DAYS,
+    fatigueOrPainPrompt,
+  };
+}
+
+function planRiskPenalty(latest, context) {
+  const capturePenalty = PLAN_CAPTURE_QUALITY_PENALTY[latest?.captureQuality?.key] ?? 0;
+  const coactivationRisk = latest?.movementFeatures?.coactivation?.risk ?? latest?.coactivation?.risk;
+  const coactivationPenalty = PLAN_COACTIVATION_PENALTY[coactivationRisk] ?? 0;
+  const cautionPenalty = context?.fatigueOrPainPrompt && (capturePenalty > 0 || coactivationPenalty > 0) ? 0.06 : 0;
+  return capturePenalty + coactivationPenalty + cautionPenalty;
+}
+
+function buildSystemDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length, options = {}) {
   if (!profile?.exercises) return DAILY_ESSENTIALS.slice(0, count);
-  const scored = getAdaptiveFocusItems(profile, sessions, count).map((item) => item.id);
+  const scored = getAdaptiveFocusItems(profile, sessions, count, options).map((item) => item.id);
   return [...new Set([...scored, ...DAILY_ESSENTIALS])].slice(0, count);
 }
 
 function buildPersonalizedDailyPlan(profile, sessions = [], count = DAILY_ESSENTIALS.length, options = {}) {
-  const core = buildSystemDailyPlan(profile, sessions, count);
+  const core = buildSystemDailyPlan(profile, sessions, count, options);
   const withOverrides = options.personalPlan ? applyPersonalPlanOverrides(core, options.personalPlan) : core;
   const priority = uniqueKnownExerciseIds(options.personalPlan?.selectedExerciseIds).length ? withOverrides : core;
   return options.orderByRegion ? orderExerciseIdsByRegion(withOverrides, priority) : withOverrides;
@@ -2293,9 +2329,10 @@ function latestExerciseScoreById(sessions) {
   return out;
 }
 
-function getAdaptiveFocusItems(profile, sessions, count = 5) {
+function getAdaptiveFocusItems(profile, sessions, count = 5, options = {}) {
   if (!profile?.exercises) return [];
   const latestByExercise = latestExerciseScoreById(sessions);
+  const planContext = adaptivePlanContext(sessions, options);
   return Object.values(profile.exercises)
     .filter((ex) => EXERCISES.some((item) => item.id === ex.exerciseId))
     .map((ex) => {
@@ -2307,8 +2344,9 @@ function getAdaptiveFocusItems(profile, sessions, count = 5) {
       const progressGap = latestProgressRatio == null ? 0.15 : Math.max(0, 1 - latestProgressRatio);
       const balanceGap = latestProgress?.balanceProgressRatio == null ? 0 : Math.max(0, 1 - latestProgress.balanceProgressRatio);
       const sideFocus = (profile.affectedSide === "left" || profile.affectedSide === "right") && ex.limitedSide === profile.affectedSide ? 0.2 : 0;
-      const noRecentData = latest ? 0 : 0.1;
-      const score = baselineGap * 0.35 + latestGap * 0.25 + progressGap * 0.35 + balanceGap * 0.2 + sideFocus + noRecentData;
+      const noRecentData = latest ? 0 : (planContext.stalePractice || planContext.fatigueOrPainPrompt ? 0 : 0.1);
+      const riskPenalty = planRiskPenalty(latest, planContext);
+      const score = Math.max(0, baselineGap * 0.35 + latestGap * 0.25 + progressGap * 0.35 + balanceGap * 0.2 + sideFocus + noRecentData - riskPenalty);
       return {
         id: ex.exerciseId,
         score,
@@ -2316,6 +2354,9 @@ function getAdaptiveFocusItems(profile, sessions, count = 5) {
         latestGap,
         progressGap,
         balanceGap,
+        noRecentData,
+        riskPenalty,
+        planContext,
         latest,
         exercise: EXERCISES.find((item) => item.id === ex.exerciseId),
         profileExercise: ex,
