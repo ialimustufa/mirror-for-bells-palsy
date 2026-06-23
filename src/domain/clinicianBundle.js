@@ -131,6 +131,7 @@ function compactAssessment(assessment = {}, sessions = []) {
     coactivationRisk: normalized.coactivationRisk ?? null,
     captureQuality: normalized.captureQuality ?? null,
     resting: normalized.resting ?? null,
+    clinicalScales: normalized.clinicalScales ?? null,
     zones: recordArray(normalized.zones).map((zone) => ({
       zone: zone.zone,
       label: zone.label,

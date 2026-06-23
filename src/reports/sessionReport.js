@@ -58,6 +58,20 @@ function restingMetricRows(restingMetrics) {
     .map((metric) => `${metric.label}: L ${formatRestMetricValue(metric.userLeft)}, R ${formatRestMetricValue(metric.userRight)} · ${restingMetricSidePhrase(metric)} · asym ${formatRatioPct(metric.asymmetryRatio)}`);
 }
 
+function clinicalScaleEstimateRows(clinicalScales) {
+  if (!clinicalScales) return [];
+  if (clinicalScales.status !== "estimated") {
+    return [`Clinical scale estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
+  }
+  const scales = clinicalScales.scales ?? {};
+  return [
+    scales.houseBrackmann ? `House-Brackmann estimate: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
+    scales.sunnybrook ? `Sunnybrook estimate: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
+    scales.eface ? `eFACE-style estimate: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
+    `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
+  ].filter(Boolean);
+}
+
 function usableProgress(progress) {
   return progressUsesLegacySideConvention(progress) ? null : progress;
 }
@@ -80,6 +94,7 @@ function buildSessionReportHtml(s) {
   const diagnostics = summarizeSessionDiagnostics(s);
   const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
   const restingRows = restingMetricRows(assessment?.resting?.metrics);
+  const clinicalScaleRows = clinicalScaleEstimateRows(assessment?.clinicalScales);
   const quality = diagnostics.captureQuality;
   const diagnosticFlags = [
     diagnostics.setupQuality ? `Setup quality: ${diagnostics.setupQuality.label ?? diagnostics.setupQuality.key}${diagnostics.setupQuality.score != null ? ` (${Math.round(diagnostics.setupQuality.score * 100)}%)` : ""}` : null,
@@ -116,6 +131,7 @@ function buildSessionReportHtml(s) {
       <div class="zone-list">
         ${assessment.zones.map((zone) => `<div><strong>${escapeHtml(zone.label)}</strong>: ${zone.voluntaryMovement == null ? "unscored" : `${Math.round(zone.voluntaryMovement * 100)}%`}${zone.coactivationRisk ? ` · quiet movement ${escapeHtml(zone.coactivationRisk)}` : ""}</div>`).join("")}
       </div>
+      ${clinicalScaleRows.length ? `<div class="clinical-scales"><div class="assessment-label">Clinical scale estimates</div><ul>${clinicalScaleRows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="muted small">These are Mirror estimates only, not clinician-assigned or validated clinical grades.</div></div>` : ""}
     </section>` : "";
 
   const exerciseRows = scoresArr.map((e, scoreIndex) => {
@@ -234,6 +250,8 @@ function buildSessionReportHtml(s) {
   .assessment-label { font-weight: 700; color: #1F1B16; margin-bottom: 2px; }
   .resting-metrics { margin: 8px 0 0 0; padding-left: 16px; color: #4A6B47; }
   .zone-list { margin-top: 12px; line-height: 1.6; }
+  .clinical-scales { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(122,143,115,0.22); }
+  .clinical-scales ul { margin: 6px 0 0; padding-left: 16px; color: #4A6B47; }
   .exercise { padding: 16px 0; border-top: 1px solid #E7E5E4; }
   .exercise:first-of-type { border-top: none; }
   .ex-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }

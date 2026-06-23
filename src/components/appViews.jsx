@@ -1837,6 +1837,9 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
   const quality = assessment.captureQuality;
   const coactivation = assessment.coactivationRisk;
   const restingAsymmetry = assessment.resting?.averageAsymmetryRatio;
+  const clinicalScales = assessment.clinicalScales?.status === "estimated" ? assessment.clinicalScales.scales : null;
+  const hb = clinicalScales?.houseBrackmann;
+  const sunnybrook = clinicalScales?.sunnybrook;
   return (
     <button
       onClick={() => sourceSession && onOpen?.(sourceSession)}
@@ -1855,6 +1858,8 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
           {[
             assessment.averageVoluntaryMovement != null ? `${Math.round(assessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved",
             Number.isFinite(restingAsymmetry) ? `${Math.round(restingAsymmetry * 100)}% rest asymmetry` : null,
+            hb ? `HB ${hb.grade}` : null,
+            sunnybrook ? `Sunnybrook ${Math.round(sunnybrook.compositeScore)}` : null,
           ].filter(Boolean).join(" · ")}
         </div>
       </div>

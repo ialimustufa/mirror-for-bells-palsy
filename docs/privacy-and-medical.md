@@ -8,6 +8,7 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 - Session records persist exercise scores, timestamps, dose settings, and snapshot counts.
 - Session records may include compact pre-calibration setup-quality metrics such as face presence, alignment ratio, frame rate, brightness, and camera-distance proxy.
 - Standard assessment summaries are stored locally in app state and keep compact rest/zone metrics plus a source session timestamp.
+- Standard assessment summaries may include optional House-Brackmann, Sunnybrook, and eFACE-style estimates when at least 80% of the standard assessment has usable evidence.
 - Report images are stored locally in IndexedDB as separate image blobs so past physiotherapy PDFs can be regenerated without bloating session JSON.
 - Browser data exports are explicit local files. The full backup is for restore, while the clinician bundle is a separate JSONL review package that may include assessment trends, selected report images, journal notes, quality flags, and frame samples when the user chooses to export it.
 - Validation dataset exports are separate opt-in JSONL files. They can include sampled landmarks, blendshapes, pose matrices, scoring metadata, and empty label templates when local data capture was enabled.
@@ -26,6 +27,6 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 
 ## Medical Disclaimer
 
-Mirror is designed for guided practice and self-tracking. It does not diagnose Bell's palsy, grade facial paralysis, prescribe treatment, or replace professional care.
+Mirror is designed for guided practice and self-tracking. It can show optional facial-grading scale estimates from local practice data, but those estimates are not clinician-assigned or validated clinical grades. Mirror does not diagnose Bell's palsy, prescribe treatment, or replace professional care.
 
 Users should work with a qualified clinician and stop any exercise that causes pain, strain, or discomfort.

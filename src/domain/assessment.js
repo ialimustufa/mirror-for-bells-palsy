@@ -1,4 +1,5 @@
 import { EXERCISE_BY_ID } from "./exercises";
+import { estimateClinicalScaleGrades } from "./clinicalScales";
 import { applySessionDose } from "./session";
 
 const STANDARD_ASSESSMENT_VERSION = 1;
@@ -145,6 +146,12 @@ function compareAssessmentRecords(previous = null, current = null) {
       current: current.captureQuality?.key ?? current.captureQuality ?? null,
       change: rankedChange(previous.captureQuality?.key ?? previous.captureQuality, current.captureQuality?.key ?? current.captureQuality, QUALITY_RANK),
     },
+    clinicalScales: {
+      previous: previous.clinicalScales?.status === "estimated" ? previous.clinicalScales.scales : null,
+      current: current.clinicalScales?.status === "estimated" ? current.clinicalScales.scales : null,
+      status: current.clinicalScales?.status ?? previous.clinicalScales?.status ?? null,
+      note: "Clinical scale values are Mirror estimates unless separately clinician-entered and validated.",
+    },
     zones: zoneKeys.map((zoneKey) => {
       const previousZone = previousZones.get(zoneKey);
       const currentZone = currentZones.get(zoneKey);
@@ -212,7 +219,7 @@ function summarizeAssessmentSession(session = {}) {
   const voluntaryValues = zones.map((zone) => zone.voluntaryMovement).filter(Number.isFinite);
   const coactivationRisk = zones.reduce((risk, zone) => strongestRisk(risk, zone.coactivationRisk), null);
   const restingMetrics = session.restingMetrics && typeof session.restingMetrics === "object" ? session.restingMetrics : null;
-  return {
+  const summary = {
     version: STANDARD_ASSESSMENT_VERSION,
     kind: STANDARD_ASSESSMENT_KIND,
     date: session.date ?? null,
@@ -233,6 +240,10 @@ function summarizeAssessmentSession(session = {}) {
       ? compactNumber(voluntaryValues.reduce((sum, value) => sum + value, 0) / voluntaryValues.length)
       : null,
     coactivationRisk,
+  };
+  return {
+    ...summary,
+    clinicalScales: estimateClinicalScaleGrades(session, summary),
   };
 }
 

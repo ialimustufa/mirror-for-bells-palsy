@@ -846,6 +846,7 @@ Each assessment stores a compact summary in `assessments` with:
 - Rest section: whether a neutral calibration review image is available plus compact resting asymmetry metrics.
 - Voluntary movement sections grouped by brow/forehead, eye, midface/nose, and mouth zones.
 - Coactivation risk from quiet-region movement recorded during the assessment.
+- Optional `clinicalScales` estimates for House-Brackmann, Sunnybrook, and eFACE-style domains when at least 80% of standard movements are usable and resting metrics are available.
 - Source session timestamp so the original report and images can still be opened.
 
 Clinician bundle exports include consecutive assessment comparisons. These compare
@@ -863,6 +864,17 @@ not a clinical grade:
 Only compact rounded metric summaries are saved in `restingMetrics`; raw neutral
 landmarks are not stored as part of the assessment summary.
 
+Clinical-scale estimates are stored with explicit status and caveats:
+
+- `status: "estimated"` only when the 80% evidence standard is met.
+- `status: "insufficient-data"` when movement coverage or resting metrics are missing.
+- House-Brackmann is a conservative global estimate derived from the Sunnybrook estimate, eye-closure level, resting asymmetry, and coactivation.
+- Sunnybrook estimates the documented rest, voluntary movement, and synkinesis components from Mirror's standard assessment movements.
+- eFACE is represented as an eFACE-style domain estimate from available static, dynamic, and synkinesis proxies; it is not a clinician-entered eFACE form.
+
+These values are not clinical-facing validated grades while
+`docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
+
 Assessments are also saved as `kind: "assessment"` session records for local image
 hydration and PDF generation, but they do not count toward daily practice goals or
 practice streaks.
@@ -878,6 +890,7 @@ The report includes:
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Resting asymmetry metrics for assessment reports when neutral calibration was available.
+- Clinical-scale estimate rows for assessment reports when the 80% evidence standard is met, or an insufficient-data reason when it is not.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
@@ -917,6 +930,7 @@ shareable review package, not a restore backup. The bundle includes:
 
 - Assessment trend rows from compact `assessments` records.
 - Assessment comparison rows for consecutive standardized assessments.
+- Clinical-scale estimate payloads attached to assessment trend rows when available.
 - Recent sessions plus source sessions referenced by assessments.
 - Per-exercise progress, capture-quality summaries, rejected-frame reasons, and safety prompts.
 - Journal entries, including user notes and local safety prompt metadata for fatigue, dryness, discomfort, or symptoms.
