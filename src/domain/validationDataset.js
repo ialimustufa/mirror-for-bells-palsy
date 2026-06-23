@@ -193,7 +193,7 @@ function compactAssessmentClinicalScale(session = {}) {
 
 function includedSessionContexts(sessions, samples) {
   const sampleKeys = new Set(samples.flatMap(sampleSessionKeys));
-  return sessions.filter((session) => sampleKeys.has(sessionKey(session)));
+  return sessions.filter((session) => session.kind === "assessment" || sampleKeys.has(sessionKey(session)));
 }
 
 function buildValidationDatasetRecords(source = {}, options = {}) {

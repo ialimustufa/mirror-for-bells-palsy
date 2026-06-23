@@ -946,7 +946,8 @@ separate explicit export so sharing remains user-controlled.
 ### Validation Dataset Export
 
 The Progress view can export an opt-in local JSONL validation dataset when local
-data capture has saved frame samples. This export is for review and tuning work,
+data capture has saved frame samples or when standard assessment rows are
+available for clinical-scale review. This export is for review and tuning work,
 not restore.
 
 The first JSONL line is a manifest with `kind: "mirror-validation-dataset-jsonl"`,
@@ -970,6 +971,11 @@ Label fields start empty except for values Mirror can infer locally, such as the
 sample's intended exercise and the profile affected side. A reviewed validation set
 can then be used to report replay accuracy, false-positive rate, false-negative
 rate, and measurement drift against the same examples.
+
+Clinical-scale assessment rows can be exported even when no frame samples were
+captured. That lets a reviewer assign House-Brackmann, Sunnybrook, and eFACE
+targets from the assessment review package while keeping frame replay validation
+separate when local data capture was not enabled.
 
 Run:
 

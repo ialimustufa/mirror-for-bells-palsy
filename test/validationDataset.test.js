@@ -98,3 +98,65 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(lines.some((line) => line.section === "assessmentClinicalScale"), true);
   assert.equal(lines.some((line) => line.section === "frameSample"), true);
 });
+
+test("validation dataset exports clinical-scale assessment rows without frame samples", async () => {
+  const source = {
+    stores: {
+      appState: [{
+        id: "appState",
+        movementProfile: { affectedSide: "right" },
+      }],
+      sessions: [
+        {
+          id: "assessment-only",
+          date: "2026-06-24",
+          ts: 300,
+          kind: "assessment",
+          scoringModelVersion: 2,
+          captureQuality: { key: "usable" },
+          restingMetrics: {
+            version: 1,
+            averageAsymmetryRatio: 0.08,
+            metrics: {
+              palpebralFissure: { label: "Palpebral fissure", userLeft: 0.04, userRight: 0.05, asymmetryRatio: 0.1 },
+              nasolabialMidface: { label: "Nasolabial/midface proxy", userLeft: 0.04, userRight: 0.05, asymmetryRatio: 0.12 },
+              oralCommissure: { label: "Oral commissure vertical position", userLeft: 0.58, userRight: 0.6, asymmetryRatio: 0.04 },
+            },
+          },
+          scores: [
+            { exerciseId: "eyebrow-raise", initialMovementProgress: { affectedProgressRatio: 0.9 }, captureQuality: { key: "strong" } },
+            { exerciseId: "eye-close", initialMovementProgress: { affectedProgressRatio: 0.8 }, captureQuality: { key: "strong" } },
+            { exerciseId: "open-smile", initialMovementProgress: { affectedProgressRatio: 0.7 }, captureQuality: { key: "strong" } },
+            { exerciseId: "nose-wrinkle", initialMovementProgress: { affectedProgressRatio: 0.6 }, captureQuality: { key: "usable" } },
+            { exerciseId: "pucker", initialMovementProgress: { affectedProgressRatio: 0.5 }, captureQuality: { key: "usable" } },
+          ],
+        },
+      ],
+      sessionFrameSamples: [],
+    },
+  };
+
+  const records = buildValidationDatasetRecords(source, { exportedAt: "2026-06-24T00:00:00.000Z" });
+  const manifest = records[0];
+  const sessions = recordsBySection(records, "sessionContext");
+  const clinicalScaleAssessments = recordsBySection(records, "assessmentClinicalScale");
+  const samples = recordsBySection(records, "frameSample");
+
+  assert.equal(manifest.summary.frameSamples, 0);
+  assert.equal(manifest.summary.sessionContexts, 1);
+  assert.equal(manifest.summary.assessmentSessions, 1);
+  assert.equal(manifest.summary.assessmentClinicalScaleRecords, 1);
+  assert.deepEqual(manifest.summary.exercises, []);
+  assert.equal(manifest.summary.containsLandmarks, false);
+  assert.deepEqual(sessions.map((session) => session.id), ["assessment-only"]);
+  assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["assessment-only:clinical-scale"]);
+  assert.equal(clinicalScaleAssessments[0].estimate.status, "estimated");
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.usableMovementCount, 5);
+  assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
+  assert.equal(samples.length, 0);
+
+  const blobText = await createValidationDatasetExportBlob(records).text();
+  const lines = blobText.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(lines.some((line) => line.section === "assessmentClinicalScale"), true);
+  assert.equal(lines.some((line) => line.section === "frameSample"), false);
+});

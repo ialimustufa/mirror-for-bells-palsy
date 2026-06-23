@@ -44,7 +44,7 @@ The Progress view's Browser Data panel has three explicit local exports:
 
 - `Export data`: a full local backup for restoring Mirror data on this device.
 - `Clinician bundle`: a JSONL review package for sharing assessment trends, recent/source sessions, selected report images, journal notes, quality flags, and replay frame samples with a clinician when the user chooses.
-- `Validation set`: a JSONL package for opt-in validation work. It includes session context, raw sampled landmarks/blendshapes when local data capture was enabled, empty frame label fields for intended movement, affected side, quality, visible movement level, and coactivation notes, plus assessment clinical-scale target fields for House-Brackmann, Sunnybrook, and eFACE-style reviewer labels when assessment rows are present.
+- `Validation set`: a JSONL package for opt-in validation work. It includes session context, raw sampled landmarks/blendshapes when local data capture was enabled, empty frame label fields for intended movement, affected side, quality, visible movement level, and coactivation notes, plus assessment clinical-scale target fields for House-Brackmann, Sunnybrook, and eFACE-style reviewer labels when assessment rows are present. Assessment clinical-scale rows can be exported even when no frame samples were captured.
 
 ## Live Demo Page
 

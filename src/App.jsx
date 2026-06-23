@@ -329,8 +329,8 @@ export default function App() {
       const records = buildValidationDatasetRecords(payload);
       const sampleCount = records[0]?.summary?.frameSamples ?? 0;
       const clinicalScaleAssessmentCount = records[0]?.summary?.assessmentClinicalScaleRecords ?? 0;
-      if (!sampleCount) {
-        setDataTransferStatus({ kind: "success", message: "No local frame samples to export. Turn on Local data capture before a session." });
+      if (!sampleCount && !clinicalScaleAssessmentCount) {
+        setDataTransferStatus({ kind: "success", message: "No local frame samples or standard assessment rows to export. Turn on Local data capture before a session, or complete a standard assessment." });
         return;
       }
       const blob = createValidationDatasetExportBlob(records);

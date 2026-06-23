@@ -66,7 +66,8 @@ Exclude an assessment row from clinical readiness counts when:
 ## Review Process
 
 1. Export a validation dataset from Progress after local data capture has been
-   enabled during standard assessments.
+   enabled during standard assessments, or after standard assessments have been
+   completed when the immediate task is clinical-scale target labeling.
 2. Generate the blinded label sheet with `--blinded`.
 3. Assign target labels from the blinded sheet and the review materials.
 4. Merge the labels back into a reviewed JSONL dataset.
