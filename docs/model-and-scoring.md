@@ -980,6 +980,7 @@ npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
 npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
+npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md
 ```
 
 The label-sheet command creates a CSV for clinician, user, or developer review.
@@ -1034,6 +1035,13 @@ agreement standard. Passing this report still does not flip
 `clinicalFacingScoresAllowed`; a human-reviewed status update is required because
 Mirror values remain estimates rather than clinician-assigned grades. The full
 review protocol is documented in `docs/clinical-scale-review-protocol.md`.
+
+The clinical-report command converts a reviewed dataset, clinical validation
+report, or clinical-readiness report into a Markdown clinical-scale agreement
+report. It records the dataset summary, primary-scale agreement table, Wilson
+confidence intervals, missing estimate counts, blocking reasons, and a sample of
+out-of-tolerance assessment rows for adjudication. The report is designed for the
+release reviewer to attach under `docs/validation/` before any status update.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset

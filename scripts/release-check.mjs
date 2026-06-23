@@ -16,7 +16,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/model-and-scoring.md",
-    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /not diagnosis/i],
+    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /clinical-scale agreement\s+report/i, /not diagnosis/i],
   },
   {
     path: "docs/algorithm-upgrade-roadmap.md",

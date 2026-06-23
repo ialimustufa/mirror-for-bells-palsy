@@ -84,6 +84,13 @@ threshold. Passing this tooling is still not the same as clinician assignment; i
 only proves that Mirror estimates met the documented agreement target on the
 reviewed local validation set.
 
+After `npm run validation:clinical-readiness`, use
+`npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
+to create the human-readable clinical-scale agreement report. That Markdown
+report packages the dataset summary, agreement table, Wilson intervals, missing
+estimate counts, blocking reasons, and mismatch samples that a release reviewer
+needs before any validation-status update.
+
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns
 against relying on small rule-of-thumb validation sets and recommends sample
