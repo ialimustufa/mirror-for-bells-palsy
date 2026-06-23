@@ -12,6 +12,13 @@ test("clinician bundle exports assessment trend, sessions, journals, images, and
       appState: [{
         id: "appState",
         assessments: [{
+          date: "2026-06-15",
+          ts: 215,
+          averageVoluntaryMovement: 0.62,
+          coactivationRisk: "high",
+          resting: { averageAsymmetryRatio: 0.24 },
+          zones: [{ zone: "eye", label: "Eye", exerciseIds: ["eye-close"], voluntaryMovement: 0.58, coactivationRisk: "high" }],
+        }, {
           date: "2026-06-22",
           ts: 220,
           sourceSessionId: "assessment-session",
@@ -69,13 +76,15 @@ test("clinician bundle exports assessment trend, sessions, journals, images, and
   const manifest = records[0];
   const sessions = recordsBySection(records, "session");
   const assessments = recordsBySection(records, "assessmentTrend");
+  const comparisons = recordsBySection(records, "assessmentComparison");
   const journals = recordsBySection(records, "journal");
   const images = recordsBySection(records, "image");
   const samples = recordsBySection(records, "frameSample");
 
   assert.equal(manifest.kind, CLINICIAN_BUNDLE_LINES_KIND);
   assert.equal(manifest.summary.sessions, 1);
-  assert.equal(manifest.summary.assessments, 1);
+  assert.equal(manifest.summary.assessments, 2);
+  assert.equal(manifest.summary.assessmentComparisons, 1);
   assert.equal(manifest.summary.journalEntries, 1);
   assert.equal(manifest.summary.journalSafetyPrompts, 1);
   assert.equal(manifest.summary.images, 2);
@@ -83,8 +92,11 @@ test("clinician bundle exports assessment trend, sessions, journals, images, and
   assert.equal(manifest.summary.containsImageDataUrls, true);
   assert.deepEqual(sessions.map((session) => session.id), ["assessment-session"]);
   assert.equal(sessions[0].diagnostics.safetyPrompts.length >= 0, true);
-  assert.equal(assessments[0].averageVoluntaryMovement, 0.72);
-  assert.equal(assessments[0].resting.averageAsymmetryRatio, 0.18);
+  assert.deepEqual(assessments.map((assessment) => assessment.averageVoluntaryMovement), [0.62, 0.72]);
+  assert.equal(assessments[1].resting.averageAsymmetryRatio, 0.18);
+  assert.equal(comparisons[0].averageVoluntaryMovement.delta, 0.1);
+  assert.equal(comparisons[0].restingAsymmetry.delta, -0.06);
+  assert.equal(comparisons[0].coactivationRisk.change, "lower-risk");
   assert.equal(journals[0].notes, "Dry eye in the evening.");
   assert.deepEqual(journals[0].safetyPrompts.map((prompt) => prompt.id), ["eye-protection"]);
   assert.deepEqual(images.map((image) => image.id).sort(), ["img-assessment-baseline", "img-assessment-rep"]);

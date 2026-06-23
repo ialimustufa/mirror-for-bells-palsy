@@ -1,4 +1,4 @@
-import { summarizeAssessmentSession } from "./assessment";
+import { compareAssessmentRecords, summarizeAssessmentSession } from "./assessment";
 import { summarizeJournalEntrySafetyPrompts, summarizeJournalSafetyPrompts } from "./safetyPrompts";
 import { summarizeSessionDiagnostics } from "./sessionDiagnostics";
 
@@ -143,6 +143,15 @@ function compactAssessment(assessment = {}, sessions = []) {
   };
 }
 
+function assessmentComparisons(assessments = []) {
+  const comparisons = [];
+  for (let i = 1; i < assessments.length; i++) {
+    const comparison = compareAssessmentRecords(assessments[i - 1], assessments[i]);
+    if (comparison) comparisons.push(comparison);
+  }
+  return comparisons;
+}
+
 function compactJournalEntry(entry = {}) {
   return {
     date: entry.date ?? null,
@@ -212,6 +221,8 @@ function buildClinicianBundleRecords(source = {}, options = {}) {
   const images = recordArray(stores.sessionImages).filter((image) => imageBelongsToSessions(image, includedKeys));
   const frameSamples = recordArray(stores.sessionFrameSamples).filter((sample) => sample.sessionId && includedKeys.has(sample.sessionId));
   const scoringVersions = [...new Set(includedSessions.map((session) => session.scoringModelVersion).filter(Boolean))];
+  const compactAssessments = sortedByTsAsc(assessments).map((assessment) => compactAssessment(assessment, sessions));
+  const comparisons = assessmentComparisons(compactAssessments);
   const manifest = {
     kind: CLINICIAN_BUNDLE_LINES_KIND,
     appId: CLINICIAN_BUNDLE_APP_ID,
@@ -219,7 +230,8 @@ function buildClinicianBundleRecords(source = {}, options = {}) {
     exportedAt: options.exportedAt ?? new Date().toISOString(),
     summary: {
       sessions: includedSessions.length,
-      assessments: assessments.length,
+      assessments: compactAssessments.length,
+      assessmentComparisons: comparisons.length,
       journalEntries: journal.length,
       journalSafetyPrompts: summarizeJournalSafetyPrompts(journal).length,
       images: images.length,
@@ -231,12 +243,13 @@ function buildClinicianBundleRecords(source = {}, options = {}) {
       containsImageDataUrls: images.some((image) => typeof image.dataUrl === "string"),
       containsFrameSamples: frameSamples.length > 0,
     },
-    sections: ["assessmentTrend", "session", "journal", "image", "frameSample"],
+    sections: ["assessmentTrend", "assessmentComparison", "session", "journal", "image", "frameSample"],
     note: "Mirror practice metrics are not validated clinical grades. Share only by explicit user export.",
   };
 
   const records = [manifest];
-  for (const assessment of sortedByTsAsc(assessments)) records.push({ section: "assessmentTrend", record: compactAssessment(assessment, sessions) });
+  for (const assessment of compactAssessments) records.push({ section: "assessmentTrend", record: assessment });
+  for (const comparison of comparisons) records.push({ section: "assessmentComparison", record: comparison });
   for (const session of includedSessions) records.push({ section: "session", record: compactSession(session) });
   for (const entry of sortedByTsAsc(journal)) records.push({ section: "journal", record: compactJournalEntry(entry) });
   for (const image of images) records.push({ section: "image", record: compactImageRecord(image) });

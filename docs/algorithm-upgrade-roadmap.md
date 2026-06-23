@@ -20,7 +20,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
 - Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality with occlusion/glare risk, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
 - Still pending in Phase 1: collect reviewed validation datasets and use threshold calibration reports to decide production constant changes.
-- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
+- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, clinician bundles include assessment-to-assessment comparisons, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses; it prioritizes controlled assessment samples, downweights weak capture quality and coactivation risk, and adaptive plans now avoid boosting stale/fatigue contexts or high-risk recent evidence.
 - Threshold personalization: new movement profiles store per-exercise threshold bands for minimum visible movement, reliable movement, and baseline target movement; saved movement features and validation replay now expose those bands for tuning.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
@@ -103,7 +103,7 @@ Status: implemented as an explicit local JSONL clinician bundle export from Prog
 
 Contents:
 
-- Assessment trend table.
+- Assessment trend and comparison table.
 - Selected baseline and current comparison images.
 - Per-exercise progress from first baseline.
 - Data quality flags.
@@ -192,7 +192,7 @@ Work:
 - Add resting asymmetry metrics for palpebral fissure, nasolabial/midface proxy, and oral commissure position. Status: implemented as compact face-local neutral calibration metrics.
 - Add voluntary movement metrics for the standard movements.
 - Add coactivation metrics during those same movements.
-- Add report language that maps Mirror metrics to "rest / voluntary movement / coactivation" sections.
+- Add report language that maps Mirror metrics to "rest / voluntary movement / coactivation" sections. Status: reports and clinician bundles use rest, voluntary movement, coactivation, and assessment-comparison sections while preserving non-diagnostic wording.
 
 Exit criteria:
 

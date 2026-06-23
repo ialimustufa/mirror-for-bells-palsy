@@ -31,6 +31,7 @@ const ASSESSMENT_ZONE_LABELS = Object.freeze({
 });
 
 const COACTIVATION_RANK = { low: 0, medium: 1, high: 2 };
+const QUALITY_RANK = { strong: 0, usable: 1, weak: 2, unscored: 3 };
 
 function compactNumber(value, digits = 4) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
@@ -69,6 +70,105 @@ function strongestRisk(current, candidate) {
   if (!candidate) return current ?? null;
   if (!current) return candidate;
   return COACTIVATION_RANK[candidate] > COACTIVATION_RANK[current] ? candidate : current;
+}
+
+function trendDirection(delta, lowerIsBetter = false) {
+  if (!Number.isFinite(delta) || Math.abs(delta) < 0.0001) return "unchanged";
+  const improved = lowerIsBetter ? delta < 0 : delta > 0;
+  return improved ? "improved" : (lowerIsBetter ? "higher" : "lower");
+}
+
+function rankedChange(previous, current, ranks) {
+  if (ranks[previous] == null && ranks[current] == null) return "unchanged";
+  if (ranks[previous] == null) return current ? "new" : "unchanged";
+  if (ranks[current] == null) return "missing";
+  if (ranks[current] === ranks[previous]) return "unchanged";
+  return ranks[current] < ranks[previous] ? "lower-risk" : "higher-risk";
+}
+
+function assessmentPoint(assessment = {}) {
+  return {
+    date: assessment.date ?? null,
+    ts: assessment.ts ?? null,
+    sourceSessionId: assessment.sourceSessionId ?? null,
+    sourceSessionTs: assessment.sourceSessionTs ?? null,
+  };
+}
+
+function zoneByKey(assessment = {}) {
+  const out = new Map();
+  for (const zone of assessment.zones ?? []) {
+    if (zone?.zone) out.set(zone.zone, zone);
+  }
+  return out;
+}
+
+function compareAssessmentRecords(previous = null, current = null) {
+  if (!previous || !current) return null;
+  const previousAverage = previous.averageVoluntaryMovement;
+  const currentAverage = current.averageVoluntaryMovement;
+  const averageDelta = Number.isFinite(previousAverage) && Number.isFinite(currentAverage)
+    ? compactNumber(currentAverage - previousAverage)
+    : null;
+  const previousResting = previous.resting?.averageAsymmetryRatio;
+  const currentResting = current.resting?.averageAsymmetryRatio;
+  const restingDelta = Number.isFinite(previousResting) && Number.isFinite(currentResting)
+    ? compactNumber(currentResting - previousResting)
+    : null;
+  const previousZones = zoneByKey(previous);
+  const currentZones = zoneByKey(current);
+  const zoneKeys = [...new Set([...previousZones.keys(), ...currentZones.keys()])];
+
+  return {
+    kind: "standard-assessment-comparison",
+    from: assessmentPoint(previous),
+    to: assessmentPoint(current),
+    averageVoluntaryMovement: {
+      previous: previousAverage ?? null,
+      current: currentAverage ?? null,
+      delta: averageDelta,
+      direction: trendDirection(averageDelta),
+    },
+    restingAsymmetry: {
+      previous: previousResting ?? null,
+      current: currentResting ?? null,
+      delta: restingDelta,
+      direction: trendDirection(restingDelta, true),
+    },
+    coactivationRisk: {
+      previous: previous.coactivationRisk ?? null,
+      current: current.coactivationRisk ?? null,
+      change: rankedChange(previous.coactivationRisk, current.coactivationRisk, COACTIVATION_RANK),
+    },
+    captureQuality: {
+      previous: previous.captureQuality?.key ?? previous.captureQuality ?? null,
+      current: current.captureQuality?.key ?? current.captureQuality ?? null,
+      change: rankedChange(previous.captureQuality?.key ?? previous.captureQuality, current.captureQuality?.key ?? current.captureQuality, QUALITY_RANK),
+    },
+    zones: zoneKeys.map((zoneKey) => {
+      const previousZone = previousZones.get(zoneKey);
+      const currentZone = currentZones.get(zoneKey);
+      const previousMovement = previousZone?.voluntaryMovement;
+      const currentMovement = currentZone?.voluntaryMovement;
+      const delta = Number.isFinite(previousMovement) && Number.isFinite(currentMovement)
+        ? compactNumber(currentMovement - previousMovement)
+        : null;
+      return {
+        zone: zoneKey,
+        label: currentZone?.label ?? previousZone?.label ?? ASSESSMENT_ZONE_LABELS[zoneKey] ?? zoneKey,
+        previousVoluntaryMovement: previousMovement ?? null,
+        currentVoluntaryMovement: currentMovement ?? null,
+        voluntaryMovementDelta: delta,
+        voluntaryMovementDirection: trendDirection(delta),
+        previousCoactivationRisk: previousZone?.coactivationRisk ?? null,
+        currentCoactivationRisk: currentZone?.coactivationRisk ?? null,
+        coactivationRiskChange: rankedChange(previousZone?.coactivationRisk, currentZone?.coactivationRisk, COACTIVATION_RANK),
+        previousCaptureQuality: previousZone?.captureQuality ?? null,
+        currentCaptureQuality: currentZone?.captureQuality ?? null,
+      };
+    }),
+    note: "Comparison uses Mirror practice metrics only; it is not a validated clinical grade.",
+  };
 }
 
 function summarizeZone(zone, scores) {
@@ -155,5 +255,6 @@ export {
   STANDARD_ASSESSMENT_VERSION,
   appendAssessmentRecord,
   buildStandardAssessmentExercises,
+  compareAssessmentRecords,
   summarizeAssessmentSession,
 };

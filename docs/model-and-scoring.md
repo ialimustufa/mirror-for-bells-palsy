@@ -846,6 +846,10 @@ Each assessment stores a compact summary in `assessments` with:
 - Coactivation risk from quiet-region movement recorded during the assessment.
 - Source session timestamp so the original report and images can still be opened.
 
+Clinician bundle exports include consecutive assessment comparisons. These compare
+average voluntary movement, resting asymmetry, coactivation risk, capture quality,
+and each zone's voluntary movement using Mirror practice metrics only.
+
 Resting asymmetry metrics are computed from the neutral calibration landmarks in
 the same face-local frame used by the scorer. They are practice-review metrics,
 not a clinical grade:
@@ -907,6 +911,7 @@ The Progress view can also export a local JSONL clinician bundle. This is a
 shareable review package, not a restore backup. The bundle includes:
 
 - Assessment trend rows from compact `assessments` records.
+- Assessment comparison rows for consecutive standardized assessments.
 - Recent sessions plus source sessions referenced by assessments.
 - Per-exercise progress, capture-quality summaries, rejected-frame reasons, and safety prompts.
 - Journal entries, including user notes and local safety prompt metadata for fatigue, dryness, discomfort, or symptoms.
