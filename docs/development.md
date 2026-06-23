@@ -14,6 +14,7 @@ npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
+npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
 npm run validation:status
 npm run release:check # lint + tests + build + release doc checks
 ```

@@ -976,6 +976,7 @@ npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-
 npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
+npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
 ```
 
 The label-sheet command creates a CSV for clinician, user, or developer review.
@@ -1019,6 +1020,14 @@ model training. When disagreement is high after that threshold workflow, it flag
 lightweight correction-model review. It does not justify a clinical-domain landmark
 model from movement labels alone; that requires reviewed landmark-localization
 annotations.
+
+The clinical-readiness command reads a reviewed dataset, combined validation
+report, or clinical-scale validation report and writes a release decision for the
+clinical-scale estimates. It requires the primary House-Brackmann, Sunnybrook
+composite, and eFACE total checks to meet the 30-assessment / 80% observed
+agreement standard. Passing this report still does not flip
+`clinicalFacingScoresAllowed`; a human-reviewed status update is required because
+Mirror values remain estimates rather than clinician-assigned grades.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset
