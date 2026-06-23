@@ -837,12 +837,26 @@ function vectorProjectionSignal(frame, neutralFrame, idxs, vector) {
   return count ? total : null;
 }
 
+function eyeClosureRawSignal(frame, neutralFrame, rawSide) {
+  const curTop = avgY(frame, RESTING_EYE_TOP[rawSide]);
+  const curBottom = avgY(frame, RESTING_EYE_BOTTOM[rawSide]);
+  const neutralTop = avgY(neutralFrame, RESTING_EYE_TOP[rawSide]);
+  const neutralBottom = avgY(neutralFrame, RESTING_EYE_BOTTOM[rawSide]);
+  if ([curTop, curBottom, neutralTop, neutralBottom].some((value) => value == null)) return null;
+  const currentAperture = Math.max(0, curBottom - curTop);
+  const neutralAperture = Math.max(0, neutralBottom - neutralTop);
+  const apertureClose = Math.max(0, neutralAperture - currentAperture);
+  const centerShift = Math.abs(((curTop + curBottom) / 2) - ((neutralTop + neutralBottom) / 2));
+  return Math.max(0, apertureClose - centerShift);
+}
+
 function directionalRawSignal(frame, neutralFrame, mapping, config, rawSide) {
   const idxs = mapping?.[rawSide];
   if (!idxs?.length) return null;
   if (config.type === "vector") {
     return vectorProjectionSignal(frame, neutralFrame, idxs, config.vectors?.[rawSide]);
   }
+  if (config.key === "eyeClosure") return eyeClosureRawSignal(frame, neutralFrame, rawSide);
   const currentSpread = verticalSpread(frame, idxs);
   const neutralSpread = verticalSpread(neutralFrame, idxs);
   if (currentSpread == null || neutralSpread == null) return null;
@@ -865,7 +879,6 @@ function directionalExerciseGate(config, leftNoise, rightNoise, options) {
   const maxNoise = Math.max(leftNoise ?? 0, rightNoise ?? 0);
   return Math.max(
     config.minSignal ?? SCORING_ABSOLUTE_MIN_SIGNAL,
-    options.pairwiseGate ?? SCORING_ABSOLUTE_MIN_SIGNAL,
     noiseGate(maxNoise, options.directionalGateMultiplier, options.directionalGateCap),
   );
 }

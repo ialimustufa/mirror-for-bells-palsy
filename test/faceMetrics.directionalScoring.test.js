@@ -4,6 +4,8 @@ import { computeExerciseSymmetry, computeNoiseFloor } from "../src/ml/faceMetric
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
+const LEFT_OPEN_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 185, 181];
+const RIGHT_OPEN_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 409, 405];
 const LEFT_PUCKER = [61, 91, 146, 78, 185, 95, 88, 178, 40, 39, 37, 0];
 const RIGHT_PUCKER = [291, 321, 375, 308, 409, 324, 318, 402, 270, 269, 267, 0];
 const LEFT_CHEEK = [205, 192, 213, 50, 187, 147, 36, 142, 207, 216];
@@ -42,6 +44,9 @@ function makeNeutralFace() {
   lm[0] = landmark(0.5, 0.57);
   setGroup(lm, LEFT_SMILE, 0.43, 0.58);
   setGroup(lm, RIGHT_SMILE, 0.57, 0.58);
+  setGroup(lm, LEFT_OPEN_SMILE, 0.43, 0.58);
+  setGroup(lm, RIGHT_OPEN_SMILE, 0.57, 0.58);
+  lm[17] = landmark(0.5, 0.62);
   setGroup(lm, LEFT_PUCKER, 0.44, 0.58);
   setGroup(lm, RIGHT_PUCKER, 0.56, 0.58);
   setGroup(lm, LEFT_CHEEK, 0.36, 0.54);
@@ -116,6 +121,36 @@ test("eye closure uses aperture decrease instead of generic eye drift", () => {
 
   assert.ok(computeExerciseSymmetry("eye-close", closed, neutral));
   assert.equal(computeExerciseSymmetry("eye-close", lateralDrift, neutral), null);
+});
+
+test("eye closure family scores soft movement below the generic pairwise gate", () => {
+  const neutral = makeNeutralFace();
+  const current = cloneLandmarks(neutral);
+  moveGroup(current, [...LEFT_EYE_TOP, ...RIGHT_EYE_TOP], 0, 0.003);
+  moveGroup(current, [...LEFT_EYE_BOTTOM, ...RIGHT_EYE_BOTTOM], 0, -0.003);
+
+  for (const exerciseId of ["eye-close", "blink", "wink", "emoji-wink"]) {
+    const result = computeExerciseSymmetry(exerciseId, current, neutral);
+    assert.ok(result, `${exerciseId} should score below the generic pairwise gate`);
+    assert.ok(result.peak < 0.02, `${exerciseId} regression sample should stay below the old generic gate`);
+  }
+});
+
+test("cheek suck and open smile use their directional gates below the generic pairwise gate", () => {
+  const neutral = makeNeutralFace();
+  const cheekSuck = cloneLandmarks(neutral);
+  moveGroup(cheekSuck, LEFT_CHEEK, 0.00055, 0);
+  moveGroup(cheekSuck, RIGHT_CHEEK, -0.00055, 0);
+
+  const openSmile = cloneLandmarks(neutral);
+  moveGroup(openSmile, LEFT_OPEN_SMILE, -0.00045, -0.00025);
+  moveGroup(openSmile, RIGHT_OPEN_SMILE, 0.00045, -0.00025);
+
+  for (const [exerciseId, current] of [["cheek-suck", cheekSuck], ["open-smile", openSmile]]) {
+    const result = computeExerciseSymmetry(exerciseId, current, neutral);
+    assert.ok(result, `${exerciseId} should score below the generic pairwise gate`);
+    assert.ok(result.peak < 0.02, `${exerciseId} regression sample should stay below the old generic gate`);
+  }
 });
 
 test("vowel-a uses mouth aperture increase and rejects smile-only movement", () => {
