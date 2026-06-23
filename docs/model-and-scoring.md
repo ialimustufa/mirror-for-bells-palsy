@@ -869,6 +869,21 @@ The report includes:
 `shareSessionReport` opens that report in a new window and triggers the browser print flow.
 The intended user action is saving the print output as a PDF and sending that PDF to a physiotherapist.
 
+### Clinician Bundle Export
+
+The Progress view can also export a local JSONL clinician bundle. This is a
+shareable review package, not a restore backup. The bundle includes:
+
+- Assessment trend rows from compact `assessments` records.
+- Recent sessions plus source sessions referenced by assessments.
+- Per-exercise progress, capture-quality summaries, rejected-frame reasons, and safety prompts.
+- Journal entries, including user notes about fatigue, dryness, discomfort, or symptoms.
+- Selected report image records for included sessions: neutral baseline images and rep snapshots.
+- Frame-sample records for included sessions when local data capture was enabled, so a clinician or developer can replay the audit trail.
+
+The full device backup still uses `Export data`; the clinician bundle is a
+separate explicit export so sharing remains user-controlled.
+
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside
 peak-movement rep snapshots so the immediate PDF can show a side-by-side comparison.

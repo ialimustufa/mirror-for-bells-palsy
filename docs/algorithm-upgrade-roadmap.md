@@ -22,7 +22,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Still pending in Phase 1: replay-calibrated threshold changes.
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
-- Still pending in Phases 2-5: clinician bundle export packaging, validation dataset format, rollback/release gates, and full safety prompt coverage.
+- Still pending in Phases 2-5: validation dataset format, rollback/release gates, and full safety prompt coverage.
 
 ## Product Features Worth Adding
 
@@ -92,6 +92,8 @@ Implementation notes:
 ### 4. Clinician Review Bundle
 
 Upgrade the existing printable report into a local clinician bundle.
+
+Status: implemented as an explicit local JSONL clinician bundle export from Progress.
 
 Contents:
 

@@ -9,6 +9,7 @@ For the public-facing policy, see [Data Privacy Policy](../PRIVACY.md).
 - Session records may include compact pre-calibration setup-quality metrics such as face presence, alignment ratio, frame rate, brightness, and camera-distance proxy.
 - Standard assessment summaries are stored locally in app state and keep compact rest/zone metrics plus a source session timestamp.
 - Report images are stored locally in IndexedDB as separate image blobs so past physiotherapy PDFs can be regenerated without bloating session JSON.
+- Browser data exports are explicit local files. The full backup is for restore, while the clinician bundle is a separate JSONL review package that may include assessment trends, selected report images, journal notes, quality flags, and frame samples when the user chooses to export it.
 - Movement profiles include neutral landmark data, noise floor data, and per-exercise baseline metrics.
 - Personal recovery models are trained locally from saved session movement progress. They store compact per-exercise trend metrics, not a replacement face model.
 - Optional local data capture can store sampled landmarks, blendshapes, pose matrices, and scoring metadata for debugging/future model work. It is off by default and does not store raw video.

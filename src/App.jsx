@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
 import { ASSESSMENT_SESSION_KIND, appendAssessmentRecord, buildStandardAssessmentExercises, summarizeAssessmentSession } from "./domain/assessment";
+import { buildClinicianBundleRecords, createClinicianBundleExportBlob } from "./domain/clinicianBundle";
 import { EXERCISE_BY_ID } from "./domain/exercises";
 import { trainPersonalRecoveryModel } from "./domain/personalRecoveryModel";
 import {
@@ -304,6 +305,21 @@ export default function App() {
       setDataTransferStatus({ kind: "error", message: "Could not export browser data." });
     }
   }, []);
+  const exportClinicianBundle = useCallback(async () => {
+    setDataTransferStatus({ kind: "working", message: "Preparing clinician bundle..." });
+    try {
+      await persistQueueRef.current.catch(() => {});
+      const payload = await exportMirrorBrowserData();
+      const records = buildClinicianBundleRecords(payload);
+      const blob = createClinicianBundleExportBlob(records);
+      const filename = `mirror-clinician-bundle-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      downloadFile(blob, filename);
+      setDataTransferStatus({ kind: "success", message: `Exported clinician bundle with ${records[0]?.summary?.sessions ?? 0} sessions.` });
+    } catch (error) {
+      console.error("Failed to export clinician bundle", error);
+      setDataTransferStatus({ kind: "error", message: "Could not export clinician bundle." });
+    }
+  }, []);
   const importBrowserData = useCallback(async (file) => {
     if (!file) return;
     setDataTransferStatus({ kind: "working", message: "Importing browser data..." });
@@ -350,7 +366,7 @@ export default function App() {
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} savedRepeatCounts={data.prefs.personalPlan?.repeatCounts} savedRepCounts={data.prefs.personalPlan?.repCounts} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "baseline" && <BaselineView data={data} onStartProfile={openProfileAssessment} onResetBaselines={resetMovementBaselines} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} dataTransferStatus={dataTransferStatus} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onExportData={exportBrowserData} onImportData={importBrowserData} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} dataTransferStatus={dataTransferStatus} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onExportData={exportBrowserData} onExportClinicianBundle={exportClinicianBundle} onImportData={importBrowserData} />}
         </main>
         <footer className="mt-10 text-center text-xs text-stone-500">
           <MadeByFooter />
