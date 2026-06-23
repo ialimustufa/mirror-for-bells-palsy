@@ -18,8 +18,8 @@ The next upgrade should make the algorithm more clinically legible, safer around
 ## Implementation Status
 
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
-- Phase 1 signal-quality work: started. Session records now include pre-session setup quality, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
-- Still pending in Phase 1: workerized MediaPipe inference, exercise-specific direction-vector tuning, and replay-calibrated threshold changes.
+- Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, session records include pre-session setup quality, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
+- Still pending in Phase 1: exercise-specific direction-vector tuning and replay-calibrated threshold changes.
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
 - Still pending in Phases 2-5: deeper resting asymmetry metrics, clinician bundle export packaging, validation dataset format, rollback/release gates, and full safety prompt coverage.
@@ -161,7 +161,7 @@ Goal: reduce false progress and false no-score states.
 
 Work:
 
-- Move MediaPipe inference into a Web Worker because the official web guide notes that `detect()` and `detectForVideo()` are synchronous and block the UI thread.
+- Move MediaPipe inference into a Web Worker because the official web guide notes that `detect()` and `detectForVideo()` are synchronous and block the UI thread. Status: implemented with a main-thread fallback for browsers without worker bitmap support.
 - Add pose, occlusion, and landmark-stability quality scores.
 - Tune calibration quality thresholds using the stricter core landmarks already captured by `coreAvgNoise`.
 - Add exercise-specific direction vectors for smile, pucker, cheek puff/suck, eye closure, and vowels instead of relying only on generic displacement magnitude.
@@ -246,7 +246,7 @@ Priority order:
 2. Build replay tests around stored frame samples.
 3. Add quiet-region definitions and first coactivation metrics.
 4. Add standardized assessment records and a clinician report section.
-5. Move face inference into a Web Worker.
+5. Move face inference into a Web Worker. Done with fallback.
 6. Add capture-quality setup before calibration.
 7. Add uncertainty bands to the personal recovery model.
 8. Create an opt-in labeled validation dataset format.

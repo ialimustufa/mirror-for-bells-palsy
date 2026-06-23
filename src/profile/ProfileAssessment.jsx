@@ -254,14 +254,15 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
   useEffect(() => {
     if (!faceLandmarker || !videoRef.current || !activeCamera) return;
     let raf, alive = true, lastTs = 0;
-    const tick = () => {
+    const tick = async () => {
       if (!alive) return;
       const v = videoRef.current;
       if (!v || v.readyState < 2 || v.paused) { raf = requestAnimationFrame(tick); return; }
       try {
         const ts = Math.max(lastTs + 1, performance.now());
         lastTs = ts;
-        const result = faceLandmarker.detectForVideo(v, ts);
+        const result = await faceLandmarker.detectForVideo(v, ts);
+        if (!alive) return;
         const rawLm = result.faceLandmarks?.[0];
         const bsArr = result.faceBlendshapes?.[0]?.categories;
         const rawMatrix = firstFacialTransformationMatrix(result);

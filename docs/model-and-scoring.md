@@ -49,12 +49,16 @@ The ML model only provides geometry and blendshape estimates. The rehab-oriented
 
 ## Runtime Pipeline
 
-The live session loop runs inside `SessionMode`.
+The live session loop runs inside `SessionMode`. The `useFaceLandmarker`
+hook exposes an async detector facade. On browsers that support worker
+bitmap transfer, MediaPipe loads in `src/workers/faceLandmarker.worker.js` so
+the synchronous `detectForVideo` call runs off the UI thread; otherwise the
+same facade falls back to the main-thread MediaPipe runtime.
 
 For each animation frame:
 
 1. Read the current video frame.
-2. Run `faceLandmarker.detectForVideo(video, timestamp)`.
+2. Await `faceLandmarker.detectForVideo(video, timestamp)` through the detector facade.
 3. Extract the first face's landmarks, blendshapes, and facial transformation matrix.
 4. Smooth landmarks and the transform matrix using an exponential moving average.
 5. During calibration, collect stable neutral frames and neutral pose matrices.

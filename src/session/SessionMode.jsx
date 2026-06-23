@@ -860,7 +860,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     return () => clearTimeout(t);
   }, [current, currentHoldSec, currentReps, currentRestSec, exIdx, phase, prefs.voiceEnabled, repIdx, secondsLeft, timerPaused, totalExercises]);
 
-  // FaceLandmarker detection + overlay loop — synchronous detectForVideo, runs continuously so the overlay stays live
+  // FaceLandmarker detection + overlay loop. The hook workerizes MediaPipe when supported
+  // and falls back to the same async facade on the main thread when needed.
   useEffect(() => {
     if (!faceLandmarker || !videoRef.current) return;
     const bsMapping = EXERCISE_BLENDSHAPES[current.id] ?? null;
@@ -868,14 +869,15 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const isNose = NOSE_EXERCISES.has(current.id);
 
     let raf, alive = true, lastTs = 0;
-    const tick = () => {
+    const tick = async () => {
       if (!alive) return;
       const v = videoRef.current;
       if (!v || v.readyState < 2 || v.paused) { raf = requestAnimationFrame(tick); return; }
       try {
         const ts = Math.max(lastTs + 1, performance.now());
         lastTs = ts;
-        const taskResult = faceLandmarker.detectForVideo(v, ts);
+        const taskResult = await faceLandmarker.detectForVideo(v, ts);
+        if (!alive) return;
         const rawLm = taskResult.faceLandmarks?.[0];
         const bsArr = taskResult.faceBlendshapes?.[0]?.categories;
         const rawMatrix = firstFacialTransformationMatrix(taskResult);

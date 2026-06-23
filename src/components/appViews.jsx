@@ -717,7 +717,7 @@ function LiveExercisePreview({ exerciseId, stream, faceLandmarker, mirrorEnabled
     let raf = 0;
     let alive = true;
     let lastTs = 0;
-    const tick = () => {
+    const tick = async () => {
       if (!alive) return;
       const v = videoRef.current;
       const c = canvasRef.current;
@@ -726,7 +726,8 @@ function LiveExercisePreview({ exerciseId, stream, faceLandmarker, mirrorEnabled
         try {
           const ts = Math.max(lastTs + 1, performance.now());
           lastTs = ts;
-          const result = faceLandmarker.detectForVideo(v, ts);
+          const result = await faceLandmarker.detectForVideo(v, ts);
+          if (!alive) return;
           lm = result?.faceLandmarks?.[0] ?? null;
         } catch {
           // Detection is best-effort; transient frame errors should not break preview.

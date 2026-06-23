@@ -5,6 +5,7 @@ This document collects the product behavior that used to live in the main README
 ## Highlights
 
 - Guided exercises across forehead, eyes, nose, cheeks, mouth, and emoji-style facial reactions.
+- Worker-backed face tracking when supported, with a main-thread fallback for browser compatibility.
 - Neutral calibration with frame-stability gating and per-landmark noise estimation.
 - Pre-calibration camera setup quality checks for face presence, alignment, stability, lighting, distance, and frame rate.
 - Exercise-specific symmetry scoring plus affected-side progress against the user's own baseline.
