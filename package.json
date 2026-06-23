@@ -8,6 +8,7 @@
     "dev": "vite",
     "test": "node --import ./test/register-extensionless-loader.mjs --test test/*.test.js",
     "replay:frames": "node scripts/replay-frame-samples.mjs",
+    "validate:dataset": "node scripts/evaluate-validation-dataset.mjs",
     "release:check": "node scripts/release-check.mjs",
     "build": "vite build",
     "lint": "eslint .",

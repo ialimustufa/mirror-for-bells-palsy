@@ -8,6 +8,8 @@ npm run dev      # starts Vite on http://127.0.0.1:5173
 npm test         # pure scoring/progress tests
 npm run build    # production bundle
 npm run lint
+npm run replay:frames -- backup.jsonl
+npm run validate:dataset -- validation-dataset.jsonl
 npm run release:check # lint + tests + build + release doc checks
 ```
 

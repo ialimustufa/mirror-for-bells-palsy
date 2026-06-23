@@ -68,9 +68,12 @@ function replayFrameSamples(samples = [], options = {}) {
     const storedScore = Number.isFinite(stored.rawSymmetry) ? stored.rawSymmetry : null;
     const replayScore = Number.isFinite(diagnostic.result?.symmetry) ? diagnostic.result.symmetry : null;
     frames.push({
+      id: sample.id ?? null,
+      sessionId: sample.sessionId ?? null,
       ts: sample.ts ?? null,
       exerciseId: sample.exerciseId,
       repIndex: sample.repIndex,
+      sampleIndex: sample.sampleIndex ?? null,
       storedScored,
       replayScored,
       storedDropReason: stored.dropReason ?? stored.reason ?? null,

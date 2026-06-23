@@ -923,6 +923,19 @@ sample's intended exercise and the profile affected side. A reviewed validation 
 can then be used to report replay accuracy, false-positive rate, false-negative
 rate, and measurement drift against the same examples.
 
+Run:
+
+```bash
+npm run validate:dataset -- validation-dataset.jsonl
+```
+
+The evaluator replays labeled frame samples through the current scorer and reports
+scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
+mean absolute stored-vs-replayed score drift. Frames labeled with
+`visibleMovementLevel: "none"` are treated as negative examples; `trace`, `low`, `moderate`, and `strong`
+are treated as positive examples unless the label quality is `unusable` or
+`uncertain`.
+
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside
 peak-movement rep snapshots so the immediate PDF can show a side-by-side comparison.

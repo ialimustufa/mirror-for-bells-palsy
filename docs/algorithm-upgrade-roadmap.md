@@ -24,8 +24,9 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
 - Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
+- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, and score drift.
 - Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, and documentation checks for medical, privacy, and validation status.
-- Still pending across Phases 1 and 4: replay-calibrated threshold changes and validation coverage.
+- Still pending across Phases 1 and 4: collecting clinician-reviewed validation data and replay-calibrated threshold changes.
 
 ## Product Features Worth Adding
 
@@ -220,7 +221,7 @@ Work:
 
 - Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local frame-sample JSONL exports.
 - Label movement attempts with: intended movement, affected side, quality, visible movement level, and coactivation notes.
-- Compare MediaPipe landmark output on Bell's palsy faces against clinician-reviewed landmarks or region movement labels.
+- Compare MediaPipe landmark output on Bell's palsy faces against clinician-reviewed landmarks or region movement labels. Status: evaluator tooling implemented; labeled dataset collection is still required.
 - Evaluate whether a lightweight correction model or clinical-domain landmark model is justified.
 
 Exit criteria:
