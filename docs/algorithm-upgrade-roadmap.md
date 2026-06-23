@@ -24,7 +24,8 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
 - Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
-- Still pending in Phases 4-5: validation coverage and rollback/release gates.
+- Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, and documentation checks for medical, privacy, and validation status.
+- Still pending across Phases 1 and 4: replay-calibrated threshold changes and validation coverage.
 
 ## Product Features Worth Adding
 
@@ -236,8 +237,8 @@ Work:
 - Keep all scoring local by default.
 - Require explicit export for any data sharing.
 - Version every data schema migration.
-- Add rollback-safe import handling for old backups.
-- Add a release checklist for medical disclaimer copy, privacy copy, and validation status.
+- Add rollback-safe import handling for old backups. Status: covered by parser compatibility tests for legacy JSON backups, JSONL backups, and non-backup JSONL rejection.
+- Add a release checklist for medical disclaimer copy, privacy copy, and validation status. Status: implemented as `npm run release:check`.
 
 Exit criteria:
 
