@@ -8,7 +8,9 @@ const BASE_STATUS = {
   status: "tooling-ready-needs-reviewed-data",
   reviewedDatasetCount: 0,
   reviewedFrameCount: 0,
+  reviewedClinicalScaleAssessmentCount: 0,
   readyExerciseCount: 0,
+  clinicalScaleAgreementReports: [],
   thresholdCalibrationReports: [],
   productionThresholdConstantsCalibrated: false,
   clinicalFacingScoresAllowed: false,
@@ -30,6 +32,22 @@ test("validation status accepts documented reviewed calibration state", () => {
     productionThresholdConstantsCalibrated: true,
   });
   assert.equal(status.productionThresholdConstantsCalibrated, true);
+});
+
+test("validation status accepts documented clinical agreement state", () => {
+  const status = validateStatus({
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 12,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  });
+  assert.equal(status.clinicalFacingScoresAllowed, true);
 });
 
 test("validation status rejects non-date updatedAt values", () => {
@@ -62,5 +80,32 @@ test("validation status rejects clinical-facing scores without reviewed coverage
       clinicalFacingScoresAllowed: true,
     }),
     /calibrated production thresholds/,
+  );
+});
+
+test("validation status rejects clinical-facing scores without clinical agreement reports", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      reviewedDatasetCount: 1,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 12,
+      readyExerciseCount: 5,
+      thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+      productionThresholdConstantsCalibrated: true,
+      clinicalFacingScoresAllowed: true,
+    }),
+    /clinical scale agreement reports/,
+  );
+});
+
+test("validation status rejects clinical agreement reports without reviewed assessment coverage", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      reviewedDatasetCount: 1,
+      clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    }),
+    /reviewed clinical-scale assessment coverage/,
   );
 });

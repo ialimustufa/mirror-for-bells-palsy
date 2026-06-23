@@ -27,7 +27,9 @@ function validateStatus(status) {
   assertCondition(typeof status.status === "string" && status.status.length > 0, "status is required");
   assertNonNegativeInteger(status.reviewedDatasetCount, "reviewedDatasetCount");
   assertNonNegativeInteger(status.reviewedFrameCount, "reviewedFrameCount");
+  assertNonNegativeInteger(status.reviewedClinicalScaleAssessmentCount, "reviewedClinicalScaleAssessmentCount");
   assertNonNegativeInteger(status.readyExerciseCount, "readyExerciseCount");
+  assertStringArray(status.clinicalScaleAgreementReports, "clinicalScaleAgreementReports");
   assertStringArray(status.thresholdCalibrationReports, "thresholdCalibrationReports");
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
   assertCondition(typeof status.productionThresholdConstantsCalibrated === "boolean", "productionThresholdConstantsCalibrated must be boolean");
@@ -39,9 +41,15 @@ function validateStatus(status) {
     assertCondition(status.readyExerciseCount > 0, "threshold constants cannot be marked calibrated without ready exercise coverage");
     assertCondition(status.thresholdCalibrationReports.length > 0, "threshold constants cannot be marked calibrated without calibration reports");
   }
+  if (status.clinicalScaleAgreementReports.length > 0) {
+    assertCondition(status.reviewedDatasetCount > 0, "clinical scale agreement reports require reviewed datasets");
+    assertCondition(status.reviewedClinicalScaleAssessmentCount > 0, "clinical scale agreement reports require reviewed clinical-scale assessment coverage");
+  }
   if (status.clinicalFacingScoresAllowed) {
     assertCondition(status.productionThresholdConstantsCalibrated, "clinical-facing scores require calibrated production thresholds");
     assertCondition(status.reviewedFrameCount > 0, "clinical-facing scores require reviewed frame coverage");
+    assertCondition(status.reviewedClinicalScaleAssessmentCount > 0, "clinical-facing scores require reviewed clinical-scale assessment coverage");
+    assertCondition(status.clinicalScaleAgreementReports.length > 0, "clinical-facing scores require clinical scale agreement reports");
   }
   return status;
 }
@@ -49,7 +57,7 @@ function validateStatus(status) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const statusPath = process.argv[2] ?? DEFAULT_STATUS_PATH;
   const status = validateStatus(JSON.parse(await readFile(statusPath, "utf8")));
-  console.log(`validation status: ${status.status} (${status.reviewedDatasetCount} reviewed datasets, ${status.reviewedFrameCount} reviewed frames)`);
+  console.log(`validation status: ${status.status} (${status.reviewedDatasetCount} reviewed datasets, ${status.reviewedFrameCount} reviewed frames, ${status.reviewedClinicalScaleAssessmentCount} reviewed clinical-scale assessments)`);
 }
 
 export { validateStatus };
