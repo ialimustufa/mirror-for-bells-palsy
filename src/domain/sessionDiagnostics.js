@@ -19,6 +19,7 @@ const CAPTURE_QUALITY_NOTES = {
 };
 
 const COACTIVATION_RANK = { low: 0, medium: 1, high: 2 };
+const COACTIVATION_PENALTY_FACTORS = { medium: 0.9, high: 0.75 };
 const EYE_CLOSURE_EXERCISES = new Set(["eye-close", "blink", "wink", "emoji-wink"]);
 
 function compactNumber(value, digits = 4) {
@@ -83,6 +84,19 @@ function summarizeCoactivation(samples = []) {
   };
 }
 
+function coactivationPenaltyForScore(score, coactivation) {
+  const factor = COACTIVATION_PENALTY_FACTORS[coactivation?.risk];
+  if (!Number.isFinite(factor) || !Number.isFinite(score?.avg)) return null;
+  return {
+    risk: coactivation.risk,
+    factor,
+    rawAvg: compactNumber(score.avg, 4),
+    adjustedAvg: compactNumber(score.avg * factor, 4),
+    penaltyPct: Math.round((1 - factor) * 100),
+    note: "Derived practice-feedback penalty only; the saved raw symmetry score is unchanged.",
+  };
+}
+
 function featuresForScore(score) {
   if (Array.isArray(score?.repDiagnostics) && score.repDiagnostics.length) return score.repDiagnostics;
   if (score?.movementFeatures) return [score.movementFeatures];
@@ -94,6 +108,7 @@ function summarizeExerciseDiagnostics(score) {
   const captureQuality = score?.captureQuality ?? summarizeCaptureQualityFromFeatures(features);
   const dropReasonCounts = captureQuality?.dropReasonCounts ?? mergeCounts(features.map((item) => item.dropReasonCounts));
   const coactivation = summarizeCoactivation(coactivationCandidates(score));
+  const coactivationPenalty = coactivationPenaltyForScore(score, coactivation);
   return {
     exerciseId: score?.exerciseId ?? null,
     name: score?.name ?? EXERCISE_BY_ID.get(score?.exerciseId)?.name ?? score?.exerciseId ?? "Exercise",
@@ -102,6 +117,7 @@ function summarizeExerciseDiagnostics(score) {
     dropReasonCounts,
     topDropReasons: topDropReasons(dropReasonCounts),
     coactivation,
+    coactivationPenalty,
     observedFrameCount: captureQuality?.observedFrameCount ?? features.reduce((sum, item) => sum + (item?.observedFrameCount ?? 0), 0),
     validScoredFrameCount: captureQuality?.validScoredFrameCount ?? features.reduce((sum, item) => sum + (item?.validScoredFrameCount ?? 0), 0),
     rejectedFrameCount: captureQuality?.rejectedFrameCount ?? features.reduce((sum, item) => sum + (item?.rejectedFrameCount ?? 0), 0),

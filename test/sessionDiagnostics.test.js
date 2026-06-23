@@ -70,6 +70,8 @@ test("session diagnostics raises weak quality and coactivation caveats", () => {
 
   assert.equal(diagnostics.captureQuality.key, "weak");
   assert.equal(diagnostics.coactivation.risk, "high");
+  assert.equal(diagnostics.exercises[0].coactivationPenalty.adjustedAvg, 0.525);
+  assert.match(diagnostics.exercises[0].coactivationPenalty.note, /raw symmetry score is unchanged/);
   assert.equal(diagnostics.safetyPrompts.length, 3);
   assert.ok(diagnostics.safetyPrompts.some((text) => text.includes("eye-protection")));
 });

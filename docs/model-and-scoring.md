@@ -898,6 +898,9 @@ locally from:
 - Session diagnostics: weak pre-calibration setup, weak or unscored capture quality,
   quiet-region coactivation, and low eye-closure scores that may be relevant to eye
   protection.
+- Exercise diagnostics show a derived quiet-region practice-score penalty when
+  coactivation risk is medium or high. This penalty is feedback-only; the raw saved
+  symmetry score is unchanged.
 - Recent journal notes: text mentions of eye dryness/irritation, pain or strain,
   significant fatigue, and new or worsening symptoms such as sudden worsening,
   numbness, speech changes, vision changes, dizziness, confusion, limb weakness, or

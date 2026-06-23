@@ -1572,10 +1572,12 @@ function ExerciseDiagnosticsLine({ diagnostics }) {
   if (!diagnostics) return null;
   const quality = diagnostics.captureQuality;
   const coactivation = diagnostics.coactivation;
+  const coactivationPenalty = diagnostics.coactivationPenalty;
   const chips = [];
   if (quality) chips.push({ key: "quality", label: `Quality ${quality.label ?? quality.key}`, color: qualityColor(quality.key) });
   if (diagnostics.topDropReasons?.[0]) chips.push({ key: "drop", label: `${diagnostics.topDropReasons[0].label} x${diagnostics.topDropReasons[0].count}`, color: "#D4A574" });
   if (coactivation && coactivation.risk !== "low") chips.push({ key: "coactivation", label: `Quiet movement ${coactivation.risk}`, color: coactivationColor(coactivation.risk) });
+  if (coactivationPenalty) chips.push({ key: "coactivation-penalty", label: `Practice score -${coactivationPenalty.penaltyPct}%`, color: coactivationColor(coactivationPenalty.risk) });
   if (!chips.length) return null;
   return (
     <div className="flex flex-wrap gap-1.5 mt-2">
