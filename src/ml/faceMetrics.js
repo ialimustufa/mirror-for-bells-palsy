@@ -45,10 +45,20 @@ const EXERCISE_BLENDSHAPES = {
 
 const MOVEMENT_SIDE_CONVENTION = "user-anatomical-v1";
 const LEGACY_MOVEMENT_SIDE_CONVENTION = "legacy-image-left-v0";
+const SCORING_MODEL_VERSION = 2;
 const DEFAULT_SCORING_NOISE_MODE = "normal";
 const SCORING_NOISE_MODES = ["normal", "soft", "raw"];
 const SCORING_NOISE_MODE_SET = new Set(SCORING_NOISE_MODES);
 const SCORING_ABSOLUTE_MIN_SIGNAL = 0.0007;
+const SCORE_DROP_REASONS = Object.freeze({
+  noFace: "no-face",
+  missingNeutral: "missing-neutral",
+  headPose: "head-pose",
+  alignment: "alignment",
+  belowSignalGate: "below-signal-gate",
+  belowActivationThreshold: "below-activation-threshold",
+  noSymmetryResult: "no-symmetry-result",
+});
 
 const SCORING_NOISE_CONFIG = {
   normal: {
@@ -1364,6 +1374,123 @@ function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neu
   return toUserSideSymmetryResult(rawResult);
 }
 
+const QUIET_REGION_BY_EXERCISE = {
+  "eyebrow-raise": ["mouth"],
+  "gentle-frown": ["mouth"],
+  "emoji-raised-brow": ["mouth"],
+  "eye-close": ["mouth"],
+  "blink": ["mouth"],
+  "wink": ["mouth"],
+  "emoji-wink": ["mouth"],
+  "closed-smile": ["eyes", "brow"],
+  "open-smile": ["eyes", "brow"],
+  "emoji-smile": ["eyes", "brow"],
+  "emoji-big-smile": ["eyes", "brow"],
+  "emoji-smirk": ["eyes"],
+  "pucker": ["eyes", "brow"],
+  "emoji-pucker": ["eyes", "brow"],
+  "emoji-kiss": ["eyes", "brow"],
+  "vowel-a": ["eyes", "brow"],
+  "vowel-e": ["eyes", "brow"],
+  "vowel-i": ["eyes", "brow"],
+  "vowel-o": ["eyes", "brow"],
+  "vowel-u": ["eyes", "brow"],
+  "nose-wrinkle": ["eyes", "mouth"],
+  "emoji-nose-scrunch": ["eyes", "mouth"],
+};
+
+const QUIET_REGION_MAPPINGS = {
+  eyes: EXERCISE_LANDMARK_PAIRS["eye-close"],
+  brow: EXERCISE_LANDMARK_PAIRS["eyebrow-raise"],
+  mouth: EXERCISE_LANDMARK_PAIRS["closed-smile"],
+};
+
+function coactivationRisk(score) {
+  if (!Number.isFinite(score) || score < 0.18) return "low";
+  if (score < 0.38) return "medium";
+  return "high";
+}
+
+function computeQuietRegionCoactivation(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, targetPeak = null, scoringOptions = {}) {
+  const regions = QUIET_REGION_BY_EXERCISE[exerciseId] ?? [];
+  if (!regions.length || !lm || !neutral) return null;
+  const options = scoringOptionsFrom(scoringOptions);
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
+  if (!lmN || !neuN) return null;
+  const entries = [];
+  for (const region of regions) {
+    const mapping = QUIET_REGION_MAPPINGS[region];
+    if (!mapping) continue;
+    const left = sumDisp(lmN, neuN, mapping.left, noiseFloor, options).adjusted;
+    const right = sumDisp(lmN, neuN, mapping.right, noiseFloor, options).adjusted;
+    const movement = left + right;
+    entries.push({ region, movement: roundMetric(movement, 5) });
+  }
+  if (!entries.length) return null;
+  const quietMovement = entries.reduce((sum, item) => sum + (item.movement ?? 0), 0);
+  const denominator = Math.max(SCORING_ABSOLUTE_MIN_SIGNAL, quietMovement + (Number.isFinite(targetPeak) ? targetPeak : 0));
+  const score = denominator > 0 ? quietMovement / denominator : 0;
+  return {
+    score: roundMetric(score, 4),
+    risk: coactivationRisk(score),
+    quietMovement: roundMetric(quietMovement, 5),
+    targetPeak: roundMetric(targetPeak, 5),
+    regions: entries,
+  };
+}
+
+function scoringDiagnostic(result, meta = {}) {
+  return {
+    scoringModelVersion: SCORING_MODEL_VERSION,
+    result: result ?? null,
+    scored: Boolean(result),
+    dropReason: result ? null : (meta.dropReason ?? SCORE_DROP_REASONS.noSymmetryResult),
+    ...meta,
+  };
+}
+
+function computeExerciseSymmetryDiagnostic(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
+  const scoringNoiseMode = normalizeScoringNoiseMode(typeof scoringOptions === "string" ? scoringOptions : scoringOptions?.scoringNoiseMode);
+  const normalizationMethod = facialTransformationMatrix && neutralFacialTransformationMatrix ? "matrix" : "eye-line";
+  if (!lm) {
+    return scoringDiagnostic(null, {
+      exerciseId,
+      scoringNoiseMode,
+      normalizationMethod,
+      dropReason: SCORE_DROP_REASONS.noFace,
+    });
+  }
+  if (!neutral) {
+    return scoringDiagnostic(null, {
+      exerciseId,
+      scoringNoiseMode,
+      normalizationMethod,
+      dropReason: SCORE_DROP_REASONS.missingNeutral,
+    });
+  }
+  const poseDeviation = headPoseDeviationRad(facialTransformationMatrix, neutralFacialTransformationMatrix);
+  if (poseDeviation != null && poseDeviation > HOLD_HEAD_POSE_MAX_RAD) {
+    return scoringDiagnostic(null, {
+      exerciseId,
+      scoringNoiseMode,
+      normalizationMethod,
+      dropReason: SCORE_DROP_REASONS.headPose,
+      headPoseDeviationRad: roundMetric(poseDeviation, 5),
+      headPoseMaxRad: HOLD_HEAD_POSE_MAX_RAD,
+    });
+  }
+  const result = computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, scoringOptions);
+  return scoringDiagnostic(result, {
+    exerciseId,
+    scoringNoiseMode,
+    normalizationMethod,
+    dropReason: result ? null : SCORE_DROP_REASONS.belowSignalGate,
+    hasNoiseFloor: Boolean(noiseFloor),
+    hasBlendshapes: Boolean(bsMap),
+    hasNeutralBlendshapes: Boolean(neutralBs),
+  });
+}
+
 function roundMetric(v, digits = 4) {
   return Number.isFinite(v) ? Number(v.toFixed(digits)) : null;
 }
@@ -1518,6 +1645,7 @@ function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatri
   const p90Noise = percentile(noiseValues, 0.9);
   return {
     version: PROFILE_VERSION,
+    scoringModelVersion: SCORING_MODEL_VERSION,
     sideConvention: MOVEMENT_SIDE_CONVENTION,
     createdAt: Date.now(),
     scoringNoiseMode: normalizeScoringNoiseMode(scoringNoiseMode),
@@ -2209,6 +2337,8 @@ export {
   LEGACY_MOVEMENT_SIDE_CONVENTION,
   MOVEMENT_SIDE_CONVENTION,
   NOSE_EXERCISES,
+  SCORE_DROP_REASONS,
+  SCORING_MODEL_VERSION,
   SCORING_NOISE_MODES,
   activationThresholdForExercise,
   averageFacialTransformationMatrix,
@@ -2225,6 +2355,7 @@ export {
   computeBaselineProgressFromDisplacements,
   computeBrowSymmetry,
   computeExerciseSymmetry,
+  computeExerciseSymmetryDiagnostic,
   computeFrownSymmetry,
   createLiveScoreStabilizer,
   computeMovementProgress,
@@ -2234,6 +2365,7 @@ export {
   computeNoseSymmetry,
   computeNostrilFlareSymmetry,
   computePairwiseSymmetry,
+  computeQuietRegionCoactivation,
   computeSymmetry,
   compactFacialTransformationMatrix,
   drawOverlay,
