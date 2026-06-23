@@ -1,10 +1,17 @@
+import { summarizeAssessmentSession } from "./assessment";
+
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 1;
+const VALIDATION_LABEL_SCHEMA_VERSION = 2;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
 const VISIBLE_MOVEMENT_LEVELS = ["none", "trace", "low", "moderate", "strong", "uncertain"];
+const CLINICIAN_CONFIDENCE_LABELS = ["high", "medium", "low", "uncertain"];
+const HOUSE_BRACKMANN_LABELS = ["I", "II", "III", "IV", "V", "VI"];
+const STANDARD_REVIEWER_ROLES = ["clinician", "user", "developer"];
+const FRAME_LABEL_REQUIRED_FIELDS = ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"];
+const ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS = ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"];
 
 function recordArray(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
@@ -69,19 +76,48 @@ function compactSessionContext(session = {}) {
   };
 }
 
+function buildFrameLabelFields() {
+  return {
+    intendedMovement: { type: "exercise-id", default: "frameSample.exerciseId" },
+    affectedSide: { type: "left|right|unknown|null", default: "profile.affectedSide" },
+    quality: { type: "enum|null", values: QUALITY_LABELS },
+    visibleMovementLevel: { type: "enum|null", values: VISIBLE_MOVEMENT_LEVELS },
+    coactivationNotes: { type: "string", default: "" },
+    reviewerRole: { type: "clinician|user|developer|null", values: STANDARD_REVIEWER_ROLES, default: null },
+    reviewedAt: { type: "iso-date-time|null", default: null },
+    notes: { type: "string", default: "" },
+  };
+}
+
+function buildAssessmentClinicalLabelFields() {
+  return {
+    houseBrackmannGrade: { type: "enum|null", values: HOUSE_BRACKMANN_LABELS, default: null },
+    sunnybrookComposite: { type: "number|null", range: [0, 100], default: null },
+    efaceTotal: { type: "number|null", range: [0, 100], default: null },
+    efaceStatic: { type: "number|null", range: [0, 100], default: null },
+    efaceDynamic: { type: "number|null", range: [0, 100], default: null },
+    efaceSynkinesis: { type: "number|null", range: [0, 100], default: null },
+    clinicianConfidence: { type: "enum|null", values: CLINICIAN_CONFIDENCE_LABELS, default: null },
+    reviewerRole: { type: "clinician|user|developer|null", values: STANDARD_REVIEWER_ROLES, default: null },
+    reviewedAt: { type: "iso-date-time|null", default: null },
+    notes: { type: "string", default: "" },
+  };
+}
+
 function buildLabelSchema() {
+  const frameFields = buildFrameLabelFields();
+  const assessmentClinicalFields = buildAssessmentClinicalLabelFields();
   return {
     version: VALIDATION_LABEL_SCHEMA_VERSION,
-    requiredFields: ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"],
-    fields: {
-      intendedMovement: { type: "exercise-id", default: "frameSample.exerciseId" },
-      affectedSide: { type: "left|right|unknown|null", default: "profile.affectedSide" },
-      quality: { type: "enum|null", values: QUALITY_LABELS },
-      visibleMovementLevel: { type: "enum|null", values: VISIBLE_MOVEMENT_LEVELS },
-      coactivationNotes: { type: "string", default: "" },
-      reviewerRole: { type: "clinician|user|developer|null", default: null },
-      reviewedAt: { type: "iso-date-time|null", default: null },
-      notes: { type: "string", default: "" },
+    requiredFields: FRAME_LABEL_REQUIRED_FIELDS,
+    fields: frameFields,
+    frameSample: {
+      requiredFields: FRAME_LABEL_REQUIRED_FIELDS,
+      fields: frameFields,
+    },
+    assessmentClinicalScale: {
+      requiredFields: ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS,
+      fields: assessmentClinicalFields,
     },
   };
 }
@@ -116,6 +152,45 @@ function compactFrameSample(sample = {}, appState = {}) {
   };
 }
 
+function buildAssessmentClinicalLabelTemplate() {
+  return {
+    houseBrackmannGrade: null,
+    sunnybrookComposite: null,
+    efaceTotal: null,
+    efaceStatic: null,
+    efaceDynamic: null,
+    efaceSynkinesis: null,
+    clinicianConfidence: null,
+    reviewerRole: null,
+    reviewedAt: null,
+    notes: "",
+  };
+}
+
+function compactAssessmentClinicalScale(session = {}) {
+  const assessment = summarizeAssessmentSession(session);
+  const clinicalScales = assessment.clinicalScales ?? null;
+  return {
+    id: session.id ? `${session.id}:clinical-scale` : session.ts != null ? `ts:${session.ts}:clinical-scale` : null,
+    sessionId: session.id ?? null,
+    sessionTs: session.ts ?? null,
+    date: session.date ?? dateFromTs(session.ts),
+    kind: "assessment-clinical-scale",
+    scoringModelVersion: session.scoringModelVersion ?? assessment.scoringModelVersion ?? null,
+    estimate: clinicalScales,
+    sourceSummary: {
+      averageVoluntaryMovement: assessment.averageVoluntaryMovement ?? null,
+      coactivationRisk: assessment.coactivationRisk ?? null,
+      captureQuality: assessment.captureQuality ?? null,
+      restingAverageAsymmetryRatio: assessment.resting?.averageAsymmetryRatio ?? null,
+      usableMovementCoverageRatio: clinicalScales?.coverage?.ratio ?? null,
+      usableMovementCount: clinicalScales?.coverage?.usableMovementCount ?? null,
+      requiredMovementCount: clinicalScales?.coverage?.requiredMovementCount ?? null,
+    },
+    label: buildAssessmentClinicalLabelTemplate(),
+  };
+}
+
 function includedSessionContexts(sessions, samples) {
   const sampleKeys = new Set(samples.flatMap(sampleSessionKeys));
   return sessions.filter((session) => sampleKeys.has(sessionKey(session)));
@@ -129,6 +204,9 @@ function buildValidationDatasetRecords(source = {}, options = {}) {
   const sampleLimit = Number.isFinite(options.sampleLimit) ? Math.max(0, Math.round(options.sampleLimit)) : 5000;
   const samples = allSamples.slice(Math.max(0, allSamples.length - sampleLimit));
   const sessionContexts = includedSessionContexts(sessions, samples);
+  const assessmentClinicalScales = sessionContexts
+    .filter((session) => session.kind === "assessment")
+    .map((session) => compactAssessmentClinicalScale(session));
   const exercises = [...new Set(samples.map((sample) => sample.exerciseId).filter(Boolean))].sort();
   const manifest = {
     kind: VALIDATION_DATASET_KIND,
@@ -141,6 +219,7 @@ function buildValidationDatasetRecords(source = {}, options = {}) {
       holdSamples: samples.filter((sample) => sample.phase === "hold").length,
       sessionContexts: sessionContexts.length,
       assessmentSessions: sessionContexts.filter((session) => session.kind === "assessment").length,
+      assessmentClinicalScaleRecords: assessmentClinicalScales.length,
       exercises,
       dateRange: dateRange([...sessionContexts, ...samples]),
       sampleLimit,
@@ -148,12 +227,13 @@ function buildValidationDatasetRecords(source = {}, options = {}) {
       containsBlendshapes: samples.some((sample) => sample.blendshapes && typeof sample.blendshapes === "object"),
     },
     labelSchema: buildLabelSchema(),
-    sections: ["sessionContext", "frameSample"],
+    sections: ["sessionContext", "assessmentClinicalScale", "frameSample"],
     note: "Opt-in local validation export. Labels are templates until a user, clinician, or developer reviews them.",
   };
 
   const records = [manifest];
   for (const session of sessionContexts) records.push({ section: "sessionContext", record: compactSessionContext(session) });
+  for (const assessmentClinicalScale of assessmentClinicalScales) records.push({ section: "assessmentClinicalScale", record: assessmentClinicalScale });
   for (const sample of samples) records.push({ section: "frameSample", record: compactFrameSample(sample, appState) });
   return records;
 }

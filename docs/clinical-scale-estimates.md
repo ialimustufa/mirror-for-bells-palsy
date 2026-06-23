@@ -49,3 +49,29 @@ If the evidence standard is not met, Mirror saves `clinicalScales.status = "insu
 These estimates are not diagnosis, prognosis, treatment advice, or validated endpoints. They remain disabled as clinical-facing validated scores while `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
 
 Before these estimates can be presented as validated clinical grades, the repo needs clinician-reviewed validation data proving agreement with target HB, Sunnybrook, and eFACE ratings. The current release gate still fails closed for clinical-facing validated scoring until reviewed datasets exist.
+
+## Validation Workflow
+
+Validation dataset exports now include assessment-level `assessmentClinicalScale`
+records whenever an included frame-sample session is a standard assessment. The
+label sheet has `assessmentClinicalScale` rows with Mirror's current estimates in
+read-only reference columns and empty target columns for reviewer-entered:
+
+- `houseBrackmannGrade`
+- `sunnybrookComposite`
+- `efaceTotal`
+- Optional `efaceStatic`, `efaceDynamic`, and `efaceSynkinesis` domain scores
+
+The validation evaluator compares Mirror estimates against reviewed labels. The
+default minimum standard is:
+
+- House-Brackmann: at least 80% of reviewed assessments within one HB grade.
+- Sunnybrook composite: at least 80% within 10 points.
+- eFACE total: at least 80% within 10 points.
+- At least five reviewed assessment labels before any primary scale can pass.
+
+The evaluator reports each scale separately and fails closed when reviewed data is
+missing, estimates are unavailable, or agreement is below the configured
+threshold. Passing this tooling is still not the same as clinician assignment; it
+only proves that Mirror estimates met the documented agreement target on the
+reviewed local validation set.

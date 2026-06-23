@@ -951,11 +951,17 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 
 - `sessionContext` records with compact session date, type, scoring version, setup
   quality, capture quality, and exercise ids.
+- `assessmentClinicalScale` records for included standard assessment sessions,
+  with the current House-Brackmann, Sunnybrook, and eFACE-style estimates plus
+  empty reviewer target fields.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
   `quality`, `visibleMovementLevel`, `coactivationNotes`, `reviewerRole`,
   `reviewedAt`, and free-text `notes`.
+- A `label` template on each assessment clinical-scale row with
+  `houseBrackmannGrade`, `sunnybrookComposite`, `efaceTotal`, optional eFACE
+  domain scores, reviewer confidence, reviewer role, review time, and notes.
 
 Label fields start empty except for values Mirror can infer locally, such as the
 sample's intended exercise and the profile affected side. A reviewed validation set
@@ -973,9 +979,10 @@ npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-rep
 ```
 
 The label-sheet command creates a CSV for clinician, user, or developer review.
-The merge command copies reviewed label fields back into a new JSONL dataset
-without changing the original export. The evaluator replays labeled frame samples
-through the current scorer and reports
+The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. The
+merge command copies reviewed label fields back into a new JSONL dataset without
+changing the original export. The evaluator replays labeled frame samples through
+the current scorer and reports
 scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
 mean absolute stored-vs-replayed score drift. Frames labeled with
 `visibleMovementLevel: "none"` are treated as negative examples; `trace`, `low`, `moderate`, and `strong`
@@ -985,6 +992,15 @@ how many labeled frames landed above minimum-visible, reliable, and baseline-tar
 movement, plus how many stayed below minimum-visible movement. It also reports
 per-exercise validation rates so weak movement families are visible instead of
 being hidden by aggregate accuracy.
+
+When reviewed `assessmentClinicalScale` labels are present, the same evaluator
+also emits a clinical-scale validation report. The default minimum standard is at
+least five reviewed assessment labels and at least 80% agreement for each primary
+scale: House-Brackmann within one grade, Sunnybrook composite within 10 points,
+and eFACE total within 10 points. eFACE static, dynamic, and synkinesis domain
+agreement is reported when those labels are supplied. This report does not make
+Mirror estimates clinician-assigned grades; it only documents agreement against
+reviewed target labels for the local validation set.
 
 The threshold calibration command groups reviewed labels by exercise and writes a
 recommendation report. It includes current reliable thresholds, positive/negative

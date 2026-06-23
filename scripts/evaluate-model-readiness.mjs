@@ -15,6 +15,12 @@ function isValidationEvaluationReport(input) {
   return input && typeof input === "object" && !Array.isArray(input) && input.validation && typeof input.validation === "object";
 }
 
+function frameEvaluationFromInput(input) {
+  if (input?.frameSamples?.validation) return input.frameSamples;
+  if (isValidationEvaluationReport(input)) return input;
+  return null;
+}
+
 const [inputPath, outputPath] = process.argv.slice(2);
 if (!inputPath) {
   console.error("Usage: npm run validation:model-readiness -- <reviewed-dataset.jsonl|validation-report.json> [model-readiness-report.json]");
@@ -22,9 +28,8 @@ if (!inputPath) {
 }
 
 const input = await readInput(inputPath);
-const evaluation = isValidationEvaluationReport(input)
-  ? input
-  : evaluateValidationFrameSamples(extractValidationFrameRecords(Array.isArray(input) ? input : [input]));
+const evaluation = frameEvaluationFromInput(input)
+  ?? evaluateValidationFrameSamples(extractValidationFrameRecords(Array.isArray(input) ? input : [input]));
 const report = assessValidationModelReadiness(evaluation);
 const text = JSON.stringify(report, null, 2);
 

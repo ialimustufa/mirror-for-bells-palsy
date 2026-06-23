@@ -21,4 +21,4 @@ const records = await readJsonl(datasetPath);
 const labelsCsv = await readFile(labelsPath, "utf8");
 const merged = mergeValidationLabels(records, labelsCsv);
 await writeFile(outputPath, writeJsonl(merged.records), "utf8");
-console.log(`Merged ${merged.updatedCount} reviewed frame labels into ${outputPath}`);
+console.log(`Merged ${merged.updatedFrameCount} reviewed frame labels and ${merged.updatedAssessmentClinicalScaleCount} clinical-scale labels into ${outputPath}`);

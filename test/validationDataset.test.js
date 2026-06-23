@@ -69,15 +69,22 @@ test("validation dataset exports labeled frame sample templates", async () => {
   const manifest = records[0];
   const sessions = recordsBySection(records, "sessionContext");
   const samples = recordsBySection(records, "frameSample");
+  const clinicalScaleAssessments = recordsBySection(records, "assessmentClinicalScale");
 
   assert.equal(manifest.kind, VALIDATION_DATASET_KIND);
   assert.equal(manifest.summary.frameSamples, 2);
   assert.equal(manifest.summary.calibrationSamples, 1);
   assert.equal(manifest.summary.holdSamples, 1);
+  assert.equal(manifest.summary.assessmentClinicalScaleRecords, 1);
   assert.deepEqual(manifest.summary.exercises, ["eye-close"]);
   assert.equal(manifest.summary.containsLandmarks, true);
   assert.deepEqual(manifest.labelSchema.requiredFields, ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"]);
+  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+  assert.deepEqual(manifest.sections, ["sessionContext", "assessmentClinicalScale", "frameSample"]);
   assert.deepEqual(sessions.map((session) => session.id), ["session-a"]);
+  assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["session-a:clinical-scale"]);
+  assert.equal(clinicalScaleAssessments[0].estimate.status, "insufficient-data");
+  assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
   assert.deepEqual(samples.map((sample) => sample.id), ["sample-calibrate", "sample-hold"]);
   assert.equal(samples[1].label.intendedMovement, "eye-close");
   assert.equal(samples[1].label.affectedSide, "left");
@@ -88,5 +95,6 @@ test("validation dataset exports labeled frame sample templates", async () => {
   const blobText = await createValidationDatasetExportBlob(records).text();
   const lines = blobText.trim().split("\n").map((line) => JSON.parse(line));
   assert.equal(lines[0].kind, VALIDATION_DATASET_KIND);
+  assert.equal(lines.some((line) => line.section === "assessmentClinicalScale"), true);
   assert.equal(lines.some((line) => line.section === "frameSample"), true);
 });

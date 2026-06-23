@@ -328,6 +328,7 @@ export default function App() {
       const payload = await exportMirrorBrowserData();
       const records = buildValidationDatasetRecords(payload);
       const sampleCount = records[0]?.summary?.frameSamples ?? 0;
+      const clinicalScaleAssessmentCount = records[0]?.summary?.assessmentClinicalScaleRecords ?? 0;
       if (!sampleCount) {
         setDataTransferStatus({ kind: "success", message: "No local frame samples to export. Turn on Local data capture before a session." });
         return;
@@ -335,7 +336,7 @@ export default function App() {
       const blob = createValidationDatasetExportBlob(records);
       const filename = `mirror-validation-dataset-${new Date().toISOString().slice(0, 10)}.jsonl`;
       downloadFile(blob, filename);
-      setDataTransferStatus({ kind: "success", message: `Exported validation dataset with ${sampleCount} frame samples.` });
+      setDataTransferStatus({ kind: "success", message: `Exported validation dataset with ${sampleCount} frame samples and ${clinicalScaleAssessmentCount} clinical-scale assessment rows.` });
     } catch (error) {
       console.error("Failed to export validation dataset", error);
       setDataTransferStatus({ kind: "error", message: "Could not export validation dataset." });

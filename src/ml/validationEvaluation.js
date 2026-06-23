@@ -4,9 +4,21 @@ const POSITIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["trace", "low", "moderate", "s
 const NEGATIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["none"]);
 const EXCLUDED_QUALITY_LABELS = new Set(["unusable", "uncertain"]);
 const RELIABLE_VISIBLE_MOVEMENT_LEVELS = new Set(["low", "moderate", "strong"]);
+const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
+  I: 1,
+  II: 2,
+  III: 3,
+  IV: 4,
+  V: 5,
+  VI: 6,
+});
 
 function compactRate(numerator, denominator) {
   return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
+}
+
+function compactNumber(value, digits = 4) {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 }
 
 function createValidationCounts() {
@@ -86,6 +98,204 @@ function extractValidationFrameRecords(records = []) {
       return null;
     })
     .filter(Boolean);
+}
+
+function extractAssessmentClinicalScaleRecords(records = []) {
+  if (!Array.isArray(records)) return [];
+  return records
+    .map((item) => {
+      if (item?.section === "assessmentClinicalScale" && item.record) return item.record;
+      if (item?.kind === "assessment-clinical-scale" || item?.estimate?.scales || item?.clinicalScales?.scales) return item;
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function numericLabel(value) {
+  if (value == null) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseHouseBrackmannGrade(value) {
+  if (value == null) return null;
+  if (Number.isFinite(value)) {
+    const rounded = Math.round(value);
+    return rounded >= 1 && rounded <= 6 ? rounded : null;
+  }
+  const text = String(value).trim().toUpperCase().replace(/^GRADE\s+/, "");
+  if (!text) return null;
+  if (HOUSE_BRACKMANN_GRADE_NUMBERS[text]) return HOUSE_BRACKMANN_GRADE_NUMBERS[text];
+  const number = Number(text);
+  return Number.isFinite(number) && number >= 1 && number <= 6 ? Math.round(number) : null;
+}
+
+function clinicalScaleLabels(record = {}) {
+  const label = record.label ?? {};
+  return {
+    houseBrackmann: parseHouseBrackmannGrade(label.houseBrackmannGrade),
+    sunnybrookComposite: numericLabel(label.sunnybrookComposite),
+    efaceTotal: numericLabel(label.efaceTotal),
+    efaceStatic: numericLabel(label.efaceStatic),
+    efaceDynamic: numericLabel(label.efaceDynamic),
+    efaceSynkinesis: numericLabel(label.efaceSynkinesis),
+  };
+}
+
+function clinicalScaleEstimate(record = {}) {
+  const estimate = record.estimate ?? record.clinicalScales ?? {};
+  const scales = estimate.status === "estimated" ? estimate.scales ?? {} : estimate.scales ?? estimate;
+  const houseBrackmann = scales.houseBrackmann ?? {};
+  const sunnybrook = scales.sunnybrook ?? {};
+  const eface = scales.eface ?? {};
+  return {
+    houseBrackmann: parseHouseBrackmannGrade(houseBrackmann.numericGrade ?? houseBrackmann.grade),
+    sunnybrookComposite: numericLabel(sunnybrook.compositeScore),
+    efaceTotal: numericLabel(eface.totalScore),
+    efaceStatic: numericLabel(eface.staticScore),
+    efaceDynamic: numericLabel(eface.dynamicScore),
+    efaceSynkinesis: numericLabel(eface.synkinesisScore),
+  };
+}
+
+function hasAnyClinicalLabel(labels = {}) {
+  return Object.values(labels).some((value) => value != null);
+}
+
+function createAgreementAccumulator(scale, agreementLabel, tolerance) {
+  return {
+    scale,
+    agreementLabel,
+    tolerance,
+    labeledCount: 0,
+    missingEstimateCount: 0,
+    exactMatchCount: 0,
+    withinToleranceCount: 0,
+    absoluteDeltas: [],
+    mismatches: [],
+  };
+}
+
+function recordAgreementCase(accumulator, record, estimateValue, labelValue) {
+  if (labelValue == null) return;
+  if (estimateValue == null) {
+    accumulator.missingEstimateCount += 1;
+    return;
+  }
+  const delta = estimateValue - labelValue;
+  const absDelta = Math.abs(delta);
+  accumulator.labeledCount += 1;
+  accumulator.absoluteDeltas.push(absDelta);
+  if (absDelta === 0) accumulator.exactMatchCount += 1;
+  if (absDelta <= accumulator.tolerance) accumulator.withinToleranceCount += 1;
+  if (absDelta > accumulator.tolerance) {
+    accumulator.mismatches.push({
+      assessmentId: record.id ?? null,
+      sessionId: record.sessionId ?? null,
+      estimate: compactNumber(estimateValue, 2),
+      label: compactNumber(labelValue, 2),
+      delta: compactNumber(delta, 2),
+    });
+  }
+}
+
+function summarizeAgreement(accumulator, options = {}) {
+  const minAgreementRate = options.minAgreementRate ?? 0.8;
+  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? 5));
+  const comparableCount = accumulator.labeledCount;
+  const denominator = comparableCount + accumulator.missingEstimateCount;
+  const agreementRate = compactRate(accumulator.withinToleranceCount, denominator);
+  const exactAgreementRate = compactRate(accumulator.exactMatchCount, denominator);
+  const meanAbsDelta = accumulator.absoluteDeltas.length
+    ? accumulator.absoluteDeltas.reduce((sum, value) => sum + value, 0) / accumulator.absoluteDeltas.length
+    : null;
+  const blockingReasons = [];
+  if (denominator < minReviewedAssessments) blockingReasons.push(`needs at least ${minReviewedAssessments} reviewed assessment labels`);
+  if (agreementRate == null || agreementRate < minAgreementRate) blockingReasons.push(`needs at least ${Math.round(minAgreementRate * 100)}% ${accumulator.agreementLabel}`);
+  return {
+    scale: accumulator.scale,
+    agreementLabel: accumulator.agreementLabel,
+    tolerance: accumulator.tolerance,
+    labeledCount: denominator,
+    comparableCount,
+    missingEstimateCount: accumulator.missingEstimateCount,
+    exactMatchCount: accumulator.exactMatchCount,
+    withinToleranceCount: accumulator.withinToleranceCount,
+    exactAgreementRate,
+    agreementRate,
+    meanAbsDelta: compactNumber(meanAbsDelta, 2),
+    meetsMinimumStandard: blockingReasons.length === 0,
+    blockingReasons,
+    mismatches: accumulator.mismatches.slice(0, 20),
+  };
+}
+
+function evaluateClinicalScaleEstimates(records = [], options = {}) {
+  const assessmentRecords = extractAssessmentClinicalScaleRecords(records);
+  const minAgreementRate = options.minAgreementRate ?? 0.8;
+  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? 5));
+  const sunnybrookTolerance = Number.isFinite(options.sunnybrookTolerance) ? options.sunnybrookTolerance : 10;
+  const efaceTolerance = Number.isFinite(options.efaceTolerance) ? options.efaceTolerance : 10;
+  const agreementOptions = { minAgreementRate, minReviewedAssessments };
+  const accumulators = {
+    houseBrackmann: createAgreementAccumulator("houseBrackmann", "within-one-grade agreement", 1),
+    sunnybrookComposite: createAgreementAccumulator("sunnybrookComposite", `within-${sunnybrookTolerance}-point agreement`, sunnybrookTolerance),
+    efaceTotal: createAgreementAccumulator("efaceTotal", `within-${efaceTolerance}-point agreement`, efaceTolerance),
+    efaceStatic: createAgreementAccumulator("efaceStatic", `within-${efaceTolerance}-point agreement`, efaceTolerance),
+    efaceDynamic: createAgreementAccumulator("efaceDynamic", `within-${efaceTolerance}-point agreement`, efaceTolerance),
+    efaceSynkinesis: createAgreementAccumulator("efaceSynkinesis", `within-${efaceTolerance}-point agreement`, efaceTolerance),
+  };
+  let reviewedAssessmentCount = 0;
+  let estimatedAssessmentCount = 0;
+  for (const record of assessmentRecords) {
+    const labels = clinicalScaleLabels(record);
+    const estimate = clinicalScaleEstimate(record);
+    if (hasAnyClinicalLabel(labels)) reviewedAssessmentCount += 1;
+    if (Object.values(estimate).some((value) => value != null)) estimatedAssessmentCount += 1;
+    for (const [scale, accumulator] of Object.entries(accumulators)) {
+      recordAgreementCase(accumulator, record, estimate[scale], labels[scale]);
+    }
+  }
+
+  const byScale = Object.fromEntries(
+    Object.entries(accumulators).map(([scale, accumulator]) => [scale, summarizeAgreement(accumulator, agreementOptions)]),
+  );
+  const primaryScales = ["houseBrackmann", "sunnybrookComposite", "efaceTotal"];
+  const evaluatedPrimaryScales = primaryScales.filter((scale) => byScale[scale].labeledCount > 0);
+  const readyPrimaryScales = primaryScales.filter((scale) => byScale[scale].meetsMinimumStandard);
+  const blockingReasons = [];
+  if (reviewedAssessmentCount < minReviewedAssessments) {
+    blockingReasons.push(`needs at least ${minReviewedAssessments} reviewed clinical-scale assessments`);
+  }
+  for (const scale of primaryScales) {
+    if (!byScale[scale].meetsMinimumStandard) blockingReasons.push(`${scale}: ${byScale[scale].blockingReasons.join("; ")}`);
+  }
+
+  return {
+    kind: "mirror-clinical-scale-validation-report",
+    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    standard: {
+      minAgreementRate,
+      minReviewedAssessments,
+      houseBrackmannAgreement: "estimate must be within one House-Brackmann grade of the reviewed label",
+      sunnybrookTolerance,
+      efaceTolerance,
+    },
+    summary: {
+      assessmentClinicalScaleRecords: assessmentRecords.length,
+      reviewedAssessmentCount,
+      estimatedAssessmentCount,
+      primaryScaleCount: primaryScales.length,
+      evaluatedPrimaryScaleCount: evaluatedPrimaryScales.length,
+      readyPrimaryScaleCount: readyPrimaryScales.length,
+      meetsMinimumStandard: blockingReasons.length === 0,
+      readyForClinicalFacingScoring: blockingReasons.length === 0 && readyPrimaryScales.length === primaryScales.length,
+    },
+    blockingReasons,
+    byScale,
+    note: "This report evaluates Mirror estimates against reviewed clinical labels. It does not make the estimates clinician-assigned grades.",
+  };
 }
 
 function evaluateValidationFrameSamples(samples = [], options = {}) {
@@ -258,7 +468,9 @@ function calibrateThresholdsFromValidationSamples(samples = [], options = {}) {
 
 export {
   calibrateThresholdsFromValidationSamples,
+  evaluateClinicalScaleEstimates,
   evaluateValidationFrameSamples,
+  extractAssessmentClinicalScaleRecords,
   extractValidationFrameRecords,
   movementClassFromLabel,
   visibleMovementLevelFromLabel,

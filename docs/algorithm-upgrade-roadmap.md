@@ -24,11 +24,11 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses; it prioritizes controlled assessment samples, downweights weak capture quality and coactivation risk, and adaptive plans now avoid boosting stale/fatigue contexts or high-risk recent evidence.
 - Threshold personalization: new movement profiles store per-exercise threshold bands for minimum visible movement, reliable movement, and baseline target movement; saved movement features and validation replay now expose those bands for tuning.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
-- Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
-- Phase 4 validation label workflow: implemented CSV label-sheet export and label merge scripts so clinician/user/developer-reviewed labels can be attached to validation JSONL datasets.
-- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, score drift, and per-exercise error rates. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`; model-readiness decisions can be generated with `npm run validation:model-readiness`.
+- Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records, assessment clinical-scale records, frame label templates for intended movement/affected side/quality/visible movement/coactivation, and clinical-scale target templates for House-Brackmann, Sunnybrook, and eFACE-style labels.
+- Phase 4 validation label workflow: implemented CSV label-sheet export and label merge scripts so clinician/user/developer-reviewed frame and clinical-scale labels can be attached to validation JSONL datasets.
+- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, score drift, and per-exercise error rates. It also evaluates reviewed House-Brackmann, Sunnybrook, and eFACE target labels against Mirror estimates with an explicit 80% minimum agreement gate. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`; model-readiness decisions can be generated with `npm run validation:model-readiness`.
 - Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, a machine-readable `docs/validation-status.json`, and documentation checks for medical, privacy, and validation status.
-- Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets and applying reviewed calibration reports to production constants.
+- Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets, applying reviewed calibration reports to production constants, and proving the clinical-scale 80% agreement gate on reviewed assessment labels.
 
 ## Product Features Worth Adding
 
@@ -229,9 +229,9 @@ Goal: stop tuning only against anecdotal captures.
 
 Work:
 
-- Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local frame-sample JSONL exports.
-- Label movement attempts with: intended movement, affected side, quality, visible movement level, and coactivation notes. Status: implemented in the validation JSONL label schema, frame-sample label templates, CSV label-sheet export, and label merge workflow.
-- Compare MediaPipe landmark output on Bell's palsy faces against clinician-reviewed landmarks or region movement labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is still required.
+- Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local validation JSONL exports with frame-sample records and assessment clinical-scale rows.
+- Label movement attempts with intended movement, affected side, quality, visible movement level, and coactivation notes; label clinical-scale assessment targets with House-Brackmann, Sunnybrook, and eFACE-style values. Status: implemented in the validation JSONL label schema, CSV label-sheet export, and label merge workflow.
+- Compare MediaPipe landmark output and Mirror clinical-scale estimates on Bell's palsy faces against clinician-reviewed landmarks, region movement labels, or clinical-scale labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is still required.
 - Evaluate whether a lightweight correction model or clinical-domain landmark model is justified. Status: implemented as `npm run validation:model-readiness`, which fails closed without enough reviewed data, recommends threshold review before model training, and does not justify clinical-domain landmark models without reviewed landmark annotations.
 
 Exit criteria:
@@ -267,7 +267,7 @@ Priority order:
 5. Move face inference into a Web Worker. Done with fallback.
 6. Add capture-quality setup before calibration. Done.
 7. Add uncertainty bands to the personal recovery model. Done.
-8. Create an opt-in labeled validation dataset format. Done with JSONL frame-sample exports and label schema.
+8. Create an opt-in labeled validation dataset format. Done with JSONL frame-sample exports, assessment clinical-scale rows, and label schema.
 
 ## Evidence And References
 

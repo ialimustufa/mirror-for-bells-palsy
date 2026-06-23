@@ -1,6 +1,10 @@
 const LABEL_COLUMNS = [
+  "rowType",
   "sampleId",
+  "assessmentId",
   "sessionId",
+  "sessionTs",
+  "date",
   "exerciseId",
   "phase",
   "ts",
@@ -11,17 +15,45 @@ const LABEL_COLUMNS = [
   "quality",
   "visibleMovementLevel",
   "coactivationNotes",
+  "estimateStatus",
+  "estimatedHouseBrackmannGrade",
+  "estimatedHouseBrackmannNumericGrade",
+  "estimatedSunnybrookComposite",
+  "estimatedEfaceTotal",
+  "estimatedEfaceStatic",
+  "estimatedEfaceDynamic",
+  "estimatedEfaceSynkinesis",
+  "houseBrackmannGrade",
+  "sunnybrookComposite",
+  "efaceTotal",
+  "efaceStatic",
+  "efaceDynamic",
+  "efaceSynkinesis",
+  "clinicianConfidence",
   "reviewerRole",
   "reviewedAt",
   "notes",
 ];
 
-const LABEL_FIELDS = [
+const FRAME_LABEL_FIELDS = [
   "intendedMovement",
   "affectedSide",
   "quality",
   "visibleMovementLevel",
   "coactivationNotes",
+  "reviewerRole",
+  "reviewedAt",
+  "notes",
+];
+
+const ASSESSMENT_CLINICAL_LABEL_FIELDS = [
+  "houseBrackmannGrade",
+  "sunnybrookComposite",
+  "efaceTotal",
+  "efaceStatic",
+  "efaceDynamic",
+  "efaceSynkinesis",
+  "clinicianConfidence",
   "reviewerRole",
   "reviewedAt",
   "notes",
@@ -78,13 +110,25 @@ function frameSampleRecords(records = []) {
   return recordArray(records).filter((line) => line.section === "frameSample" && line.record && typeof line.record === "object");
 }
 
-function labelRowFromRecord(line) {
+function assessmentClinicalScaleRecords(records = []) {
+  return recordArray(records).filter((line) => line.section === "assessmentClinicalScale" && line.record && typeof line.record === "object");
+}
+
+function formatNumber(value, digits = 1) {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : "";
+}
+
+function frameLabelRowFromRecord(line) {
   const record = line.record;
   const frame = record.frame ?? {};
   const label = record.label ?? {};
   return {
+    rowType: "frameSample",
     sampleId: record.id ?? frame.id ?? "",
+    assessmentId: "",
     sessionId: record.sessionId ?? frame.sessionId ?? "",
+    sessionTs: frame.sessionTs ?? "",
+    date: "",
     exerciseId: record.exerciseId ?? frame.exerciseId ?? "",
     phase: record.phase ?? frame.phase ?? "",
     ts: record.ts ?? frame.ts ?? "",
@@ -95,6 +139,67 @@ function labelRowFromRecord(line) {
     quality: label.quality ?? "",
     visibleMovementLevel: label.visibleMovementLevel ?? "",
     coactivationNotes: label.coactivationNotes ?? "",
+    estimateStatus: "",
+    estimatedHouseBrackmannGrade: "",
+    estimatedHouseBrackmannNumericGrade: "",
+    estimatedSunnybrookComposite: "",
+    estimatedEfaceTotal: "",
+    estimatedEfaceStatic: "",
+    estimatedEfaceDynamic: "",
+    estimatedEfaceSynkinesis: "",
+    houseBrackmannGrade: "",
+    sunnybrookComposite: "",
+    efaceTotal: "",
+    efaceStatic: "",
+    efaceDynamic: "",
+    efaceSynkinesis: "",
+    clinicianConfidence: "",
+    reviewerRole: label.reviewerRole ?? "",
+    reviewedAt: label.reviewedAt ?? "",
+    notes: label.notes ?? "",
+  };
+}
+
+function assessmentClinicalLabelRowFromRecord(line) {
+  const record = line.record;
+  const label = record.label ?? {};
+  const estimate = record.estimate ?? {};
+  const scales = estimate.status === "estimated" ? estimate.scales ?? {} : {};
+  const houseBrackmann = scales.houseBrackmann ?? {};
+  const sunnybrook = scales.sunnybrook ?? {};
+  const eface = scales.eface ?? {};
+  return {
+    rowType: "assessmentClinicalScale",
+    sampleId: "",
+    assessmentId: record.id ?? "",
+    sessionId: record.sessionId ?? "",
+    sessionTs: record.sessionTs ?? "",
+    date: record.date ?? "",
+    exerciseId: "",
+    phase: "",
+    ts: "",
+    repIndex: "",
+    sampleIndex: "",
+    intendedMovement: "",
+    affectedSide: "",
+    quality: "",
+    visibleMovementLevel: "",
+    coactivationNotes: "",
+    estimateStatus: estimate.status ?? "",
+    estimatedHouseBrackmannGrade: houseBrackmann.grade ?? "",
+    estimatedHouseBrackmannNumericGrade: houseBrackmann.numericGrade ?? "",
+    estimatedSunnybrookComposite: formatNumber(sunnybrook.compositeScore),
+    estimatedEfaceTotal: formatNumber(eface.totalScore),
+    estimatedEfaceStatic: formatNumber(eface.staticScore),
+    estimatedEfaceDynamic: formatNumber(eface.dynamicScore),
+    estimatedEfaceSynkinesis: formatNumber(eface.synkinesisScore),
+    houseBrackmannGrade: label.houseBrackmannGrade ?? "",
+    sunnybrookComposite: label.sunnybrookComposite ?? "",
+    efaceTotal: label.efaceTotal ?? "",
+    efaceStatic: label.efaceStatic ?? "",
+    efaceDynamic: label.efaceDynamic ?? "",
+    efaceSynkinesis: label.efaceSynkinesis ?? "",
+    clinicianConfidence: label.clinicianConfidence ?? "",
     reviewerRole: label.reviewerRole ?? "",
     reviewedAt: label.reviewedAt ?? "",
     notes: label.notes ?? "",
@@ -102,7 +207,10 @@ function labelRowFromRecord(line) {
 }
 
 function validationLabelRows(records = []) {
-  return frameSampleRecords(records).map(labelRowFromRecord);
+  return [
+    ...frameSampleRecords(records).map(frameLabelRowFromRecord),
+    ...assessmentClinicalScaleRecords(records).map(assessmentClinicalLabelRowFromRecord),
+  ];
 }
 
 function createValidationLabelCsv(records = []) {
@@ -110,42 +218,74 @@ function createValidationLabelCsv(records = []) {
   return `${rows.map((row) => row.map(csvEscape).join(",")).join("\n")}\n`;
 }
 
-function csvRowsBySampleId(csvText = "") {
+function valueFromRow(row, indexByHeader, column) {
+  const index = indexByHeader[column];
+  return index == null ? "" : row[index] ?? "";
+}
+
+function csvRowsByRecordId(csvText = "") {
   const rows = parseCsv(csvText).filter((row) => row.some((cell) => String(cell ?? "").trim()));
-  if (!rows.length) return new Map();
+  const frameRowsById = new Map();
+  const assessmentRowsById = new Map();
+  if (!rows.length) return { frameRowsById, assessmentRowsById };
   const headers = rows[0];
   const indexByHeader = Object.fromEntries(headers.map((header, index) => [header, index]));
-  const byId = new Map();
   for (const row of rows.slice(1)) {
-    const sampleId = row[indexByHeader.sampleId]?.trim();
-    if (!sampleId) continue;
     const next = {};
-    for (const column of LABEL_COLUMNS) next[column] = row[indexByHeader[column]] ?? "";
-    byId.set(sampleId, next);
+    for (const column of LABEL_COLUMNS) next[column] = valueFromRow(row, indexByHeader, column);
+    const rowType = next.rowType?.trim() || (next.assessmentId?.trim() ? "assessmentClinicalScale" : "frameSample");
+    if (rowType === "assessmentClinicalScale") {
+      const assessmentId = next.assessmentId?.trim();
+      if (assessmentId) assessmentRowsById.set(assessmentId, next);
+      continue;
+    }
+    const sampleId = next.sampleId?.trim();
+    if (sampleId) frameRowsById.set(sampleId, next);
   }
-  return byId;
+  return { frameRowsById, assessmentRowsById };
+}
+
+function mergeLabelFields(existingLabel, row, fields) {
+  const label = { ...(existingLabel ?? {}) };
+  for (const field of fields) {
+    const value = row[field]?.trim();
+    if (value) label[field] = value;
+  }
+  return label;
 }
 
 function mergeValidationLabels(records = [], csvText = "") {
-  const labelsById = csvRowsBySampleId(csvText);
-  let updatedCount = 0;
+  const { frameRowsById, assessmentRowsById } = csvRowsByRecordId(csvText);
+  let updatedFrameCount = 0;
+  let updatedAssessmentClinicalScaleCount = 0;
   const nextRecords = recordArray(records).map((line) => {
-    if (line.section !== "frameSample" || !line.record || typeof line.record !== "object") return line;
-    const sampleId = line.record.id ?? line.record.frame?.id ?? "";
-    const row = labelsById.get(sampleId);
-    if (!row) return line;
-    const label = { ...(line.record.label ?? {}) };
-    for (const field of LABEL_FIELDS) {
-      const value = row[field]?.trim();
-      if (value) label[field] = value;
+    if (line.section === "frameSample" && line.record && typeof line.record === "object") {
+      const sampleId = line.record.id ?? line.record.frame?.id ?? "";
+      const row = frameRowsById.get(sampleId);
+      if (!row) return line;
+      updatedFrameCount += 1;
+      return { ...line, record: { ...line.record, label: mergeLabelFields(line.record.label, row, FRAME_LABEL_FIELDS) } };
     }
-    updatedCount += 1;
-    return { ...line, record: { ...line.record, label } };
+    if (line.section === "assessmentClinicalScale" && line.record && typeof line.record === "object") {
+      const assessmentId = line.record.id ?? "";
+      const row = assessmentRowsById.get(assessmentId);
+      if (!row) return line;
+      updatedAssessmentClinicalScaleCount += 1;
+      return { ...line, record: { ...line.record, label: mergeLabelFields(line.record.label, row, ASSESSMENT_CLINICAL_LABEL_FIELDS) } };
+    }
+    return line;
   });
-  return { records: nextRecords, updatedCount };
+  return {
+    records: nextRecords,
+    updatedCount: updatedFrameCount + updatedAssessmentClinicalScaleCount,
+    updatedFrameCount,
+    updatedAssessmentClinicalScaleCount,
+  };
 }
 
 export {
+  ASSESSMENT_CLINICAL_LABEL_FIELDS,
+  FRAME_LABEL_FIELDS,
   LABEL_COLUMNS,
   createValidationLabelCsv,
   mergeValidationLabels,

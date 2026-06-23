@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
-import { evaluateValidationFrameSamples, extractValidationFrameRecords } from "../src/ml/validationEvaluation.js";
+import {
+  evaluateClinicalScaleEstimates,
+  evaluateValidationFrameSamples,
+  extractAssessmentClinicalScaleRecords,
+  extractValidationFrameRecords,
+} from "../src/ml/validationEvaluation.js";
 
 async function readValidationRecords(path) {
   const text = await readFile(path, "utf8");
@@ -23,5 +28,17 @@ if (!path) {
 
 const records = await readValidationRecords(path);
 const samples = extractValidationFrameRecords(records);
-const result = evaluateValidationFrameSamples(samples);
+const frameSamples = evaluateValidationFrameSamples(samples);
+const assessmentClinicalScales = extractAssessmentClinicalScaleRecords(records);
+const clinicalScales = assessmentClinicalScales.length
+  ? evaluateClinicalScaleEstimates(assessmentClinicalScales)
+  : null;
+const result = clinicalScales
+  ? {
+    kind: "mirror-validation-dataset-evaluation-report",
+    generatedAt: clinicalScales.generatedAt,
+    frameSamples,
+    clinicalScales,
+  }
+  : frameSamples;
 console.log(JSON.stringify(result, null, 2));

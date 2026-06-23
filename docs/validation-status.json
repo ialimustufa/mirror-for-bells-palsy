@@ -1,16 +1,19 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-23",
+  "updatedAt": "2026-06-24",
   "status": "tooling-ready-needs-reviewed-data",
   "reviewedDatasetCount": 0,
   "reviewedFrameCount": 0,
+  "reviewedClinicalScaleAssessmentCount": 0,
   "readyExerciseCount": 0,
+  "clinicalScaleAgreementReports": [],
   "thresholdCalibrationReports": [],
   "productionThresholdConstantsCalibrated": false,
   "clinicalFacingScoresAllowed": false,
   "notes": [
-    "Validation export, label-sheet, merge, evaluation, threshold calibration, and model-readiness report tooling are implemented.",
+    "Validation export, label-sheet, merge, frame evaluation, clinical-scale agreement evaluation, threshold calibration, and model-readiness report tooling are implemented.",
     "No clinician-reviewed validation dataset is committed in this repository.",
+    "House-Brackmann, Sunnybrook, and eFACE-style estimates remain Mirror estimates until reviewed assessment labels meet the documented 80% agreement standard.",
     "Production threshold constants should not be changed from calibration reports until reviewed datasets are available."
   ]
 }
