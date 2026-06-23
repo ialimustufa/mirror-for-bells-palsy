@@ -8,7 +8,7 @@ This document collects the product behavior that used to live in the main README
 - Worker-backed face tracking when supported, with a main-thread fallback for browser compatibility.
 - Neutral calibration with frame-stability gating and per-landmark noise estimation.
 - Pre-calibration camera setup quality checks for face presence, alignment, stability, lighting, distance, and frame rate.
-- Exercise-specific symmetry scoring plus affected-side progress against the user's own baseline.
+- Exercise-specific directional symmetry scoring plus affected-side progress against the user's own baseline.
 - Optional personal movement profile that personalizes dosing, focus, and progress tracking.
 - Local personal recovery model that learns affected-side recovery trends from the user's own saved sessions.
 - Comfort levels that adjust reps, hold time, and rest time.

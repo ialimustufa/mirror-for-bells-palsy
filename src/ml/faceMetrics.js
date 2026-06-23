@@ -304,6 +304,98 @@ const WATER_HOLD_MOUTH_SEAL_LANDMARKS = {
   right: [291, 314, 321, 375, 308, 324, 318, 402],
 };
 
+const DIRECTIONAL_EXERCISE_SIGNALS = {
+  "eye-close": { type: "aperture-decrease", key: "eyeClosure", minSignal: 0.006 },
+  "blink": { type: "aperture-decrease", key: "eyeClosure", minSignal: 0.006 },
+  "wink": { type: "aperture-decrease", key: "eyeClosure", minSignal: 0.006 },
+  "emoji-wink": { type: "aperture-decrease", key: "eyeClosure", minSignal: 0.006 },
+  "closed-smile": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "open-smile": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "emoji-smile": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "emoji-big-smile": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "emoji-smirk": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "pucker": {
+    type: "vector",
+    key: "puckerInward",
+    minSignal: 0.01,
+    vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
+  },
+  "emoji-pucker": {
+    type: "vector",
+    key: "puckerInward",
+    minSignal: 0.01,
+    vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
+  },
+  "emoji-kiss": {
+    type: "vector",
+    key: "puckerInward",
+    minSignal: 0.01,
+    vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
+  },
+  "cheek-puff": {
+    type: "vector",
+    key: "cheekPuffOutward",
+    minSignal: 0.012,
+    vectors: { left: { x: -1, y: 0 }, right: { x: 1, y: 0 } },
+  },
+  "cheek-suck": {
+    type: "vector",
+    key: "cheekSuckInward",
+    minSignal: 0.012,
+    vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
+  },
+  "vowel-a": { type: "aperture-increase", key: "mouthOpen", minSignal: 0.008 },
+  "vowel-e": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "vowel-i": {
+    type: "vector",
+    key: "smilePull",
+    minSignal: 0.012,
+    vectors: { left: { x: -0.88, y: -0.48 }, right: { x: 0.88, y: -0.48 } },
+  },
+  "vowel-o": {
+    type: "vector",
+    key: "puckerInward",
+    minSignal: 0.01,
+    vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
+  },
+  "vowel-u": {
+    type: "vector",
+    key: "puckerInward",
+    minSignal: 0.01,
+    vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
+  },
+};
+
 function facialTransformInfo(matrix) {
   if (!matrix) return null;
   const data = matrix.data ?? matrix;
@@ -511,6 +603,27 @@ function directionalSideNoise(noiseFloor, key, side, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
 }
 
+function landmarkNoiseTotal(noiseFloor, idxs) {
+  const values = noiseFloorValues(noiseFloor);
+  if (!values || !idxs?.length) return null;
+  let total = 0, count = 0;
+  for (const idx of idxs) {
+    const value = values[idx];
+    if (!Number.isFinite(value)) continue;
+    total += Math.max(0, value);
+    count++;
+  }
+  return count ? { sum: total, average: total / count } : null;
+}
+
+function directionalSideNoiseWithFallback(noiseFloor, key, side, idxs, config) {
+  const directional = directionalSideNoise(noiseFloor, key, side, null);
+  if (directional != null) return directional;
+  const landmarkNoise = landmarkNoiseTotal(noiseFloor, idxs);
+  if (!landmarkNoise) return 0;
+  return config?.type === "vector" ? landmarkNoise.sum : landmarkNoise.average;
+}
+
 function adjustedSignal(rawSignal, noise, noiseWeight) {
   const raw = Number.isFinite(rawSignal) ? rawSignal : 0;
   const safeNoise = Number.isFinite(noise) ? Math.max(0, noise) : 0;
@@ -605,6 +718,113 @@ function verticalSpread(frame, idxs) {
   return count ? maxY - minY : null;
 }
 
+function normalizedVector(vector) {
+  const x = Number(vector?.x ?? 0);
+  const y = Number(vector?.y ?? 0);
+  const z = Number(vector?.z ?? 0);
+  const length = Math.hypot(x, y, z);
+  return length > 0 ? { x: x / length, y: y / length, z: z / length } : null;
+}
+
+function vectorProjectionSignal(frame, neutralFrame, idxs, vector) {
+  const unit = normalizedVector(vector);
+  if (!unit) return null;
+  let total = 0, count = 0;
+  for (const i of idxs ?? []) {
+    const current = frame[i], neutralPoint = neutralFrame[i];
+    if (!current || !neutralPoint) continue;
+    const dx = current.x - neutralPoint.x;
+    const dy = current.y - neutralPoint.y;
+    const dz = (current.z ?? 0) - (neutralPoint.z ?? 0);
+    total += Math.max(0, dx * unit.x + dy * unit.y + dz * unit.z);
+    count++;
+  }
+  return count ? total : null;
+}
+
+function directionalRawSignal(frame, neutralFrame, mapping, config, rawSide) {
+  const idxs = mapping?.[rawSide];
+  if (!idxs?.length) return null;
+  if (config.type === "vector") {
+    return vectorProjectionSignal(frame, neutralFrame, idxs, config.vectors?.[rawSide]);
+  }
+  const currentSpread = verticalSpread(frame, idxs);
+  const neutralSpread = verticalSpread(neutralFrame, idxs);
+  if (currentSpread == null || neutralSpread == null) return null;
+  if (config.type === "aperture-decrease") return Math.max(0, neutralSpread - currentSpread);
+  if (config.type === "aperture-increase") return Math.max(0, currentSpread - neutralSpread);
+  return null;
+}
+
+function directionalExerciseRawSignals(exerciseId, frame, neutralFrame) {
+  const config = DIRECTIONAL_EXERCISE_SIGNALS[exerciseId];
+  const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId];
+  if (!config || !mapping || !frame || !neutralFrame) return null;
+  const left = directionalRawSignal(frame, neutralFrame, mapping, config, "left");
+  const right = directionalRawSignal(frame, neutralFrame, mapping, config, "right");
+  if (left == null && right == null) return null;
+  return { config, left, right };
+}
+
+function directionalExerciseGate(config, leftNoise, rightNoise, options) {
+  const maxNoise = Math.max(leftNoise ?? 0, rightNoise ?? 0);
+  return Math.max(
+    config.minSignal ?? SCORING_ABSOLUTE_MIN_SIGNAL,
+    options.pairwiseGate ?? SCORING_ABSOLUTE_MIN_SIGNAL,
+    noiseGate(maxNoise, options.directionalGateMultiplier, options.directionalGateCap),
+  );
+}
+
+function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
+  const options = scoringOptionsFrom(scoringOptions);
+  const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
+  if (!lmN || !neuN) {
+    logScoringDiagnostics(exerciseId, "normalize failed", { hasCurrent: Boolean(lmN), hasNeutral: Boolean(neuN) }, options);
+    return null;
+  }
+  const signals = directionalExerciseRawSignals(exerciseId, lmN, neuN);
+  if (!signals) return null;
+  const { config } = signals;
+  const mapping = EXERCISE_LANDMARK_PAIRS[exerciseId];
+  const leftNoise = directionalSideNoiseWithFallback(noiseFloor, config.key, "left", mapping?.left, config);
+  const rightNoise = directionalSideNoiseWithFallback(noiseFloor, config.key, "right", mapping?.right, config);
+  const left = adjustedSignal(signals.left, leftNoise, options.directionalNoiseWeight);
+  const right = adjustedSignal(signals.right, rightNoise, options.directionalNoiseWeight);
+  const lAdjusted = left.adjusted;
+  const rAdjusted = right.adjusted;
+  const peak = Math.max(lAdjusted, rAdjusted);
+  const gate = directionalExerciseGate(config, left.noise, right.noise, options);
+  const debugPayload = {
+    signalType: config.type,
+    directionalKey: config.key,
+    rawImageLeft: {
+      signal: debugMetric(left.raw),
+      noisePenalty: debugMetric(left.noisePenalty),
+      adjusted: debugMetric(lAdjusted),
+      final: debugMetric(lAdjusted),
+    },
+    rawImageRight: {
+      signal: debugMetric(right.raw),
+      noisePenalty: debugMetric(right.noisePenalty),
+      adjusted: debugMetric(rAdjusted),
+      final: debugMetric(rAdjusted),
+    },
+    returnedUserLeftDisp: debugMetric(rAdjusted),
+    returnedUserRightDisp: debugMetric(lAdjusted),
+    peak: debugMetric(peak),
+    gate: debugMetric(gate),
+    noiseSource: config.key,
+    activationState: { aboveGate: peak >= gate },
+  };
+  if (peak < gate) {
+    logScoringDiagnostics(exerciseId, "below signal gate", debugPayload, options);
+    return null;
+  }
+  const symmetry = Math.min(lAdjusted, rAdjusted) / peak;
+  logScoringDiagnostics(exerciseId, "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
+  return { symmetry, leftDisp: lAdjusted, rightDisp: rAdjusted, peak, directionalKey: config.key };
+}
+
 function waterHoldSealLeakSignal(frame, neutralFrame, rawSide) {
   const idxs = WATER_HOLD_MOUTH_SEAL_LANDMARKS[rawSide];
   const currentSpread = verticalSpread(frame, idxs);
@@ -685,6 +905,12 @@ function emptyDirectionalNoiseSamples() {
     noseScrunchLift: { left: [], right: [] },
     browGap: { left: [], right: [] },
     frown: { left: [], right: [] },
+    smilePull: { left: [], right: [] },
+    puckerInward: { left: [], right: [] },
+    cheekPuffOutward: { left: [], right: [] },
+    cheekSuckInward: { left: [], right: [] },
+    eyeClosure: { left: [], right: [] },
+    mouthOpen: { left: [], right: [] },
   };
 }
 
@@ -735,6 +961,11 @@ function computeNoiseFloor(buffer, neutral, matrixBuffer = null, neutralFacialTr
     pushDirectionalSample(directionalSamples, "browGap", "right", browGapSignal(lmN, neuN, "right"));
     pushDirectionalSample(directionalSamples, "frown", "left", frownSignal(lmN, neuN, "left"));
     pushDirectionalSample(directionalSamples, "frown", "right", frownSignal(lmN, neuN, "right"));
+    for (const [exerciseId, config] of Object.entries(DIRECTIONAL_EXERCISE_SIGNALS)) {
+      const signals = directionalExerciseRawSignals(exerciseId, lmN, neuN);
+      pushDirectionalSample(directionalSamples, config.key, "left", signals?.left);
+      pushDirectionalSample(directionalSamples, config.key, "right", signals?.right);
+    }
     for (let i = 0; i < N; i++) {
       const a = lmN[i], b = neuN[i];
       if (!a || !b) continue;
@@ -1368,6 +1599,9 @@ function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neu
   }
   if (WATER_HOLD_SIDE_BY_ID[exerciseId]) {
     return toUserSideSymmetryResult(computeWaterHoldSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
+  }
+  if (DIRECTIONAL_EXERCISE_SIGNALS[exerciseId]) {
+    return toUserSideSymmetryResult(computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
   }
   const rawResult = computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options)
     ?? computeSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix);

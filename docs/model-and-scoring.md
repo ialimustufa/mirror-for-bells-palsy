@@ -280,6 +280,37 @@ Examples:
 
 The mapping is defined in `EXERCISE_LANDMARK_PAIRS`.
 
+## Direction-Specific Scoring
+
+Some common movements now use `computeDirectionalExerciseSymmetry` instead of
+generic 3D displacement magnitude:
+
+- Smile and `vowel-e`/`vowel-i`: outward and slightly upward mouth pull.
+- Pucker, kiss, `vowel-o`, and `vowel-u`: inward lip movement toward the midline.
+- Cheek puff: outward cheek movement.
+- Cheek suck: inward cheek movement.
+- Eye close, blink, and wink: decreased eyelid aperture.
+- `vowel-a`: increased mouth aperture.
+
+This prevents wrong-direction movement from counting as a valid score. For example,
+an inward pucker should not score as a smile, lateral eye drift should not score as
+eye closure, and smile-only movement should not score as `vowel-a`.
+
+The directional scorer still returns the same user/anatomical fields used by the
+rest of the app:
+
+```text
+leftDisp
+rightDisp
+symmetry
+peak
+```
+
+Calibration records movement-specific neutral jitter keys such as `smilePull`,
+`puckerInward`, `cheekPuffOutward`, `cheekSuckInward`, `eyeClosure`, and
+`mouthOpen`. When older profiles do not have these keys, scoring falls back to
+the relevant landmark group's neutral noise floor so old backups remain usable.
+
 ## Brow-Specific Scoring
 
 Brow raise exercises use `computeBrowSymmetry` instead of the generic displacement scorer.
