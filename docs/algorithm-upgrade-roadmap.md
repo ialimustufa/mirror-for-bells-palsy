@@ -36,6 +36,8 @@ The next upgrade should make the algorithm more clinically legible, safer around
 
 Add a pre-session setup view that scores lighting, distance, face angle, glasses/occlusion risk, frame rate, and camera stability before calibration starts.
 
+Status: implemented with local setup-quality sampling before calibration, compact setup/capture summaries on saved sessions, and action-oriented coaching for weak setup signals.
+
 Why it helps:
 
 - Reduces bad baselines before they happen.
@@ -51,6 +53,8 @@ Implementation notes:
 ### 2. Standardized Assessment Mode
 
 Add a separate assessment flow that is slower and more controlled than normal practice. It should collect rest, voluntary movement, and unintended-movement observations for a small set of standard movements.
+
+Status: implemented as a standard assessment session kind with a fixed controlled movement set, separate saved `assessments`, zone summaries, and a separate assessment trend in Progress.
 
 Suggested movement set:
 
@@ -75,6 +79,8 @@ Implementation notes:
 ### 3. Synkinesis-Aware Feedback
 
 Add detection for unintended co-activation during an intended movement.
+
+Status: implemented as quiet-region coactivation metrics and gentle practice feedback. The app intentionally labels this as quiet-region movement/coactivation risk, not a clinical synkinesis diagnosis.
 
 Examples:
 
@@ -135,6 +141,8 @@ Why it helps:
 
 Add a developer-only replay harness for captured frame samples.
 
+Status: implemented through local frame-sample capture, `npm run replay:frames`, validation dataset replay, and threshold/model-readiness scripts.
+
 Why it helps:
 
 - Threshold tuning should be repeatable.
@@ -155,10 +163,10 @@ Goal: make every score explainable.
 
 Work:
 
-- Add structured `dropReason` values for unscored frames: no face, poor pose, below activation threshold, low confidence, bad neutral, missing matrix, or quiet-region coactivation.
-- Store per-rep distributions, not only averages: valid frame count, median, peak, interquartile range, and dropped-frame count.
-- Add a versioned `scoringModelVersion` to sessions, profiles, and exports.
-- Add a local diagnostics view that can inspect one session's score derivation.
+- Add structured `dropReason` values for unscored frames: no face, poor pose, below activation threshold, low confidence, bad neutral, missing matrix, or quiet-region coactivation. Status: implemented as structured scoring diagnostics and capture-quality drop-reason counts.
+- Store per-rep distributions, not only averages: valid frame count, median, peak, interquartile range, and dropped-frame count. Status: implemented in rep/session scoring diagnostics and frame-sample replay summaries.
+- Add a versioned `scoringModelVersion` to sessions, profiles, and exports. Status: implemented on saved scoring records, profile records, browser backups, clinician bundles, validation datasets, and replay reports.
+- Add a local diagnostics view that can inspect one session's score derivation. Status: implemented through session summary diagnostics panels and per-exercise diagnostic chips backed by structured rep diagnostics.
 
 Exit criteria:
 
@@ -188,10 +196,10 @@ Goal: make reports easier to interpret without pretending to be a diagnosis.
 
 Work:
 
-- Implement a local standardized assessment record with zones: brow/forehead, eye, midface/nose, mouth.
+- Implement a local standardized assessment record with zones: brow/forehead, eye, midface/nose, mouth. Status: implemented with `standard-assessment` records and zone summaries for brow, eye, midface/nose, and mouth.
 - Add resting asymmetry metrics for palpebral fissure, nasolabial/midface proxy, and oral commissure position. Status: implemented as compact face-local neutral calibration metrics.
-- Add voluntary movement metrics for the standard movements.
-- Add coactivation metrics during those same movements.
+- Add voluntary movement metrics for the standard movements. Status: implemented by summarizing affected-side movement/progress or symmetry into assessment zone and average voluntary-movement metrics.
+- Add coactivation metrics during those same movements. Status: implemented by carrying quiet-region coactivation risk into each assessment zone and the overall assessment record.
 - Add report language that maps Mirror metrics to "rest / voluntary movement / coactivation" sections. Status: reports and clinician bundles use rest, voluntary movement, coactivation, and assessment-comparison sections while preserving non-diagnostic wording.
 
 Exit criteria:
@@ -207,7 +215,7 @@ Work:
 
 - Replace single activation-threshold heuristics with per-exercise threshold bands: minimum visible movement, reliable movement, and baseline target movement. Status: implemented for new movement profiles and saved movement-feature summaries.
 - Train the local personal recovery model on weighted daily assessment points before normal practice sessions. Status: assessment session samples receive higher trend weight while standalone practice runs are downweighted.
-- Add uncertainty bands to trend displays instead of a single recovery number.
+- Add uncertainty bands to trend displays instead of a single recovery number. Status: personal recovery entries store uncertainty half-width plus low/high current-ratio bounds, and Progress displays those ranges.
 - Make adaptive plans consider fatigue, missed days, low-quality captures, and coactivation risk. Status: implemented by passing local journal context into plan ranking, suppressing stale no-recent-data boosts, and demoting weak-capture or high-coactivation recent evidence.
 
 Exit criteria:
@@ -222,7 +230,7 @@ Goal: stop tuning only against anecdotal captures.
 Work:
 
 - Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local frame-sample JSONL exports.
-- Label movement attempts with: intended movement, affected side, quality, visible movement level, and coactivation notes.
+- Label movement attempts with: intended movement, affected side, quality, visible movement level, and coactivation notes. Status: implemented in the validation JSONL label schema, frame-sample label templates, CSV label-sheet export, and label merge workflow.
 - Compare MediaPipe landmark output on Bell's palsy faces against clinician-reviewed landmarks or region movement labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is still required.
 - Evaluate whether a lightweight correction model or clinical-domain landmark model is justified. Status: implemented as `npm run validation:model-readiness`, which fails closed without enough reviewed data, recommends threshold review before model training, and does not justify clinical-domain landmark models without reviewed landmark annotations.
 
@@ -237,9 +245,9 @@ Goal: make algorithm upgrades shippable without weakening the local-first promis
 
 Work:
 
-- Keep all scoring local by default.
-- Require explicit export for any data sharing.
-- Version every data schema migration.
+- Keep all scoring local by default. Status: implemented with in-browser MediaPipe/scoring and local IndexedDB persistence.
+- Require explicit export for any data sharing. Status: implemented through user-triggered browser-data, clinician-bundle, and validation-dataset exports; non-restore JSONL exports are rejected by browser-data import.
+- Version every data schema migration. Status: implemented through IndexedDB schema versioning, app data side-convention migration versioning, scoring model versioning, and export schema/version fields.
 - Add rollback-safe import handling for old backups. Status: covered by parser compatibility tests for legacy JSON backups, JSONL backups, and non-backup JSONL rejection.
 - Add a release checklist for medical disclaimer copy, privacy copy, and validation status. Status: implemented as `npm run release:check` plus `docs/validation-status.json`.
 
@@ -252,13 +260,13 @@ Exit criteria:
 
 Priority order:
 
-1. Add `scoringModelVersion`, `dropReason`, and per-rep distribution fields.
-2. Build replay tests around stored frame samples.
-3. Add quiet-region definitions and first coactivation metrics.
-4. Add standardized assessment records and a clinician report section.
+1. Add `scoringModelVersion`, `dropReason`, and per-rep distribution fields. Done.
+2. Build replay tests around stored frame samples. Done.
+3. Add quiet-region definitions and first coactivation metrics. Done.
+4. Add standardized assessment records and a clinician report section. Done.
 5. Move face inference into a Web Worker. Done with fallback.
-6. Add capture-quality setup before calibration.
-7. Add uncertainty bands to the personal recovery model.
+6. Add capture-quality setup before calibration. Done.
+7. Add uncertainty bands to the personal recovery model. Done.
 8. Create an opt-in labeled validation dataset format. Done with JSONL frame-sample exports and label schema.
 
 ## Evidence And References
