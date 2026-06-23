@@ -6,6 +6,11 @@
   "reviewedFrameCount": 0,
   "reviewedClinicalScaleAssessmentCount": 0,
   "readyExerciseCount": 0,
+  "clinicalScaleMinimumStandard": {
+    "minAgreementRate": 0.8,
+    "minReviewedAssessments": 30,
+    "confidenceInterval": "wilson-95"
+  },
   "clinicalScaleAgreementReports": [],
   "thresholdCalibrationReports": [],
   "productionThresholdConstantsCalibrated": false,

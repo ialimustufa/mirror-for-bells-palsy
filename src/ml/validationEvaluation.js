@@ -12,6 +12,16 @@ const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
   V: 5,
   VI: 6,
 });
+const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
+  minAgreementRate: 0.8,
+  minReviewedAssessments: 30,
+  confidenceLevel: 0.95,
+});
+const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
+  0.9: 1.6448536269514722,
+  0.95: 1.959963984540054,
+  0.99: 2.5758293035489004,
+});
 
 function compactRate(numerator, denominator) {
   return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
@@ -19,6 +29,26 @@ function compactRate(numerator, denominator) {
 
 function compactNumber(value, digits = 4) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function zScoreForConfidenceLevel(confidenceLevel) {
+  return WILSON_Z_BY_CONFIDENCE_LEVEL[confidenceLevel] ?? WILSON_Z_BY_CONFIDENCE_LEVEL[DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel];
+}
+
+function wilsonScoreInterval(successes, total, confidenceLevel = DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel) {
+  if (!Number.isFinite(successes) || !Number.isFinite(total) || total <= 0) return null;
+  const z = zScoreForConfidenceLevel(confidenceLevel);
+  const phat = successes / total;
+  const z2 = z * z;
+  const denominator = 1 + z2 / total;
+  const center = (phat + z2 / (2 * total)) / denominator;
+  const margin = (z / denominator) * Math.sqrt((phat * (1 - phat) / total) + (z2 / (4 * total * total)));
+  return {
+    method: "wilson-score",
+    confidenceLevel,
+    lower: compactNumber(Math.max(0, center - margin), 4),
+    upper: compactNumber(Math.min(1, center + margin), 4),
+  };
 }
 
 function createValidationCounts() {
@@ -201,12 +231,14 @@ function recordAgreementCase(accumulator, record, estimateValue, labelValue) {
 }
 
 function summarizeAgreement(accumulator, options = {}) {
-  const minAgreementRate = options.minAgreementRate ?? 0.8;
-  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? 5));
+  const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
+  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
+  const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const comparableCount = accumulator.labeledCount;
   const denominator = comparableCount + accumulator.missingEstimateCount;
   const agreementRate = compactRate(accumulator.withinToleranceCount, denominator);
   const exactAgreementRate = compactRate(accumulator.exactMatchCount, denominator);
+  const confidenceInterval = wilsonScoreInterval(accumulator.withinToleranceCount, denominator, confidenceLevel);
   const meanAbsDelta = accumulator.absoluteDeltas.length
     ? accumulator.absoluteDeltas.reduce((sum, value) => sum + value, 0) / accumulator.absoluteDeltas.length
     : null;
@@ -224,6 +256,7 @@ function summarizeAgreement(accumulator, options = {}) {
     withinToleranceCount: accumulator.withinToleranceCount,
     exactAgreementRate,
     agreementRate,
+    agreementConfidenceInterval: confidenceInterval,
     meanAbsDelta: compactNumber(meanAbsDelta, 2),
     meetsMinimumStandard: blockingReasons.length === 0,
     blockingReasons,
@@ -233,11 +266,12 @@ function summarizeAgreement(accumulator, options = {}) {
 
 function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const assessmentRecords = extractAssessmentClinicalScaleRecords(records);
-  const minAgreementRate = options.minAgreementRate ?? 0.8;
-  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? 5));
+  const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
+  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
+  const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const sunnybrookTolerance = Number.isFinite(options.sunnybrookTolerance) ? options.sunnybrookTolerance : 10;
   const efaceTolerance = Number.isFinite(options.efaceTolerance) ? options.efaceTolerance : 10;
-  const agreementOptions = { minAgreementRate, minReviewedAssessments };
+  const agreementOptions = { minAgreementRate, minReviewedAssessments, confidenceLevel };
   const accumulators = {
     houseBrackmann: createAgreementAccumulator("houseBrackmann", "within-one-grade agreement", 1),
     sunnybrookComposite: createAgreementAccumulator("sunnybrookComposite", `within-${sunnybrookTolerance}-point agreement`, sunnybrookTolerance),
@@ -278,6 +312,10 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     standard: {
       minAgreementRate,
       minReviewedAssessments,
+      confidenceInterval: {
+        method: "wilson-score",
+        confidenceLevel,
+      },
       houseBrackmannAgreement: "estimate must be within one House-Brackmann grade of the reviewed label",
       sunnybrookTolerance,
       efaceTolerance,
@@ -467,6 +505,7 @@ function calibrateThresholdsFromValidationSamples(samples = [], options = {}) {
 }
 
 export {
+  DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD,
   calibrateThresholdsFromValidationSamples,
   evaluateClinicalScaleEstimates,
   evaluateValidationFrameSamples,

@@ -198,38 +198,46 @@ function clinicalRecord(id, estimate, label) {
   };
 }
 
-test("clinical scale evaluation reports 80 percent reviewed agreement", () => {
-  const records = [
-    clinicalRecord("assessment-1:clinical-scale", { hb: 2, sunnybrook: 82, eface: 80 }, { hb: "II", sunnybrook: 84, eface: 79 }),
-    clinicalRecord("assessment-2:clinical-scale", { hb: 3, sunnybrook: 70, eface: 68 }, { hb: "III", sunnybrook: 72, eface: 66 }),
-    clinicalRecord("assessment-3:clinical-scale", { hb: 4, sunnybrook: 48, eface: 52 }, { hb: "III", sunnybrook: 42, eface: 45 }),
-    clinicalRecord("assessment-4:clinical-scale", { hb: 5, sunnybrook: 28, eface: 30 }, { hb: "V", sunnybrook: 34, eface: 37 }),
-    clinicalRecord("assessment-5:clinical-scale", { hb: 2, sunnybrook: 91, eface: 88 }, { hb: "IV", sunnybrook: 74, eface: 70 }),
-  ];
+function clinicalAgreementRecords(total, successCount) {
+  return Array.from({ length: total }, (_, index) => {
+    const success = index < successCount;
+    const estimate = { hb: 3, sunnybrook: 72, eface: 70 };
+    const label = success
+      ? { hb: "III", sunnybrook: 74, eface: 72 }
+      : { hb: "V", sunnybrook: 55, eface: 52 };
+    return clinicalRecord(`assessment-${index + 1}:clinical-scale`, estimate, label);
+  });
+}
+
+test("clinical scale evaluation reports 80 percent reviewed agreement across 30 assessments", () => {
+  const records = clinicalAgreementRecords(30, 24);
 
   const extracted = extractAssessmentClinicalScaleRecords(records);
   const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
 
-  assert.equal(extracted.length, 5);
-  assert.equal(report.summary.reviewedAssessmentCount, 5);
+  assert.equal(extracted.length, 30);
+  assert.equal(report.summary.reviewedAssessmentCount, 30);
   assert.equal(report.summary.meetsMinimumStandard, true);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
-  assert.equal(report.byScale.houseBrackmann.labeledCount, 5);
-  assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 4);
+  assert.equal(report.standard.minReviewedAssessments, 30);
+  assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
+  assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 24);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 0.8);
-  assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 4);
+  assert.equal(report.byScale.houseBrackmann.agreementConfidenceInterval.method, "wilson-score");
+  assert.ok(report.byScale.houseBrackmann.agreementConfidenceInterval.lower < 0.8);
+  assert.ok(report.byScale.houseBrackmann.agreementConfidenceInterval.upper > 0.8);
+  assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 24);
   assert.equal(report.byScale.sunnybrookComposite.agreementRate, 0.8);
-  assert.equal(report.byScale.efaceTotal.withinToleranceCount, 4);
+  assert.equal(report.byScale.efaceTotal.withinToleranceCount, 24);
   assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
 });
 
 test("clinical scale evaluation fails closed without enough reviewed assessments", () => {
-  const report = evaluateClinicalScaleEstimates([
-    clinicalRecord("assessment-1:clinical-scale", { hb: 2, sunnybrook: 82, eface: 80 }, { hb: "II", sunnybrook: 84, eface: 79 }),
-  ], { generatedAt: "2026-06-23T00:00:00.000Z" });
+  const report = evaluateClinicalScaleEstimates(clinicalAgreementRecords(29, 29), { generatedAt: "2026-06-23T00:00:00.000Z" });
 
-  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.reviewedAssessmentCount, 29);
   assert.equal(report.summary.meetsMinimumStandard, false);
-  assert.match(report.blockingReasons.join("\n"), /needs at least 5 reviewed clinical-scale assessments/);
+  assert.match(report.blockingReasons.join("\n"), /needs at least 30 reviewed clinical-scale assessments/);
   assert.equal(report.byScale.houseBrackmann.meetsMinimumStandard, false);
 });

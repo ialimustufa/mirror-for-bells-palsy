@@ -995,12 +995,14 @@ being hidden by aggregate accuracy.
 
 When reviewed `assessmentClinicalScale` labels are present, the same evaluator
 also emits a clinical-scale validation report. The default minimum standard is at
-least five reviewed assessment labels and at least 80% agreement for each primary
+least 30 reviewed assessment labels and at least 80% agreement for each primary
 scale: House-Brackmann within one grade, Sunnybrook composite within 10 points,
 and eFACE total within 10 points. eFACE static, dynamic, and synkinesis domain
-agreement is reported when those labels are supplied. This report does not make
-Mirror estimates clinician-assigned grades; it only documents agreement against
-reviewed target labels for the local validation set.
+agreement is reported when those labels are supplied. Each agreement rate also
+includes a Wilson 95% binomial confidence interval to show uncertainty around the
+observed pass rate. This report does not make Mirror estimates clinician-assigned
+grades; it only documents agreement against reviewed target labels for the local
+validation set.
 
 The threshold calibration command groups reviewed labels by exercise and writes a
 recommendation report. It includes current reliable thresholds, positive/negative

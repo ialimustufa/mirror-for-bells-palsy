@@ -10,6 +10,11 @@ const BASE_STATUS = {
   reviewedFrameCount: 0,
   reviewedClinicalScaleAssessmentCount: 0,
   readyExerciseCount: 0,
+  clinicalScaleMinimumStandard: {
+    minAgreementRate: 0.8,
+    minReviewedAssessments: 30,
+    confidenceInterval: "wilson-95",
+  },
   clinicalScaleAgreementReports: [],
   thresholdCalibrationReports: [],
   productionThresholdConstantsCalibrated: false,
@@ -40,7 +45,7 @@ test("validation status accepts documented clinical agreement state", () => {
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
-    reviewedClinicalScaleAssessmentCount: 12,
+    reviewedClinicalScaleAssessmentCount: 30,
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
@@ -57,6 +62,20 @@ test("validation status rejects non-date updatedAt values", () => {
       updatedAt: "June 23, 2026",
     }),
     /YYYY-MM-DD/,
+  );
+});
+
+test("validation status rejects weak clinical scale minimum standards", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        minAgreementRate: 0.8,
+        minReviewedAssessments: 12,
+        confidenceInterval: "wilson-95",
+      },
+    }),
+    /at least 30/,
   );
 });
 
@@ -89,7 +108,7 @@ test("validation status rejects clinical-facing scores without clinical agreemen
       ...BASE_STATUS,
       reviewedDatasetCount: 1,
       reviewedFrameCount: 1200,
-      reviewedClinicalScaleAssessmentCount: 12,
+      reviewedClinicalScaleAssessmentCount: 30,
       readyExerciseCount: 5,
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
       productionThresholdConstantsCalibrated: true,
@@ -104,6 +123,7 @@ test("validation status rejects clinical agreement reports without reviewed asse
     () => validateStatus({
       ...BASE_STATUS,
       reviewedDatasetCount: 1,
+      reviewedClinicalScaleAssessmentCount: 12,
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     }),
     /reviewed clinical-scale assessment coverage/,

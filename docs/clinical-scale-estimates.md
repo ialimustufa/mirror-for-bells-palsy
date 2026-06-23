@@ -9,6 +9,8 @@ Mirror can now derive optional clinical-scale estimates from a completed standar
 - Reliability literature supports Sunnybrook as more granular than HB. A 2024 comparison reported moderate HB reliability and high Sunnybrook reliability, while noting that subjective clinician assessment still matters: https://pmc.ncbi.nlm.nih.gov/articles/PMC10895858/
 - Video assessment literature describes Sunnybrook as a regional weighted 0-100 scale and notes that video-based synkinesis/resting components can be less reliable than voluntary movement: https://www.jmir.org/2019/4/e11109/PDF
 - eFACE is a clinician-graded electronic facial paralysis assessment with static, dynamic, and synkinesis domains. Mirror only maps available standard-assessment proxies into an eFACE-style domain estimate; it does not replace the clinician-entered eFACE form.
+- Wilson's score interval is used for binomial agreement uncertainty reporting rather than relying on a raw percentage alone: https://www.tandfonline.com/doi/abs/10.1080/01621459.1927.10502953
+- BMJ guidance on external model validation emphasizes sample sizes large enough to estimate performance precisely and warns against simplistic rules of thumb: https://www.bmj.com/content/384/bmj-2023-074821
 
 ## Evidence Standard
 
@@ -68,10 +70,19 @@ default minimum standard is:
 - House-Brackmann: at least 80% of reviewed assessments within one HB grade.
 - Sunnybrook composite: at least 80% within 10 points.
 - eFACE total: at least 80% within 10 points.
-- At least five reviewed assessment labels before any primary scale can pass.
+- At least 30 reviewed assessment labels before any primary scale can pass.
+- A Wilson 95% binomial confidence interval is reported for each agreement rate
+  so reviewers can see the uncertainty around the observed percentage.
 
 The evaluator reports each scale separately and fails closed when reviewed data is
 missing, estimates are unavailable, or agreement is below the configured
 threshold. Passing this tooling is still not the same as clinician assignment; it
 only proves that Mirror estimates met the documented agreement target on the
 reviewed local validation set.
+
+The 30-assessment floor is still a local release gate, not a universal clinical
+sample-size claim. Current clinical prediction-model validation guidance warns
+against relying on small rule-of-thumb validation sets and recommends sample
+sizes large enough to estimate performance precisely. Mirror therefore reports
+confidence intervals and keeps `clinicalFacingScoresAllowed` disabled until a
+reviewed dataset is actually available.
