@@ -1,5 +1,6 @@
 import { EXERCISE_BY_ID } from "./exercises";
 import { estimateClinicalScaleGrades } from "./clinicalScales";
+import { clinicalScalePresentationPolicy } from "./clinicalScalePresentation";
 import { applySessionDose } from "./session";
 
 const STANDARD_ASSESSMENT_VERSION = 1;
@@ -106,6 +107,7 @@ function zoneByKey(assessment = {}) {
 
 function compareAssessmentRecords(previous = null, current = null) {
   if (!previous || !current) return null;
+  const clinicalScalePolicy = clinicalScalePresentationPolicy();
   const previousAverage = previous.averageVoluntaryMovement;
   const currentAverage = current.averageVoluntaryMovement;
   const averageDelta = Number.isFinite(previousAverage) && Number.isFinite(currentAverage)
@@ -174,7 +176,7 @@ function compareAssessmentRecords(previous = null, current = null) {
         currentCaptureQuality: currentZone?.captureQuality ?? null,
       };
     }),
-    note: "Comparison uses Mirror practice metrics only; it is not a validated clinical grade.",
+    note: clinicalScalePolicy.comparisonNote,
   };
 }
 

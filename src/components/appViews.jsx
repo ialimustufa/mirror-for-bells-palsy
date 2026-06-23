@@ -3,6 +3,7 @@ import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRigh
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC, summarizeAssessmentSession } from "../domain/assessment";
+import { clinicalScalePresentationPolicy } from "../domain/clinicalScalePresentation";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
 import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
@@ -1646,6 +1647,7 @@ function ExerciseDiagnosticsLine({ diagnostics }) {
 
 function ClinicalScaleEstimatePanel({ clinicalScales }) {
   if (!clinicalScales) return null;
+  const presentation = clinicalScalePresentationPolicy();
   const estimated = clinicalScales.status === "estimated";
   const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales) : [];
   const coverage = clinicalScales.coverage;
@@ -1653,11 +1655,11 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
     <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.24)" }}>
       <div className="flex items-start justify-between gap-3 mb-3">
         <div>
-          <div className="text-xs uppercase tracking-wider opacity-55">Clinical scale estimates</div>
-          <div className="text-sm font-semibold mt-1">{estimated ? "Assessment-grade estimates available" : "Not enough assessment evidence"}</div>
+          <div className="text-xs uppercase tracking-wider opacity-55">{presentation.panelTitle}</div>
+          <div className="text-sm font-semibold mt-1">{estimated ? presentation.availableLabel : presentation.unavailableLabel}</div>
         </div>
         <div className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: estimated ? "rgba(122,143,115,0.24)" : "rgba(212,165,116,0.16)", color: estimated ? "#D9E5D2" : "#F6D8B2" }}>
-          {estimated ? "Estimate" : "No scale"}
+          {estimated ? presentation.badgeLabel : "No scale"}
         </div>
       </div>
       {estimated ? (
@@ -1681,7 +1683,7 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
       )}
       <div className="mt-3 text-[11px] leading-relaxed opacity-62">
         {coverage ? `${coverage.usableMovementCount}/${coverage.requiredMovementCount} standard movements usable. ` : ""}
-        Mirror estimate only; not clinician-assigned, diagnostic, or treatment guidance.
+        {presentation.shortNotice}
       </div>
     </div>
   );

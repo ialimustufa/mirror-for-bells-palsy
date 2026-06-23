@@ -874,6 +874,9 @@ Clinical-scale estimates are stored with explicit status and caveats:
 
 These values are not clinical-facing validated grades while
 `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
+The runtime presentation policy in `src/domain/clinicalScalePresentation.js`
+imports that same status file so app panels and printable reports keep the
+Mirror-estimate wording until the reviewed validation gate is explicitly opened.
 
 Assessments are also saved as `kind: "assessment"` session records for local image
 hydration and PDF generation, but they do not count toward daily practice goals or
@@ -1035,7 +1038,9 @@ review protocol is documented in `docs/clinical-scale-review-protocol.md`.
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset
 is committed, production thresholds are not clinically calibrated, and clinical-facing
-scores are not allowed.
+scores are not allowed. The app and printable report copy read this status through
+`src/domain/clinicalScalePresentation.js`, so clinical-facing wording cannot be
+enabled by changing only a UI component.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

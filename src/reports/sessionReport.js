@@ -1,5 +1,6 @@
 import { COMFORT_DOSING } from "../domain/config";
 import { summarizeAssessmentSession } from "../domain/assessment";
+import { clinicalScalePresentationPolicy } from "../domain/clinicalScalePresentation";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
 import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel, progressUsesLegacySideConvention } from "../ml/faceMetrics";
@@ -58,16 +59,17 @@ function restingMetricRows(restingMetrics) {
     .map((metric) => `${metric.label}: L ${formatRestMetricValue(metric.userLeft)}, R ${formatRestMetricValue(metric.userRight)} · ${restingMetricSidePhrase(metric)} · asym ${formatRatioPct(metric.asymmetryRatio)}`);
 }
 
-function clinicalScaleEstimateRows(clinicalScales) {
+function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScalePresentationPolicy()) {
   if (!clinicalScales) return [];
   if (clinicalScales.status !== "estimated") {
     return [`Clinical scale estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
   }
   const scales = clinicalScales.scales ?? {};
+  const scaleNoun = presentation.scaleNoun;
   return [
-    scales.houseBrackmann ? `House-Brackmann estimate: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
-    scales.sunnybrook ? `Sunnybrook estimate: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
-    scales.eface ? `eFACE-style estimate: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
+    scales.houseBrackmann ? `House-Brackmann ${scaleNoun}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
+    scales.sunnybrook ? `Sunnybrook ${scaleNoun}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
+    scales.eface ? `eFACE-style ${scaleNoun}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
     `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
   ].filter(Boolean);
 }
@@ -93,8 +95,9 @@ function buildSessionReportHtml(s) {
   const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
   const diagnostics = summarizeSessionDiagnostics(s);
   const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
+  const clinicalScalePolicy = clinicalScalePresentationPolicy();
   const restingRows = restingMetricRows(assessment?.resting?.metrics);
-  const clinicalScaleRows = clinicalScaleEstimateRows(assessment?.clinicalScales);
+  const clinicalScaleRows = clinicalScaleEstimateRows(assessment?.clinicalScales, clinicalScalePolicy);
   const quality = diagnostics.captureQuality;
   const diagnosticFlags = [
     diagnostics.setupQuality ? `Setup quality: ${diagnostics.setupQuality.label ?? diagnostics.setupQuality.key}${diagnostics.setupQuality.score != null ? ` (${Math.round(diagnostics.setupQuality.score * 100)}%)` : ""}` : null,
@@ -131,7 +134,7 @@ function buildSessionReportHtml(s) {
       <div class="zone-list">
         ${assessment.zones.map((zone) => `<div><strong>${escapeHtml(zone.label)}</strong>: ${zone.voluntaryMovement == null ? "unscored" : `${Math.round(zone.voluntaryMovement * 100)}%`}${zone.coactivationRisk ? ` · quiet movement ${escapeHtml(zone.coactivationRisk)}` : ""}</div>`).join("")}
       </div>
-      ${clinicalScaleRows.length ? `<div class="clinical-scales"><div class="assessment-label">Clinical scale estimates</div><ul>${clinicalScaleRows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="muted small">These are Mirror estimates only, not clinician-assigned or validated clinical grades.</div></div>` : ""}
+      ${clinicalScaleRows.length ? `<div class="clinical-scales"><div class="assessment-label">${escapeHtml(clinicalScalePolicy.reportHeading)}</div><ul>${clinicalScaleRows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="muted small">${escapeHtml(clinicalScalePolicy.reportNotice)}</div></div>` : ""}
     </section>` : "";
 
   const exerciseRows = scoresArr.map((e, scoreIndex) => {
@@ -304,7 +307,7 @@ function buildSessionReportHtml(s) {
 
     <div class="footer">
       Symmetry is auto-detected from facial landmarks captured during the session. Some movement variation is normal even in healthy faces.
-      Generated for clinical review by a physiotherapist or facial retraining specialist. Mirror metrics are practice feedback, not validated clinical grades.
+      Generated for clinical review by a physiotherapist or facial retraining specialist. ${escapeHtml(clinicalScalePolicy.footerNotice)}
     </div>
   </div>
   <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 250); });</script>
@@ -332,4 +335,4 @@ function shareSessionReport(sessionLike) {
   win.document.close();
   win.focus();
 }
-export { formatDuration, formatSessionDate, shareSessionReport };
+export { buildSessionReportHtml, clinicalScaleEstimateRows, formatDuration, formatSessionDate, shareSessionReport };

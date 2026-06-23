@@ -54,6 +54,7 @@ checks for:
 - Privacy/local-first wording for browser data, clinician bundle, and validation exports.
 - Current validation status and remaining release risks in the roadmap.
 - `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, and whether clinical-facing scores are allowed.
+- Runtime clinical-scale presentation policy, which reads `docs/validation-status.json` before app panels or reports can use clinical-facing wording.
 
 Backup compatibility must remain rollback-safe:
 
