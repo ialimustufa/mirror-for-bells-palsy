@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { computeQuietRegionCoactivation } from "../src/ml/faceMetrics.js";
+import { computeQuietRegionCoactivation, SCORE_DROP_REASONS } from "../src/ml/faceMetrics.js";
 import { replayFrameSamples } from "../src/ml/frameSampleReplay.js";
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
@@ -83,4 +83,50 @@ test("frame sample replay reconstructs calibration and scores hold frames", () =
   assert.equal(replay.scoredFrameCount, 1);
   assert.equal(replay.frames[0].replayScored, true);
   assert.equal(replay.frames[0].calibrationSampleCount, 3);
+});
+
+test("frame sample replay scores matched captures and rejects wrong movements", () => {
+  const neutral = makeNeutralFace();
+  const matchedSmile = cloneLandmarks(neutral);
+  const wrongInwardMouth = cloneLandmarks(neutral);
+  moveGroup(matchedSmile, LEFT_SMILE, -0.012, 0);
+  moveGroup(matchedSmile, RIGHT_SMILE, 0.012, 0);
+  moveGroup(wrongInwardMouth, LEFT_SMILE, 0.012, 0);
+  moveGroup(wrongInwardMouth, RIGHT_SMILE, -0.012, 0);
+
+  const replay = replayFrameSamples([
+    { phase: "calibrate", ts: 1, landmarks: neutral, blendshapes: {}, scoringNoiseMode: "normal" },
+    { phase: "calibrate", ts: 2, landmarks: neutral, blendshapes: {}, scoringNoiseMode: "normal" },
+    { phase: "calibrate", ts: 3, landmarks: neutral, blendshapes: {}, scoringNoiseMode: "normal" },
+    {
+      id: "matched-smile",
+      phase: "hold",
+      exerciseId: "closed-smile",
+      repIndex: 0,
+      ts: 4,
+      landmarks: matchedSmile,
+      blendshapes: {},
+      scoringNoiseMode: "normal",
+      scoring: { activated: true, rawSymmetry: 1 },
+    },
+    {
+      id: "wrong-inward-mouth",
+      phase: "hold",
+      exerciseId: "closed-smile",
+      repIndex: 0,
+      ts: 5,
+      landmarks: wrongInwardMouth,
+      blendshapes: {},
+      scoringNoiseMode: "normal",
+      scoring: { activated: false, dropReason: SCORE_DROP_REASONS.belowSignalGate },
+    },
+  ]);
+
+  assert.equal(replay.holdFrameCount, 2);
+  assert.equal(replay.scoredFrameCount, 1);
+  assert.equal(replay.frames.find((frame) => frame.id === "matched-smile").replayScored, true);
+  const rejected = replay.frames.find((frame) => frame.id === "wrong-inward-mouth");
+  assert.equal(rejected.replayScored, false);
+  assert.equal(rejected.replayDropReason, SCORE_DROP_REASONS.belowSignalGate);
+  assert.equal(replay.dropReasonCounts[SCORE_DROP_REASONS.belowSignalGate], 1);
 });

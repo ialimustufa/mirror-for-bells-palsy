@@ -187,7 +187,7 @@ Work:
 
 Exit criteria:
 
-- Replay tests show lower frame rejection in good captures and higher rejection in wrong-movement captures.
+- Replay tests show lower frame rejection in good captures and higher rejection in wrong-movement captures. Status: frame-sample replay regression scores a matched smile capture and rejects a wrong inward-mouth movement from the same calibration.
 - The UI can distinguish "try again because capture quality is bad" from "movement is below your baseline threshold".
 
 ### Phase 2: Add Clinical-Legibility Metrics
