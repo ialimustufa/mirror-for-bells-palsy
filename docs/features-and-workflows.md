@@ -11,6 +11,7 @@ This document collects the product behavior that used to live in the main README
 - Local personal recovery model that learns affected-side recovery trends from the user's own saved sessions.
 - Comfort levels that adjust reps, hold time, and rest time.
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
+- A standardized assessment mode that saves assessment summaries separately from daily practice sessions.
 - Printable session report that can be saved as a PDF for a physiotherapist.
 - Session-level scoring diagnostics with capture quality, rejected-frame reasons, quiet-region movement flags, and conservative safety notes.
 - A live `/try` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.
@@ -18,6 +19,8 @@ This document collects the product behavior that used to live in the main README
 ## Main Practice Flow
 
 The main app route at `/` guides a user through calibration, exercise preview, rest, hold, interstitial feedback, and summary. It can score holds when the model and camera are available, and it still supports unscored guided practice when they are not.
+
+Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends.
 
 ## Live Demo Page
 

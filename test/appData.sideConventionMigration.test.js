@@ -132,3 +132,17 @@ test("normalizes scoring noise prefs with safe defaults", () => {
   assert.equal(invalid.prefs.scoringNoiseMode, "normal");
   assert.equal(invalid.prefs.scoringDiagnosticsEnabled, false);
 });
+
+test("normalizes assessments as separate dated records", () => {
+  const normalized = normalizeAppData({
+    assessments: [
+      { ts: 30, zones: [{ zone: "mouth" }] },
+      { sourceSessionTs: 10 },
+      null,
+    ],
+  });
+
+  assert.equal(normalized.assessments.length, 2);
+  assert.deepEqual(normalized.assessments.map((item) => item.ts), [10, 30]);
+  assert.deepEqual(normalized.assessments[0].zones, []);
+});

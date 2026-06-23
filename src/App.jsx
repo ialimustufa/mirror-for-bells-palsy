@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
+import { ASSESSMENT_SESSION_KIND, appendAssessmentRecord, buildStandardAssessmentExercises, summarizeAssessmentSession } from "./domain/assessment";
 import { EXERCISE_BY_ID } from "./domain/exercises";
 import { trainPersonalRecoveryModel } from "./domain/personalRecoveryModel";
 import {
@@ -186,6 +187,21 @@ export default function App() {
     const kind = ids.length > 1 ? "session" : "practice";
     setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
+  const startAssessment = () => {
+    const exercises = buildStandardAssessmentExercises(data.movementProfile);
+    const firstExercise = exercises[0];
+    primeSpeech(data.prefs.voiceEnabled, {
+      text: firstExercise ? `Standard assessment. Up next: ${firstExercise.name}.` : "Standard assessment ready.",
+      volume: 1,
+    });
+    setSession({
+      exercises,
+      kind: ASSESSMENT_SESSION_KIND,
+      assessmentKind: "standard-assessment",
+      startedAt: Date.now(),
+      comfortLevel: getComfortDosing(data.movementProfile).key,
+    });
+  };
   const completeSession = (rec) => {
     let shouldPromptJournal = false;
     persist((currentData) => {
@@ -193,7 +209,11 @@ export default function App() {
       shouldPromptJournal = isCountedSession(rec)
         && existingCountedSessionsToday === 0
         && !currentData.journal.some((entry) => entry.date === rec.date);
-      return withPersonalRecoveryModel(appendSessionRecord(currentData, rec));
+      const withSession = appendSessionRecord(currentData, rec);
+      const withAssessment = rec.kind === ASSESSMENT_SESSION_KIND
+        ? appendAssessmentRecord(withSession, summarizeAssessmentSession(rec))
+        : withSession;
+      return withPersonalRecoveryModel(withAssessment);
     });
     setSession(null);
     if (shouldPromptJournal) setJournalPrompt({ session: rec });
@@ -326,7 +346,7 @@ export default function App() {
       <div className="relative max-w-2xl mx-auto px-5 pb-28 pt-8 lg:pb-12">
         <Header view={view} streak={streak} />
         <main className="mt-8 lg:mt-2">
-          {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
+          {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onStartAssessment={startAssessment} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} savedRepeatCounts={data.prefs.personalPlan?.repeatCounts} savedRepCounts={data.prefs.personalPlan?.repCounts} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "baseline" && <BaselineView data={data} onStartProfile={openProfileAssessment} onResetBaselines={resetMovementBaselines} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}

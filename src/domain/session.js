@@ -13,6 +13,7 @@ export const DEFAULT_PERSONAL_PLAN = { selectedExerciseIds: [], addedExerciseIds
 export const DEFAULT_DATA = {
   journal: [],
   sessions: [],
+  assessments: [],
   movementProfile: null,
   initialMovementProfile: null,
   movementProfileHistory: [],
@@ -34,11 +35,11 @@ export const DEFAULT_DATA = {
 export const todayISO = () => new Date().toISOString().split("T")[0];
 export const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / (1000 * 60 * 60 * 24));
 
-// Single-exercise standalone runs are tagged "practice" — they're still tracked and
-// charted, but don't count toward the daily-goal X-of-Y counter. Legacy records have no
-// kind and continue to count.
+// Single-exercise standalone runs are tagged "practice" and standardized assessment
+// runs are tagged "assessment" — they're still saved, but don't count toward the
+// daily-goal X-of-Y counter. Legacy records have no kind and continue to count.
 export function isCountedSession(s) {
-  return s?.kind !== "practice";
+  return s?.kind !== "practice" && s?.kind !== "assessment";
 }
 
 export function getComfortDosing(profileOrLevel) {
@@ -168,8 +169,9 @@ export function formatClock(d) {
 }
 
 export const computeStreak = (sessions) => {
-  if (!sessions.length) return 0;
-  const dates = [...new Set(sessions.map((s) => s.date))].sort().reverse();
+  const counted = sessions.filter(isCountedSession);
+  if (!counted.length) return 0;
+  const dates = [...new Set(counted.map((s) => s.date))].sort().reverse();
   let streak = 0; let cursor = todayISO();
   for (const d of dates) {
     if (d === cursor) { streak++; const prev = new Date(cursor); prev.setDate(prev.getDate() - 1); cursor = prev.toISOString().split("T")[0]; }

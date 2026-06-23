@@ -66,6 +66,18 @@ function normalizePersonalPlan(plan) {
   };
 }
 
+function normalizeAssessments(assessments) {
+  if (!Array.isArray(assessments)) return [];
+  return assessments
+    .filter((assessment) => assessment && typeof assessment === "object")
+    .map((assessment) => ({
+      ...assessment,
+      zones: Array.isArray(assessment.zones) ? assessment.zones : [],
+      ts: assessment.ts ?? assessment.sourceSessionTs ?? Date.now(),
+    }))
+    .sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+}
+
 export function normalizeAppData(parsed = {}) {
   const compactParsed = compactAppDataForStorage(parsed);
   const rawMovementProfileHistory = Array.isArray(compactParsed.movementProfileHistory) ? compactParsed.movementProfileHistory : [];
@@ -80,6 +92,7 @@ export function normalizeAppData(parsed = {}) {
   return {
     ...DEFAULT_DATA,
     ...migratedParsed,
+    assessments: normalizeAssessments(migratedParsed.assessments),
     movementProfileHistory,
     personalRecoveryModel: normalizePersonalRecoveryModel(migratedParsed.personalRecoveryModel),
     prefs: {
@@ -165,6 +178,7 @@ function migrateAppDataSideConvention(data) {
       ? data.movementProfileHistory.map(migrateMovementProfileSideConvention)
       : [],
     sessions: Array.isArray(data.sessions) ? data.sessions.map(migrateSessionSideConvention) : [],
+    assessments: Array.isArray(data.assessments) ? data.assessments.map(migrateRecordProgressSideConvention) : [],
   };
 }
 
@@ -190,6 +204,7 @@ export function needsSideConventionMigration(data = {}) {
   if (data.sideConventionVersion !== APP_SIDE_CONVENTION_VERSION) return true;
   if (profileNeedsSideConventionMigration(data.movementProfile) || profileNeedsSideConventionMigration(data.initialMovementProfile)) return true;
   if (Array.isArray(data.movementProfileHistory) && data.movementProfileHistory.some(profileNeedsSideConventionMigration)) return true;
+  if (Array.isArray(data.assessments) && data.assessments.some(recordNeedsProgressSideConventionMigration)) return true;
   return Array.isArray(data.sessions) && data.sessions.some((session) => (
     recordNeedsProgressSideConventionMigration(session)
     || (Array.isArray(session.scores) && session.scores.some(recordNeedsProgressSideConventionMigration))

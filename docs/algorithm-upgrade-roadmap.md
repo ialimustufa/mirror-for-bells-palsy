@@ -20,9 +20,9 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
 - Phase 1 signal-quality work: started. Session records now include capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
 - Still pending in Phase 1: a pre-session quality setup UI, workerized MediaPipe inference, exercise-specific direction-vector tuning, and replay-calibrated threshold changes.
-- Phase 2 clinical-legibility work: started. Printable reports now include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, and conservative safety notes.
+- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
-- Still pending in Phases 2-5: standardized assessment records, resting asymmetry metrics, clinician bundle export packaging, validation dataset format, rollback/release gates, and full safety prompt coverage.
+- Still pending in Phases 2-5: deeper resting asymmetry metrics, clinician bundle export packaging, validation dataset format, rollback/release gates, and full safety prompt coverage.
 
 ## Product Features Worth Adding
 

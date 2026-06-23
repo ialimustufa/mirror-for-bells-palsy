@@ -480,6 +480,7 @@ function browserDataSummary(stores) {
   const sessionFrameSamples = recordArray(stores.sessionFrameSamples);
   return {
     sessions: recordArray(stores.sessions).length,
+    assessments: Array.isArray(appState?.assessments) ? appState.assessments.length : 0,
     sessionImages: sessionImages.length,
     sessionFrameSamples: sessionFrameSamples.length,
     journalEntries: Array.isArray(appState?.journal) ? appState.journal.length : 0,

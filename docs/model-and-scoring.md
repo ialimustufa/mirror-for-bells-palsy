@@ -765,6 +765,26 @@ advanced -> 115% reps, catalog holds, 2s rest
 Hold durations are clamped so advanced mode does not push longer sustained contractions by default.
 `SessionMode` reads `current.reps`, `current.holdSec`, and `current.restSec`, so scoring and timers follow the same session-specific dose shown in the UI.
 
+### Standard Assessment Records
+
+Standard assessments are saved separately from daily practice trend records. The
+assessment flow uses a fixed set of movements:
+
+```text
+eyebrow-raise, eye-close, open-smile, nose-wrinkle, pucker
+```
+
+Each assessment stores a compact summary in `assessments` with:
+
+- Rest section: whether a neutral calibration review image is available.
+- Voluntary movement sections grouped by brow/forehead, eye, midface/nose, and mouth zones.
+- Coactivation risk from quiet-region movement recorded during the assessment.
+- Source session timestamp so the original report and images can still be opened.
+
+Assessments are also saved as `kind: "assessment"` session records for local image
+hydration and PDF generation, but they do not count toward daily practice goals or
+practice streaks.
+
 ### Session Report Export
 
 `buildSessionReportHtml` converts a saved or just-completed session into a printable clinical review report.
@@ -773,6 +793,7 @@ The report includes:
 
 - Session date, time, duration, type, and comfort level.
 - Average session symmetry.
+- Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.

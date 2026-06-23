@@ -1,4 +1,5 @@
 import { COMFORT_DOSING } from "../domain/config";
+import { summarizeAssessmentSession } from "../domain/assessment";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
 import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel, progressUsesLegacySideConvention } from "../ml/faceMetrics";
@@ -41,7 +42,7 @@ function buildSessionReportHtml(s) {
   const overallPct = displayPct(s.sessionAvg);
   const overallColor = scoreColor(s.sessionAvg);
   const comfort = s.comfortLevel ? (COMFORT_DOSING[s.comfortLevel]?.label ?? s.comfortLevel) : null;
-  const sessionType = s.kind === "practice" ? "Practice run" : "Daily session";
+  const sessionType = s.kind === "assessment" ? "Standard assessment" : s.kind === "practice" ? "Practice run" : "Daily session";
   const baseline = usableProgress(s.baselineProgress);
   const initialBaseline = usableProgress(s.initialBaselineProgress);
   const movement = usableProgress(s.movementProgress);
@@ -49,6 +50,7 @@ function buildSessionReportHtml(s) {
   const scoresArr = s.scores || [];
   const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
   const diagnostics = summarizeSessionDiagnostics(s);
+  const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
   const quality = diagnostics.captureQuality;
   const diagnosticFlags = [
     quality ? `Capture quality: ${quality.label ?? quality.key} (${formatRatioPct(quality.validFrameRatio)} valid frames, ${quality.rejectedFrameCount ?? 0} rejected)` : null,
@@ -62,6 +64,27 @@ function buildSessionReportHtml(s) {
       ${diagnostics.captureQualityNote ? `<p>${escapeHtml(diagnostics.captureQualityNote)}</p>` : ""}
       ${diagnosticFlags.length ? `<ul>${diagnosticFlags.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
       ${diagnostics.safetyPrompts.length ? `<div class="safety">${diagnostics.safetyPrompts.map((item) => `<div>${escapeHtml(item)}</div>`).join("")}</div>` : ""}
+    </section>` : "";
+  const assessmentBlock = assessment ? `
+    <section class="assessment">
+      <h2>Standard Assessment Sections</h2>
+      <div class="assessment-grid">
+        <div>
+          <div class="assessment-label">Rest</div>
+          <div class="muted small">${assessment.resting.baselineSnapshotAvailable ? "Neutral calibration image captured for review." : "Neutral calibration was used for scoring; no review image is attached."}</div>
+        </div>
+        <div>
+          <div class="assessment-label">Voluntary movement</div>
+          <div class="muted small">${assessment.averageVoluntaryMovement == null ? "No aggregate voluntary movement score." : `${Math.round(assessment.averageVoluntaryMovement * 100)}% average across assessment zones.`}</div>
+        </div>
+        <div>
+          <div class="assessment-label">Coactivation</div>
+          <div class="muted small">${assessment.coactivationRisk ? `Quiet-region movement risk: ${escapeHtml(assessment.coactivationRisk)}.` : "No elevated quiet-region movement recorded."}</div>
+        </div>
+      </div>
+      <div class="zone-list">
+        ${assessment.zones.map((zone) => `<div><strong>${escapeHtml(zone.label)}</strong>: ${zone.voluntaryMovement == null ? "unscored" : `${Math.round(zone.voluntaryMovement * 100)}%`}${zone.coactivationRisk ? ` · quiet movement ${escapeHtml(zone.coactivationRisk)}` : ""}</div>`).join("")}
+      </div>
     </section>` : "";
 
   const exerciseRows = scoresArr.map((e, scoreIndex) => {
@@ -174,6 +197,11 @@ function buildSessionReportHtml(s) {
   .diagnostics ul { margin: 8px 0 0; padding-left: 18px; }
   .diagnostics li { margin: 3px 0; }
   .safety { margin-top: 10px; padding-top: 10px; border-top: 1px solid #E7E5E4; color: #8F3C2A; line-height: 1.5; }
+  .assessment { padding: 14px 16px; background: rgba(122,143,115,0.1); border: 1px solid rgba(122,143,115,0.24); border-radius: 10px; margin: 16px 0; font-size: 13px; color: #4A6B47; }
+  .assessment h2 { margin-top: 0; color: #4A6B47; }
+  .assessment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px; }
+  .assessment-label { font-weight: 700; color: #1F1B16; margin-bottom: 2px; }
+  .zone-list { margin-top: 12px; line-height: 1.6; }
   .exercise { padding: 16px 0; border-top: 1px solid #E7E5E4; }
   .exercise:first-of-type { border-top: none; }
   .ex-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -218,6 +246,7 @@ function buildSessionReportHtml(s) {
 
     ${movement ? `<div class="baseline"><strong>Current baseline progress:</strong> affected side · ${escapeHtml(movementProgressLabel(movement) ?? "")}</div>` : baseline ? `<div class="baseline"><strong>Current baseline progress:</strong> ${escapeHtml(baseline.side)} side · ${escapeHtml(baselineProgressLabel(baseline) ?? "")}</div>` : ""}
     ${initialMovement ? `<div class="baseline"><strong>Affected side:</strong> ${escapeHtml((movementProgressLabel(initialMovement) ?? "").replace("from baseline", "from first baseline"))}${movementBalanceLabel(initialMovement) ? `<br /><strong>Affected vs proper side:</strong> ${escapeHtml(movementBalanceLabel(initialMovement).replace(/^affected vs proper: /, ""))}` : ""}</div>` : initialBaseline ? `<div class="baseline"><strong>First baseline progress:</strong> ${escapeHtml(initialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(initialBaseline) ?? "")}</div>` : ""}
+    ${assessmentBlock}
     ${diagnosticsBlock}
 
     <h2>By Exercise</h2>
@@ -225,7 +254,7 @@ function buildSessionReportHtml(s) {
 
     <div class="footer">
       Symmetry is auto-detected from facial landmarks captured during the session. Some movement variation is normal even in healthy faces.
-      Generated for clinical review by a physiotherapist or facial retraining specialist.
+      Generated for clinical review by a physiotherapist or facial retraining specialist. Mirror metrics are practice feedback, not validated clinical grades.
     </div>
   </div>
   <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 250); });</script>

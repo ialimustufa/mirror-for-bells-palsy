@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus, Download, Upload } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
+import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC } from "../domain/assessment";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
@@ -267,7 +268,7 @@ function BaselineManagerPanel({ profile, onRedo, onReset }) {
   );
 }
 
-function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onStartProfile, onStartSession, onGo, onResetPersonalPlan }) {
+function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onStartProfile, onStartSession, onStartAssessment, onGo, onResetPersonalPlan }) {
   // Home is a derived dashboard: it summarizes today's stored records and maps the
   // configured daily goal into the next practice prompt.
   const todaysSessions = data.sessions.filter((s) => s.date === todayISO());
@@ -293,6 +294,11 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
     [planSessionExercises]
   );
   const planTargetRepCount = planSessionExercises.reduce((sum, ex) => sum + (ex.reps ?? 0), 0);
+  const assessmentExercises = STANDARD_ASSESSMENT_EXERCISE_IDS.map((id) => EXERCISES.find((exercise) => exercise.id === id)).filter(Boolean);
+  const assessmentDurationSec = assessmentExercises.reduce((sum, exercise) => sum + STANDARD_ASSESSMENT_REPS * exercise.holdSec + (STANDARD_ASSESSMENT_REPS + 1) * STANDARD_ASSESSMENT_REST_SEC, 0)
+    + Math.max(0, assessmentExercises.length - 1) * INTERSTITIAL_SEC;
+  const latestAssessment = [...(data.assessments ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))[0] ?? null;
+  const latestAssessmentDate = latestAssessment?.date ? formatSessionDate(latestAssessment) : null;
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -423,6 +429,32 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
           )}
         </div>
       )}
+      <div className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.56)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="text-sm font-semibold">Standard assessment</div>
+            <div className="text-xs text-stone-500 mt-0.5">{assessmentExercises.length} movements · {STANDARD_ASSESSMENT_REPS} reps each · ~{formatDuration(assessmentDurationSec)}</div>
+          </div>
+          {latestAssessment && (
+            <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ background: "rgba(122,143,115,0.16)", color: "#4A6B47" }}>
+              {latestAssessment.averageVoluntaryMovement != null ? `${Math.round(latestAssessment.averageVoluntaryMovement * 100)}%` : "saved"}
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-5 gap-1.5 mb-3">
+          {assessmentExercises.map((exercise) => (
+            <div key={exercise.id} title={exercise.name} className="rounded-xl py-2 flex items-center justify-center" style={{ background: "rgba(31,27,22,0.04)" }}>
+              <ExerciseGlyph exercise={exercise} size="xs" />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onStartAssessment} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+            <Play className="w-3.5 h-3.5 fill-current" />Start assessment
+          </button>
+          {latestAssessmentDate && <div className="text-xs text-stone-500">Last: {latestAssessmentDate}</div>}
+        </div>
+      </div>
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Streak" value={streak} unit={streak === 1 ? "day" : "days"} />
         <StatCard label="Today's symmetry" value={todaysAvgSymmetry != null ? `${displayPct(todaysAvgSymmetry)}` : "—"} unit={todaysAvgSymmetry != null ? "%" : "no data"} />
@@ -1536,7 +1568,8 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
   const sessionInitialMovement = isView ? usableProgress(session.initialMovementProgress) : initialMovementProgress;
   const effectiveKind = isView ? session.kind : kind;
   const isPractice = effectiveKind === "practice";
-  const nextFocus = sessionFocusRecommendation(scoresArr);
+  const isAssessment = effectiveKind === "assessment";
+  const nextFocus = isAssessment ? null : sessionFocusRecommendation(scoresArr);
   const nextFocusProgress = preferredMovementProgress(nextFocus) ?? preferredBaselineProgress(nextFocus);
   const overall = isView
     ? session.sessionAvg
@@ -1565,6 +1598,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
   const remainingAfter = Math.max(0, goal - sessionN);
   const nextSlot = remainingAfter > 0 ? nextSessionAt(goal, sessionN) : null;
   const message = (() => {
+    if (isAssessment) return "Assessment saved for comparison.";
     if (overall == null) return isView ? "Session recorded." : "Session done. Nicely steady work.";
     if (overall >= 0.85) return "Beautifully even today.";
     if (overall >= 0.7) return "Strong symmetric work.";
@@ -1580,7 +1614,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           <button onClick={onClose} className="self-start mb-4 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Close report"><X className="w-5 h-5" /></button>
         )}
         <div className="text-center mb-8">
-          <div className="text-xs uppercase tracking-widest opacity-60 mb-2">{isView ? formatSessionDate(session) : isPractice ? "Practice complete" : "Session complete"}</div>
+          <div className="text-xs uppercase tracking-widest opacity-60 mb-2">{isView ? formatSessionDate(session) : isAssessment ? "Assessment complete" : isPractice ? "Practice complete" : "Session complete"}</div>
           <h2 className="text-3xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>
             <em style={{ fontStyle: "italic", fontWeight: 400 }}>{message}</em>
           </h2>
@@ -1594,6 +1628,11 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           {!isView && isPractice && (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)" }}>
               <span className="opacity-80">Practice run · doesn't count toward daily goal</span>
+            </div>
+          )}
+          {!isView && isAssessment && (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)" }}>
+              <span className="opacity-80">Standard assessment · separate from daily practice</span>
             </div>
           )}
           {isView && session.duration != null && (
@@ -1753,6 +1792,50 @@ function PastSessionsList({ sessions, onOpen, onDelete }) {
         {sorted.map((s) => {
           const exCount = (s.exercises ?? s.scores ?? []).length;
           return <PastSessionRow key={s.id || s.ts || `${s.date}-${exCount}`} session={s} onOpen={onOpen} onDelete={onDelete} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
+  const zones = assessment.zones ?? [];
+  const quality = assessment.captureQuality;
+  const coactivation = assessment.coactivationRisk;
+  return (
+    <button
+      onClick={() => sourceSession && onOpen?.(sourceSession)}
+      disabled={!sourceSession}
+      className="w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left disabled:opacity-70"
+      style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}
+    >
+      <div className="text-xs text-stone-500 tabular-nums w-28 shrink-0">{formatSessionDate(assessment)}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm flex items-center gap-2">
+          <span>{zones.length} zone{zones.length !== 1 ? "s" : ""}</span>
+          {quality && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>{quality.label ?? quality.key}</span>}
+          {coactivation && coactivation !== "low" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${coactivationColor(coactivation)}22`, color: coactivationColor(coactivation) }}>quiet {coactivation}</span>}
+        </div>
+        <div className="text-xs text-stone-500">{assessment.averageVoluntaryMovement != null ? `${Math.round(assessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved"}</div>
+      </div>
+      {sourceSession ? <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" /> : <div className="text-xs text-stone-400 shrink-0">record only</div>}
+    </button>
+  );
+}
+
+function PastAssessmentsList({ assessments, sessions, onOpen }) {
+  const sorted = [...(assessments ?? [])].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 12);
+  if (!sorted.length) return null;
+  return (
+    <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+      <div className="text-sm font-semibold mb-3">Past assessments</div>
+      <div className="space-y-1.5">
+        {sorted.map((assessment) => {
+          const sourceSession = sessions.find((session) => (
+            (assessment.sourceSessionId && session.id === assessment.sourceSessionId)
+            || (assessment.sourceSessionTs && session.ts === assessment.sourceSessionTs)
+          ));
+          return <PastAssessmentRow key={assessment.sourceSessionId ?? assessment.sourceSessionTs ?? assessment.ts} assessment={assessment} sourceSession={sourceSession} onOpen={onOpen} />;
         })}
       </div>
     </div>
@@ -2128,8 +2211,10 @@ function BaselineView({ data, onStartProfile, onResetBaselines }) {
 function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onExportData, onImportData }) {
   // Progress charts are projections of journal/session history. Keeping them derived
   // avoids migration work when scoring or display rules change.
-  const totalSessions = data.sessions.length;
-  const last7DaysSessions = data.sessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
+  const practiceSessions = useMemo(() => data.sessions.filter((session) => session.kind !== "assessment"), [data.sessions]);
+  const assessments = useMemo(() => data.assessments ?? [], [data.assessments]);
+  const totalSessions = practiceSessions.length;
+  const last7DaysSessions = practiceSessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
   const personalModelDisabled = prefs.personalModelEnabled === false;
   const personalModel = personalModelDisabled ? null : data.personalRecoveryModel;
   const personalModelEntries = Object.values(personalModel?.exercises ?? {}).filter((entry) => entry.currentRatio != null);
@@ -2141,24 +2226,25 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
   const modelStatus = personalModelDisabled ? "disabled" : personalModel?.status ?? "collecting";
   const modelStatusColor = modelStatus === "high" ? "#7A8F73" : modelStatus === "medium" ? "#6E7F59" : modelStatus === "low" ? "#D4A574" : modelStatus === "disabled" ? "#A8A29E" : "#A8A29E";
   const journalChartData = useMemo(() => data.journal.length === 0 ? [] : data.journal.slice(-21).map((j) => ({ date: new Date(j.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), symmetry: j.symmetry })), [data.journal]);
-  const aiSymmetryData = useMemo(() => data.sessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [data.sessions]);
-  const baselineProgressData = useMemo(() => data.sessions.map((s) => {
+  const aiSymmetryData = useMemo(() => practiceSessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [practiceSessions]);
+  const assessmentTrendData = useMemo(() => assessments.filter((assessment) => assessment.averageVoluntaryMovement != null).slice(-21).map((assessment) => ({ date: new Date(assessment.date ?? assessment.ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: Math.round(assessment.averageVoluntaryMovement * 100) })), [assessments]);
+  const baselineProgressData = useMemo(() => practiceSessions.map((s) => {
     const progress = preferredMovementProgress(s) ?? preferredBaselineProgress(s);
     const ratio = progress?.affectedProgressRatio ?? progress?.ratio;
     return ratio == null ? null : { date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(ratio * 100) };
-  }).filter(Boolean).slice(-21), [data.sessions]);
+  }).filter(Boolean).slice(-21), [practiceSessions]);
   const activityGrid = useMemo(() => {
     const today = new Date(); const grid = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today); d.setDate(d.getDate() - i);
       const iso = d.toISOString().split("T")[0];
-      const daySessions = data.sessions.filter((s) => s.date === iso);
+      const daySessions = practiceSessions.filter((s) => s.date === iso);
       const symAvgs = daySessions.map((s) => s.sessionAvg).filter((v) => v != null);
       const dayAvg = symAvgs.length > 0 ? symAvgs.reduce((a, b) => a + b, 0) / symAvgs.length : null;
       grid.push({ date: iso, count: daySessions.length, avg: dayAvg });
     }
     return grid;
-  }, [data.sessions]);
+  }, [practiceSessions]);
 
   return (
     <div className="space-y-6">
@@ -2249,6 +2335,23 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           <div className="text-xs text-stone-500 mt-1">Complete a couple of sessions with the camera on to see your measured symmetry trend over time.</div>
         </div>
       )}
+      {assessmentTrendData.length > 1 && (
+        <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+          <div className="flex items-center gap-2 mb-1"><Check className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Standard assessment trend</div></div>
+          <div className="text-xs text-stone-500 mb-4">Separate from daily practice sessions</div>
+          <div style={{ width: "100%", height: 160 }}>
+            <ResponsiveContainer>
+              <AreaChart data={assessmentTrendData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                <defs><linearGradient id="assessmentGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7A8F73" stopOpacity={0.4} /><stop offset="100%" stopColor="#7A8F73" stopOpacity={0} /></linearGradient></defs>
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#7C7066" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, "dataMax + 20"]} tick={{ fontSize: 10, fill: "#7C7066" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#1F1B16", border: "none", borderRadius: 8, color: "#F4EFE6", fontSize: 12 }} formatter={(v) => [`${v}%`, "Assessment"]} />
+                <Area type="monotone" dataKey="score" stroke="#7A8F73" strokeWidth={2} fill="url(#assessmentGradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       {baselineProgressData.length > 0 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="flex items-center gap-2 mb-1"><TrendingUp className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Affected-side movement from first baseline</div></div>
@@ -2297,7 +2400,8 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           <span>Symmetric</span>
         </div>
       </div>
-      <PastSessionsList sessions={data.sessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
+      <PastAssessmentsList assessments={assessments} sessions={data.sessions} onOpen={onOpenReport} />
+      <PastSessionsList sessions={practiceSessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
       {journalChartData.length > 1 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="text-sm font-semibold mb-1">Self-rated symmetry</div>
