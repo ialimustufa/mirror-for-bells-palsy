@@ -27,7 +27,7 @@ This document collects the product behavior that used to live in the main README
 
 The main app route at `/` guides a user through camera setup, calibration, exercise preview, rest, hold, interstitial feedback, and summary. It can score holds when the model and camera are available, and it still supports unscored guided practice when they are not.
 
-Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends. When evidence coverage is sufficient, the assessment record also stores optional clinical-scale estimates for review; these remain Mirror estimates, not validated clinician grades.
+Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends. When evidence coverage is sufficient, the completion summary, assessment history, and report export show optional clinical-scale estimates for review; these remain Mirror estimates, not validated clinician grades.
 
 ## Safety Prompts
 

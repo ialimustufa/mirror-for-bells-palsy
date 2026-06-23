@@ -101,6 +101,39 @@ function progressSideLabel(progress) {
   return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
 }
 
+function clinicalScaleEstimateCards(scales) {
+  if (!scales) return [];
+  return [
+    scales.houseBrackmann ? {
+      key: "hb",
+      label: "House-Brackmann",
+      value: `Grade ${scales.houseBrackmann.grade}`,
+      sublabel: scales.houseBrackmann.label,
+    } : null,
+    scales.sunnybrook ? {
+      key: "sunnybrook",
+      label: "Sunnybrook",
+      value: `${Math.round(scales.sunnybrook.compositeScore)}/100`,
+      sublabel: `${scales.sunnybrook.voluntaryMovementScore} vol - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synk`,
+    } : null,
+    scales.eface ? {
+      key: "eface",
+      label: "eFACE-style",
+      value: `${Math.round(scales.eface.totalScore)}/100`,
+      sublabel: `${Math.round(scales.eface.staticScore)} static · ${Math.round(scales.eface.dynamicScore)} dynamic · ${Math.round(scales.eface.synkinesisScore)} synk`,
+    } : null,
+  ].filter(Boolean);
+}
+
+function compactClinicalScaleLabel(scales) {
+  if (!scales) return null;
+  return [
+    scales.houseBrackmann ? `HB ${scales.houseBrackmann.grade}` : null,
+    scales.sunnybrook ? `SB ${Math.round(scales.sunnybrook.compositeScore)}` : null,
+    scales.eface ? `eFACE ${Math.round(scales.eface.totalScore)}` : null,
+  ].filter(Boolean).join(" · ") || null;
+}
+
 function sourceSessionForAssessment(assessment, sessions = []) {
   if (!assessment) return null;
   return sessions.find((session) => (
@@ -320,9 +353,7 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
   const latestAssessment = assessmentWithClinicalScaleFallback(latestAssessmentRaw, sourceSessionForAssessment(latestAssessmentRaw, data.sessions));
   const latestAssessmentDate = latestAssessment?.date ? formatSessionDate(latestAssessment) : null;
   const latestClinicalScales = latestAssessment?.clinicalScales?.status === "estimated" ? latestAssessment.clinicalScales.scales : null;
-  const latestClinicalLabel = latestClinicalScales
-    ? `HB ${latestClinicalScales.houseBrackmann.grade} · SB ${Math.round(latestClinicalScales.sunnybrook.compositeScore)}`
-    : null;
+  const latestClinicalLabel = compactClinicalScaleLabel(latestClinicalScales);
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -1613,9 +1644,52 @@ function ExerciseDiagnosticsLine({ diagnostics }) {
   );
 }
 
+function ClinicalScaleEstimatePanel({ clinicalScales }) {
+  if (!clinicalScales) return null;
+  const estimated = clinicalScales.status === "estimated";
+  const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales) : [];
+  const coverage = clinicalScales.coverage;
+  return (
+    <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.24)" }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">Clinical scale estimates</div>
+          <div className="text-sm font-semibold mt-1">{estimated ? "Assessment-grade estimates available" : "Not enough assessment evidence"}</div>
+        </div>
+        <div className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: estimated ? "rgba(122,143,115,0.24)" : "rgba(212,165,116,0.16)", color: estimated ? "#D9E5D2" : "#F6D8B2" }}>
+          {estimated ? "Estimate" : "No scale"}
+        </div>
+      </div>
+      {estimated ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {cards.map((card) => (
+            <div key={card.key} className="rounded-xl p-3" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
+              <div className="text-[10px] uppercase tracking-wider opacity-50 mb-1">{card.label}</div>
+              <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{card.value}</div>
+              <div className="text-[11px] opacity-62 mt-1 leading-snug">{card.sublabel}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {(clinicalScales.reasons ?? ["insufficient assessment data"]).map((reason) => (
+            <div key={reason} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: "#F6D8B2" }}>
+              <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />{reason}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 text-[11px] leading-relaxed opacity-62">
+        {coverage ? `${coverage.usableMovementCount}/${coverage.requiredMovementCount} standard movements usable. ` : ""}
+        Mirror estimate only; not clinician-assigned, diagnostic, or treatment guidance.
+      </div>
+    </div>
+  );
+}
+
 // Dual-mode: live mode receives `scores` (in-progress array) + `onFinish`; view mode
 // receives a saved `session` record + `onClose`. Both render the same comprehensive report.
-function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
+function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, restingMetrics, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
   const isView = !!session;
   const scoresArr = isView ? (session.scores || []) : scores;
   const usableProgress = (progress) => progressUsesLegacySideConvention(progress) ? null : progress;
@@ -1643,10 +1717,12 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
     initialBaselineProgress: sessionInitialBaseline,
     movementProgress: sessionMovement,
     initialMovementProgress: sessionInitialMovement,
+    ...(restingMetrics ? { restingMetrics } : {}),
     scores: scoresArr,
     comfortLevel,
     kind: effectiveKind,
   };
+  const assessmentSummary = isAssessment ? summarizeAssessmentSession(reportSession) : null;
   const diagnostics = summarizeSessionDiagnostics(reportSession);
   const overallPct = displayPct(overall);
   const [timelapse, setTimelapse] = useState(null); // { exerciseIdx, startIdx }
@@ -1728,6 +1804,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           </div>
         )}
         <SessionDiagnosticsPanel diagnostics={diagnostics} />
+        {isAssessment && <ClinicalScaleEstimatePanel clinicalScales={assessmentSummary?.clinicalScales} />}
         {nextFocus && (
           <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.2)" }}>
             <div className="text-xs uppercase tracking-wider opacity-55 mb-2">Next focus</div>
@@ -1862,8 +1939,7 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
   const coactivation = displayAssessment.coactivationRisk;
   const restingAsymmetry = displayAssessment.resting?.averageAsymmetryRatio;
   const clinicalScales = displayAssessment.clinicalScales?.status === "estimated" ? displayAssessment.clinicalScales.scales : null;
-  const hb = clinicalScales?.houseBrackmann;
-  const sunnybrook = clinicalScales?.sunnybrook;
+  const clinicalLabel = compactClinicalScaleLabel(clinicalScales);
   return (
     <button
       onClick={() => sourceSession && onOpen?.(sourceSession)}
@@ -1882,8 +1958,7 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
           {[
             displayAssessment.averageVoluntaryMovement != null ? `${Math.round(displayAssessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved",
             Number.isFinite(restingAsymmetry) ? `${Math.round(restingAsymmetry * 100)}% rest asymmetry` : null,
-            hb ? `HB ${hb.grade}` : null,
-            sunnybrook ? `Sunnybrook ${Math.round(sunnybrook.compositeScore)}` : null,
+            clinicalLabel,
           ].filter(Boolean).join(" · ")}
         </div>
       </div>

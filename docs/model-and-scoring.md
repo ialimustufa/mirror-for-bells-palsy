@@ -890,7 +890,7 @@ The report includes:
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Resting asymmetry metrics for assessment reports when neutral calibration was available.
-- Clinical-scale estimate rows for assessment reports when the 80% evidence standard is met, or an insufficient-data reason when it is not.
+- Clinical-scale estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, or an insufficient-data reason when it is not.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
