@@ -130,6 +130,12 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.
 
+The release gate runs `npm run validation:status`, which verifies that referenced
+clinical-scale agreement reports exist and contain a passing observed-standard
+status, all three primary scale rows, Wilson interval reporting, and release
+control text. A status update that only changes counts or report paths without
+matching artifacts must fail the release check.
+
 ## References
 
 - House-Brackmann protocol summary: https://iowaprotocols.medicine.uiowa.edu/protocols/house-brackmann-facial-paralysis-scale

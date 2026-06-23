@@ -1058,6 +1058,14 @@ scores are not allowed. The app and printable report copy read this status throu
 `src/domain/clinicalScalePresentation.js`, so clinical-facing wording cannot be
 enabled by changing only a UI component.
 
+`npm run validation:status` validates both the status JSON and any referenced
+report artifacts. Clinical agreement report paths must point to Markdown reports
+with the Mirror clinical-scale agreement heading, a passing observed-standard
+status, primary House-Brackmann/Sunnybrook/eFACE rows, Wilson interval reporting,
+and release-control text. Threshold calibration report paths must point to JSON
+`mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
+matches the status claim.
+
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside
 peak-movement rep snapshots so the immediate PDF can show a side-by-side comparison.

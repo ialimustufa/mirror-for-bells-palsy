@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_STATUS_PATH = "docs/validation-status.json";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
+const PRIMARY_CLINICAL_SCALE_COUNT = 3;
 
 function assertCondition(condition, message) {
   if (!condition) throw new Error(message);
@@ -30,6 +31,62 @@ function assertClinicalScaleMinimumStandard(value) {
   );
   assertCondition(value.confidenceInterval === "wilson-95", "clinicalScaleMinimumStandard.confidenceInterval must be wilson-95");
   assertCondition(value.reviewProtocol === "docs/clinical-scale-review-protocol.md", "clinicalScaleMinimumStandard.reviewProtocol must reference docs/clinical-scale-review-protocol.md");
+}
+
+function assertTextMatches(text, pattern, artifactPath, description) {
+  assertCondition(pattern.test(text), `${artifactPath} must include ${description}`);
+}
+
+function integerFromMatch(text, pattern) {
+  const match = text.match(pattern);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isInteger(value) ? value : null;
+}
+
+function validateClinicalScaleAgreementReportText(text, artifactPath) {
+  assertTextMatches(text, /# Mirror Clinical Scale Agreement Report/i, artifactPath, "the Mirror clinical-scale agreement report heading");
+  assertTextMatches(text, /Status:\s*meets-clinical-scale-observed-standard/i, artifactPath, "a passing clinical-scale readiness status");
+  assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
+  assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
+  assertTextMatches(text, /eFACE total\s*\|/i, artifactPath, "eFACE total agreement row");
+  assertTextMatches(text, /Wilson/i, artifactPath, "Wilson confidence interval reporting");
+  assertTextMatches(text, /Reference standard:\s*blinded clinician-assigned/i, artifactPath, "the blinded clinician reference-standard statement");
+  assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
+  const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
+  const readyPrimaryScaleCount = integerFromMatch(text, /Ready primary scales:\s*(\d+)\/\d+/i);
+  return {
+    path: artifactPath,
+    reviewedClinicalScaleAssessmentCount,
+    readyPrimaryScaleCount,
+  };
+}
+
+function validateThresholdCalibrationReportText(text, artifactPath) {
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${artifactPath} must be a JSON threshold calibration report: ${error.message}`);
+  }
+  assertCondition(report?.kind === "mirror-threshold-calibration-report", `${artifactPath} must be a mirror-threshold-calibration-report`);
+  assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
+  assertNonNegativeInteger(report.summary.readyExercises, `${artifactPath}.summary.readyExercises`);
+  assertCondition(Array.isArray(report.exercises), `${artifactPath} must include an exercises array`);
+  assertTextMatches(report.note ?? "", /reviewed labels/i, artifactPath, "the reviewed-labels calibration note");
+  return {
+    path: artifactPath,
+    readyExerciseCount: report.summary.readyExercises,
+  };
+}
+
+async function readArtifactText(path, options = {}) {
+  if (options.readArtifactText) return options.readArtifactText(path);
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    throw new Error(`validation artifact not found or unreadable: ${path} (${error.message})`);
+  }
 }
 
 function validateStatus(status) {
@@ -73,10 +130,61 @@ function validateStatus(status) {
   return status;
 }
 
+async function validateStatusArtifacts(status, options = {}) {
+  validateStatus(status);
+  const clinicalAgreementReports = [];
+  for (const artifactPath of status.clinicalScaleAgreementReports) {
+    const text = await readArtifactText(artifactPath, options);
+    clinicalAgreementReports.push(validateClinicalScaleAgreementReportText(text, artifactPath));
+  }
+  const thresholdCalibrationReports = [];
+  for (const artifactPath of status.thresholdCalibrationReports) {
+    const text = await readArtifactText(artifactPath, options);
+    thresholdCalibrationReports.push(validateThresholdCalibrationReportText(text, artifactPath));
+  }
+  if (status.clinicalScaleAgreementReports.length > 0) {
+    const maxReviewedAssessments = Math.max(0, ...clinicalAgreementReports.map((report) => report.reviewedClinicalScaleAssessmentCount ?? 0));
+    const maxReadyPrimaryScales = Math.max(0, ...clinicalAgreementReports.map((report) => report.readyPrimaryScaleCount ?? 0));
+    assertCondition(
+      maxReviewedAssessments >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
+      "clinical scale agreement report artifacts must document reviewed assessment coverage meeting the minimum standard",
+    );
+    assertCondition(
+      maxReadyPrimaryScales >= PRIMARY_CLINICAL_SCALE_COUNT,
+      `clinical scale agreement report artifacts must document ${PRIMARY_CLINICAL_SCALE_COUNT}/${PRIMARY_CLINICAL_SCALE_COUNT} ready primary scales`,
+    );
+  }
+  if (status.productionThresholdConstantsCalibrated) {
+    const readyExerciseCount = thresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);
+    assertCondition(
+      readyExerciseCount >= status.readyExerciseCount,
+      "threshold calibration report artifacts must document ready exercise coverage matching validation status",
+    );
+  }
+  return {
+    status,
+    artifacts: {
+      clinicalAgreementReports,
+      thresholdCalibrationReports,
+    },
+  };
+}
+
+async function validateStatusFile(statusPath = DEFAULT_STATUS_PATH, options = {}) {
+  const status = validateStatus(JSON.parse(await readFile(statusPath, "utf8")));
+  return validateStatusArtifacts(status, options);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const statusPath = process.argv[2] ?? DEFAULT_STATUS_PATH;
-  const status = validateStatus(JSON.parse(await readFile(statusPath, "utf8")));
+  const { status } = await validateStatusFile(statusPath);
   console.log(`validation status: ${status.status} (${status.reviewedDatasetCount} reviewed datasets, ${status.reviewedFrameCount} reviewed frames, ${status.reviewedClinicalScaleAssessmentCount} reviewed clinical-scale assessments)`);
 }
 
-export { validateStatus };
+export {
+  validateClinicalScaleAgreementReportText,
+  validateStatus,
+  validateStatusArtifacts,
+  validateStatusFile,
+  validateThresholdCalibrationReportText,
+};

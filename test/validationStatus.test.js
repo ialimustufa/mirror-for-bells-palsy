@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateStatus } from "../scripts/validation-status-check.mjs";
+import { validateStatus, validateStatusArtifacts } from "../scripts/validation-status-check.mjs";
 
 const BASE_STATUS = {
   schemaVersion: 1,
@@ -21,6 +21,54 @@ const BASE_STATUS = {
   productionThresholdConstantsCalibrated: false,
   clinicalFacingScoresAllowed: false,
 };
+
+function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales = 3 } = {}) {
+  return `# Mirror Clinical Scale Agreement Report
+
+Generated: 2026-06-24T00:00:00.000Z
+Status: meets-clinical-scale-observed-standard
+Recommendation: allow-controlled-estimate-availability-after-human-review
+
+## Dataset Summary
+
+- Reviewed clinical-scale assessments: ${reviewedCount}
+- Ready primary scales: ${readyPrimaryScales}/3
+
+## Primary Scale Agreement
+
+| Scale | Tolerance | Labels | Missing estimates | Within tolerance | Agreement | Wilson interval | Mean absolute delta | Status |
+| --- | --- | ---: | ---: | ---: | ---: | --- | ---: | --- |
+| House-Brackmann | within one grade | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 0.5 | meets-observed-standard |
+| Sunnybrook composite | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
+| eFACE total | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
+
+## Reporting Checklist
+
+- Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
+- Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
+`;
+}
+
+function passingThresholdReport({ readyExercises = 5 } = {}) {
+  return JSON.stringify({
+    kind: "mirror-threshold-calibration-report",
+    generatedAt: "2026-06-24T00:00:00.000Z",
+    summary: {
+      exercises: readyExercises,
+      readyExercises,
+      needsMoreLabels: 0,
+    },
+    exercises: [],
+    note: "Recommendations require clinician/user/developer-reviewed labels and should be reviewed before changing production constants.",
+  });
+}
+
+function artifactReader(artifacts) {
+  return async (path) => {
+    if (Object.hasOwn(artifacts, path)) return artifacts[path];
+    throw new Error(`missing fixture: ${path}`);
+  };
+}
 
 test("validation status accepts explicit unvalidated tooling-ready state", () => {
   const status = validateStatus(BASE_STATUS);
@@ -54,6 +102,32 @@ test("validation status accepts documented clinical agreement state", () => {
     clinicalFacingScoresAllowed: true,
   });
   assert.equal(status.clinicalFacingScoresAllowed, true);
+});
+
+test("validation status artifacts accept documented clinical and calibration reports", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  const result = await validateStatusArtifacts(status, {
+    readArtifactText: artifactReader({
+      "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+      "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+    }),
+  });
+
+  assert.equal(result.status.clinicalFacingScoresAllowed, true);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
+  assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
 
 test("validation status rejects non-date updatedAt values", () => {
@@ -143,5 +217,51 @@ test("validation status rejects clinical agreement reports without reviewed asse
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     }),
     /reviewed clinical-scale assessment coverage/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports that do not meet the observed standard", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("Status: meets-clinical-scale-observed-standard", "Status: needs-reviewed-clinical-scale-data"),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /passing clinical-scale readiness status/,
+  );
+});
+
+test("validation status artifacts reject missing calibration artifact coverage", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "production-thresholds-calibrated",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    readyExerciseCount: 5,
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport({ readyExercises: 4 }),
+      }),
+    }),
+    /ready exercise coverage/,
   );
 });
