@@ -102,10 +102,18 @@ gate, not a universal clinical sample-size claim.
 If multiple reviewers label the same assessment:
 
 - Keep each raw reviewer sheet outside the production dataset until adjudication.
+- Run `npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv`
+  to compare reviewer labels and create an adjudication queue.
 - Resolve disagreements in a separate adjudicated sheet.
 - Document the adjudication rule in the readiness report notes.
 - Do not mix raw reviewer rows and adjudicated rows for the same assessment in a
   single readiness dataset.
+
+The reviewer-agreement report uses the same tolerance targets as the clinical
+validation gate: House-Brackmann within one grade, Sunnybrook composite within
+10 points, and eFACE totals/domains within 10 points. The adjudication sheet keeps
+both raw reviewer values in audit columns and leaves the mergeable target columns
+blank until a consensus label is entered.
 
 ## Required Artifacts Before Enabling Clinical-Facing Scores
 

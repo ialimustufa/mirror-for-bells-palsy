@@ -976,6 +976,7 @@ Run:
 ```bash
 npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
+npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv
 npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
@@ -1042,6 +1043,13 @@ report. It records the dataset summary, primary-scale agreement table, Wilson
 confidence intervals, missing estimate counts, blocking reasons, and a sample of
 out-of-tolerance assessment rows for adjudication. The report is designed for the
 release reviewer to attach under `docs/validation/` before any status update.
+
+When two clinicians review the same blinded clinical-scale labels, the
+reviewer-agreement command compares the two CSVs before merge. It reports
+per-scale paired counts, exact agreement, tolerance-based agreement, missing
+labels, and disagreement rows. When an adjudication output path is provided, it
+writes a CSV with both raw reviewer values preserved in audit columns and blank
+target columns for the final consensus label.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset

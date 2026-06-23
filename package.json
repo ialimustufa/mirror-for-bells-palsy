@@ -11,6 +11,7 @@
     "validate:dataset": "node --import ./scripts/register-extensionless-loader.mjs scripts/evaluate-validation-dataset.mjs",
     "validation:label-sheet": "node scripts/export-validation-label-sheet.mjs",
     "validation:merge-labels": "node scripts/merge-validation-labels.mjs",
+    "validation:reviewer-agreement": "node --import ./scripts/register-extensionless-loader.mjs scripts/compare-clinical-reviewer-labels.mjs",
     "validation:calibrate-thresholds": "node --import ./scripts/register-extensionless-loader.mjs scripts/calibrate-thresholds.mjs",
     "validation:model-readiness": "node --import ./scripts/register-extensionless-loader.mjs scripts/evaluate-model-readiness.mjs",
     "validation:clinical-readiness": "node --import ./scripts/register-extensionless-loader.mjs scripts/evaluate-clinical-scale-readiness.mjs",
