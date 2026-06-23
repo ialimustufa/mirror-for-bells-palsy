@@ -8,6 +8,12 @@ const SETUP_LABELS = {
   collecting: "Checking setup",
 };
 
+const OCCLUSION_RISK_LABELS = {
+  low: "Low",
+  possible: "Possible",
+  likely: "Likely",
+};
+
 function compactNumber(value, digits = 4) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 }
@@ -47,6 +53,35 @@ function fpsScore(fps) {
   return 0.35;
 }
 
+function summarizeOcclusionRisk({ facePresenceRatio, alignmentRatio, meanBrightness, meanContrast }) {
+  let score = 0;
+  const signals = [];
+  if (Number.isFinite(facePresenceRatio) && facePresenceRatio < 0.85) {
+    score += facePresenceRatio < 0.65 ? 0.35 : 0.2;
+    signals.push("partial-face");
+  }
+  if (Number.isFinite(alignmentRatio) && alignmentRatio < 0.75) {
+    score += alignmentRatio < 0.55 ? 0.25 : 0.12;
+    signals.push("off-center-face");
+  }
+  if (Number.isFinite(meanBrightness) && (meanBrightness < 0.18 || meanBrightness > 0.9)) {
+    score += 0.22;
+    signals.push(meanBrightness > 0.9 ? "glare-or-backlighting" : "too-dark");
+  }
+  if (Number.isFinite(meanContrast) && meanContrast < 0.08) {
+    score += 0.25;
+    signals.push("low-face-contrast");
+  }
+  const compactScore = compactNumber(clamp01(score));
+  const key = compactScore >= 0.45 ? "likely" : compactScore >= 0.22 ? "possible" : "low";
+  return {
+    key,
+    label: OCCLUSION_RISK_LABELS[key],
+    score: compactScore,
+    signals,
+  };
+}
+
 function setupKey(score, sampleCount) {
   if (sampleCount < Math.min(8, SETUP_SAMPLE_TARGET)) return "collecting";
   if (score >= 0.82) return "strong";
@@ -68,6 +103,7 @@ function setupActionItems(summary) {
   if ((summary.stableFrameRatio ?? 0) < 0.65) items.push("Hold the phone/camera steadier before calibration.");
   if (Number.isFinite(summary.meanBrightness) && summary.meanBrightness < 0.28) items.push("Add light to your face before starting.");
   if (Number.isFinite(summary.meanBrightness) && summary.meanBrightness > 0.84) items.push("Reduce glare or bright backlighting.");
+  if (summary.occlusionRisk?.key === "likely") items.push("Reduce glare or move hair/glasses away from the face outline.");
   if (Number.isFinite(summary.meanEyeDistance) && summary.meanEyeDistance < 0.26) items.push("Move closer to the camera.");
   if (Number.isFinite(summary.meanEyeDistance) && summary.meanEyeDistance > 0.48) items.push("Move slightly farther from the camera.");
   if (Number.isFinite(summary.fps) && summary.fps < 10) items.push("Close other apps or improve lighting for smoother tracking.");
@@ -87,6 +123,7 @@ function summarizeCaptureSetupQuality(samples = []) {
   const meanContrast = mean(validSamples.map((sample) => sample.contrast));
   const meanEyeDistance = mean(faceSamples.map((sample) => sample.eyeDistance));
   const fps = setupFps(validSamples);
+  const occlusionRisk = summarizeOcclusionRisk({ facePresenceRatio, alignmentRatio, meanBrightness, meanContrast });
   const score = sampleCount
     ? clamp01(
       (facePresenceRatio ?? 0) * 0.25
@@ -112,6 +149,7 @@ function summarizeCaptureSetupQuality(samples = []) {
     meanContrast: compactNumber(meanContrast),
     meanEyeDistance: compactNumber(meanEyeDistance),
     fps: compactNumber(fps, 2),
+    occlusionRisk,
     ready: sampleCount >= SETUP_SAMPLE_TARGET && key !== "collecting",
   };
   return {

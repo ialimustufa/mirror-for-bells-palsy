@@ -823,9 +823,11 @@ not create a clinical score. It records a compact `setupQuality` summary with:
 - Approximate camera FPS.
 - Small-frame brightness and contrast.
 - Eye-distance proxy for camera distance.
+- Occlusion/glare risk proxy from face presence, alignment, brightness, and contrast.
 
 The setup quality appears in session diagnostics and reports so weak lighting,
-distance, or camera stability can be separated from true movement change.
+distance, occlusion/glare risk, or camera stability can be separated from true
+movement change.
 
 ### Standard Assessment Records
 

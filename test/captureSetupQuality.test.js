@@ -21,6 +21,7 @@ test("capture setup quality marks stable centered capture as strong", () => {
   assert.equal(summary.key, "strong");
   assert.equal(summary.ready, true);
   assert.equal(summary.actionItems.length, 0);
+  assert.equal(summary.occlusionRisk.key, "low");
   assert.ok(summary.score >= 0.82);
   assert.ok(summary.fps >= 18);
 });
@@ -38,6 +39,17 @@ test("capture setup quality reports actionable weak setup causes", () => {
   assert.equal(summary.ready, true);
   assert.ok(summary.actionItems.includes("Center your face and keep your eyes level."));
   assert.ok(summary.actionItems.some((item) => item.includes("light")));
+});
+
+test("capture setup quality reports likely glare or occlusion risk", () => {
+  const summary = summarizeCaptureSetupQuality(samples(SETUP_SAMPLE_TARGET, {
+    brightness: 0.94,
+    contrast: 0.04,
+  }));
+
+  assert.equal(summary.occlusionRisk.key, "likely");
+  assert.deepEqual(summary.occlusionRisk.signals, ["glare-or-backlighting", "low-face-contrast"]);
+  assert.ok(summary.actionItems.some((item) => item.includes("glare")));
 });
 
 test("capture setup quality stays collecting before enough samples", () => {

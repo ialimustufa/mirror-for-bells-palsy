@@ -18,7 +18,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 ## Implementation Status
 
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
-- Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
+- Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality with occlusion/glare risk, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
 - Still pending in Phase 1: collect reviewed validation datasets and use threshold calibration reports to decide production constant changes.
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses; it downweights weak capture quality and coactivation risk, and adaptive plans now avoid boosting stale/fatigue contexts or high-risk recent evidence.
@@ -172,7 +172,7 @@ Goal: reduce false progress and false no-score states.
 Work:
 
 - Move MediaPipe inference into a Web Worker because the official web guide notes that `detect()` and `detectForVideo()` are synchronous and block the UI thread. Status: implemented with a main-thread fallback for browsers without worker bitmap support.
-- Add pose, occlusion, and landmark-stability quality scores.
+- Add pose, occlusion, and landmark-stability quality scores. Status: setup quality records centered/level alignment, landmark stability, and an occlusion/glare risk proxy from face presence, brightness, and contrast.
 - Tune calibration quality thresholds using the stricter core landmarks already captured by `coreAvgNoise`.
 - Add exercise-specific direction vectors for smile, pucker, cheek puff/suck, eye closure, and vowels instead of relying only on generic displacement magnitude. Status: implemented for those families with movement-specific neutral jitter keys.
 - Add quiet-region movement penalties for the first synkinesis-aware feedback.
