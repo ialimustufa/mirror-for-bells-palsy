@@ -1923,6 +1923,22 @@ function activationThresholdForExercise(exerciseId, peak) {
   return roundMetric(Math.max(peak * 0.35, 0.004));
 }
 
+function thresholdBandsForExercise(exerciseId, peak) {
+  const baselineTarget = roundMetric(peak);
+  if (NOSE_EXERCISES.has(exerciseId)) {
+    return {
+      minimumVisible: roundMetric(Math.max(peak * 0.15, NOSE_PROFILE_THRESHOLD_FLOOR * 0.6)),
+      reliableMovement: activationThresholdForExercise(exerciseId, peak),
+      baselineTarget,
+    };
+  }
+  return {
+    minimumVisible: roundMetric(Math.max(peak * 0.2, 0.002)),
+    reliableMovement: activationThresholdForExercise(exerciseId, peak),
+    baselineTarget,
+  };
+}
+
 function effectiveProfileThreshold(exerciseId, threshold) {
   if (threshold == null) return null;
   if (NOSE_EXERCISES.has(exerciseId)) return Math.min(threshold, NOSE_PROFILE_THRESHOLD_MAX);
@@ -1938,6 +1954,7 @@ function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatri
     const leftPeak = stat.leftPeak ?? 0;
     const rightPeak = stat.rightPeak ?? 0;
     const peak = Math.max(leftPeak, rightPeak);
+    const thresholdBands = thresholdBandsForExercise(stat.exerciseId, peak);
     exercises[stat.exerciseId] = {
       exerciseId: stat.exerciseId,
       name: stat.name,
@@ -1958,7 +1975,8 @@ function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatri
       leftPeakMovement: roundMetric(leftPeak),
       rightPeakMovement: roundMetric(rightPeak),
       initialSymmetry: symmetryBaseline == null ? null : roundMetric(symmetryBaseline),
-      activationThreshold: activationThresholdForExercise(stat.exerciseId, peak),
+      activationThreshold: thresholdBands.reliableMovement,
+      thresholdBands,
       limitedSide: inferLimitedSide(leftPeak, rightPeak),
     };
   }
@@ -2669,6 +2687,7 @@ export {
   SCORING_MODEL_VERSION,
   SCORING_NOISE_MODES,
   activationThresholdForExercise,
+  thresholdBandsForExercise,
   averageFacialTransformationMatrix,
   averageBlendshapes,
   averageLandmarks,

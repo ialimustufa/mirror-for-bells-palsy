@@ -59,10 +59,27 @@ function evaluateValidationFrameSamples(samples = [], options = {}) {
   let trueNegative = 0;
   let falsePositive = 0;
   let falseNegative = 0;
+  const thresholdBandCounts = {
+    withBands: 0,
+    aboveMinimumVisible: 0,
+    aboveReliableMovement: 0,
+    aboveBaselineTarget: 0,
+    belowMinimumVisible: 0,
+  };
   for (const frame of replay.frames) {
     const expectedPositive = labels.get(frameKey(frame));
     if (expectedPositive == null) continue;
     labeledFrameCount += 1;
+    if (frame.thresholdBands && Number.isFinite(frame.bandPeak)) {
+      thresholdBandCounts.withBands += 1;
+      const minimumVisible = frame.thresholdBands.minimumVisible;
+      const reliableMovement = frame.thresholdBands.reliableMovement;
+      const baselineTarget = frame.thresholdBands.baselineTarget;
+      if (Number.isFinite(minimumVisible) && frame.bandPeak >= minimumVisible) thresholdBandCounts.aboveMinimumVisible += 1;
+      if (Number.isFinite(reliableMovement) && frame.bandPeak >= reliableMovement) thresholdBandCounts.aboveReliableMovement += 1;
+      if (Number.isFinite(baselineTarget) && frame.bandPeak >= baselineTarget) thresholdBandCounts.aboveBaselineTarget += 1;
+      if (Number.isFinite(minimumVisible) && frame.bandPeak < minimumVisible) thresholdBandCounts.belowMinimumVisible += 1;
+    }
     if (expectedPositive && frame.replayScored) truePositive += 1;
     else if (!expectedPositive && !frame.replayScored) trueNegative += 1;
     else if (!expectedPositive && frame.replayScored) falsePositive += 1;
@@ -85,6 +102,7 @@ function evaluateValidationFrameSamples(samples = [], options = {}) {
       falsePositiveRate: compactRate(falsePositive, negativeCount),
       falseNegativeRate: compactRate(falseNegative, positiveCount),
       meanAbsScoreDelta: replay.meanAbsScoreDelta,
+      thresholdBandCounts,
     },
   };
 }

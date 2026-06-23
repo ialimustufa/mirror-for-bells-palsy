@@ -51,7 +51,12 @@ test("validation evaluation reports labeled replay accuracy and error rates", ()
       landmarks: smile,
       blendshapes: {},
       scoringNoiseMode: "normal",
-      scoring: { activated: true, rawSymmetry: 1 },
+      scoring: {
+        activated: true,
+        rawSymmetry: 1,
+        peak: 0.024,
+        thresholdBands: { minimumVisible: 0.004, reliableMovement: 0.007, baselineTarget: 0.02 },
+      },
       label: { quality: "strong", visibleMovementLevel: "moderate" },
     },
     {
@@ -65,7 +70,12 @@ test("validation evaluation reports labeled replay accuracy and error rates", ()
       landmarks: neutral,
       blendshapes: {},
       scoringNoiseMode: "normal",
-      scoring: { activated: false, dropReason: "below-signal-gate" },
+      scoring: {
+        activated: false,
+        peak: 0,
+        dropReason: "below-signal-gate",
+        thresholdBands: { minimumVisible: 0.004, reliableMovement: 0.007, baselineTarget: 0.02 },
+      },
       label: { quality: "strong", visibleMovementLevel: "none" },
     },
   ];
@@ -79,6 +89,13 @@ test("validation evaluation reports labeled replay accuracy and error rates", ()
   assert.equal(result.validation.falsePositiveRate, 0);
   assert.equal(result.validation.falseNegativeRate, 0);
   assert.equal(result.validation.accuracy, 1);
+  assert.deepEqual(result.validation.thresholdBandCounts, {
+    withBands: 2,
+    aboveMinimumVisible: 1,
+    aboveReliableMovement: 1,
+    aboveBaselineTarget: 1,
+    belowMinimumVisible: 1,
+  });
 });
 
 test("validation evaluation extracts frame records from JSONL records", () => {

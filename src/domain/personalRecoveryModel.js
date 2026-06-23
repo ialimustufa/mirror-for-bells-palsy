@@ -94,11 +94,12 @@ function sampleWeight(session, score, progress, profileExercise) {
   const coactivationRisk = features?.coactivation?.risk ?? score?.coactivation?.risk;
   if (coactivationRisk === "high") weight *= 0.75;
   else if (coactivationRisk === "medium") weight *= 0.9;
+  const reliableThreshold = features?.profileThreshold ?? features?.thresholdBands?.reliableMovement;
   if (
     Number.isFinite(features?.activationPeak)
-    && Number.isFinite(features?.profileThreshold)
-    && features.profileThreshold > 0
-    && features.activationPeak < features.profileThreshold
+    && Number.isFinite(reliableThreshold)
+    && reliableThreshold > 0
+    && features.activationPeak < reliableThreshold
   ) {
     weight *= 0.5;
   }

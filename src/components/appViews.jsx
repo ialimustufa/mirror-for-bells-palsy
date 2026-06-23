@@ -2184,7 +2184,9 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
             <ExerciseGlyph exerciseId={ex.exerciseId} region={ex.region} size="xs" tone="dark" />
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{ex.name}</div>
-              <div className="opacity-55">limited side: {ex.limitedSide} · threshold {ex.activationThreshold ?? "—"}</div>
+              <div className="opacity-55">
+                limited side: {ex.limitedSide} · reliable {ex.thresholdBands?.reliableMovement ?? ex.activationThreshold ?? "—"} · target {ex.thresholdBands?.baselineTarget ?? "—"}
+              </div>
               {ex.quality && <div className="opacity-55">quality: {ex.quality.label}{ex.quality.issues?.length ? ` · ${ex.quality.issues.join(", ")}` : ""}</div>}
               {progressByExercise?.[ex.exerciseId] && <div className="mt-0.5" style={{ color: "#D4A574" }}>{progressSummaryLabel(progressByExercise[ex.exerciseId])}</div>}
             </div>

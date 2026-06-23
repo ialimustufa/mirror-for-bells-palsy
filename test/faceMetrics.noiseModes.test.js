@@ -6,6 +6,7 @@ import {
   computeNoiseFloor,
   normalizeScoringNoiseMode,
   scoringOptionsFrom,
+  thresholdBandsForExercise,
 } from "../src/ml/faceMetrics.js";
 
 const MIDLINE = [1, 2, 4, 5, 195, 197];
@@ -169,6 +170,25 @@ test("movement profiles tag scoring mode and save compact directional noise", ()
   assert.equal(profile.scoringNoiseMode, "soft");
   assert.ok(Array.isArray(profile.noiseFloor.values));
   assert.deepEqual(profile.noiseFloor.directional.browGap, { left: 0.001234, right: 0.001111 });
+  assert.deepEqual(profile.exercises["eyebrow-raise"].thresholdBands, {
+    minimumVisible: 0.003,
+    reliableMovement: 0.0052,
+    baselineTarget: 0.015,
+  });
+  assert.equal(profile.exercises["eyebrow-raise"].activationThreshold, profile.exercises["eyebrow-raise"].thresholdBands.reliableMovement);
+});
+
+test("threshold bands separate minimum visible, reliable, and baseline target movement", () => {
+  assert.deepEqual(thresholdBandsForExercise("closed-smile", 0.02), {
+    minimumVisible: 0.004,
+    reliableMovement: 0.007,
+    baselineTarget: 0.02,
+  });
+  assert.deepEqual(thresholdBandsForExercise("nose-wrinkle", 0.006), {
+    minimumVisible: 0.0009,
+    reliableMovement: 0.0015,
+    baselineTarget: 0.006,
+  });
 });
 
 test("scoring mode normalization falls back to normal", () => {

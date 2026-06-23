@@ -67,6 +67,15 @@ function replayFrameSamples(samples = [], options = {}) {
     const replayScored = diagnostic.scored === true;
     const storedScore = Number.isFinite(stored.rawSymmetry) ? stored.rawSymmetry : null;
     const replayScore = Number.isFinite(diagnostic.result?.symmetry) ? diagnostic.result.symmetry : null;
+    const storedPeak = Number.isFinite(stored.peak) ? stored.peak : null;
+    const replayPeak = Number.isFinite(diagnostic.result?.peak) ? diagnostic.result.peak : null;
+    const bandPeak = replayPeak ?? storedPeak;
+    const thresholdBands = stored.thresholdBands ?? sample.thresholdBands ?? null;
+    const thresholdMargins = thresholdBands && bandPeak != null ? {
+      minimumVisible: Number.isFinite(thresholdBands.minimumVisible) ? Number((bandPeak - thresholdBands.minimumVisible).toFixed(5)) : null,
+      reliableMovement: Number.isFinite(thresholdBands.reliableMovement) ? Number((bandPeak - thresholdBands.reliableMovement).toFixed(5)) : null,
+      baselineTarget: Number.isFinite(thresholdBands.baselineTarget) ? Number((bandPeak - thresholdBands.baselineTarget).toFixed(5)) : null,
+    } : null;
     frames.push({
       id: sample.id ?? null,
       sessionId: sample.sessionId ?? null,
@@ -80,7 +89,12 @@ function replayFrameSamples(samples = [], options = {}) {
       replayDropReason: diagnostic.dropReason,
       storedScore,
       replayScore,
+      storedPeak,
+      replayPeak,
+      bandPeak,
       scoreDelta: storedScore != null && replayScore != null ? replayScore - storedScore : null,
+      thresholdBands,
+      thresholdMargins,
       calibrationSampleCount: calibration?.sampleCount ?? 0,
     });
   }

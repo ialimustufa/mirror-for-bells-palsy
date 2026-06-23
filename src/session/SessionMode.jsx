@@ -31,6 +31,16 @@ function profileActivationThreshold(profile, exerciseId) {
   return effectiveProfileThreshold(exerciseId, getProfileExercise(profile, exerciseId)?.activationThreshold) ?? null;
 }
 
+function profileThresholdBands(profile, exerciseId) {
+  const bands = getProfileExercise(profile, exerciseId)?.thresholdBands;
+  if (!bands || typeof bands !== "object") return null;
+  return {
+    minimumVisible: compactNumber(bands.minimumVisible),
+    reliableMovement: compactNumber(effectiveProfileThreshold(exerciseId, bands.reliableMovement)),
+    baselineTarget: compactNumber(bands.baselineTarget),
+  };
+}
+
 function hasRetakeGate(tracking, exerciseId) {
   return tracking.exerciseId === exerciseId && tracking.threshold != null;
 }
@@ -278,6 +288,7 @@ function movementFeaturesFromHold({
   holdObservedFrames,
   activationPeak,
   profileThreshold,
+  thresholdBands,
   scoringNoiseMode,
   scoreValues,
   dropReasonCounts,
@@ -305,6 +316,7 @@ function movementFeaturesFromHold({
     coactivation: summarizeCoactivation(coactivationSamples),
     alignedFrameRatio: compactNumber(alignedFrameRatio, 4),
     profileThreshold: compactNumber(profileThreshold),
+    thresholdBands,
     scoringNoiseMode,
   };
 }
@@ -347,6 +359,7 @@ function summarizeMovementFeatures(features = []) {
     coactivation: summarizeCoactivation(valid.map((item) => item.coactivation).filter(Boolean)),
     alignedFrameRatio: totalHoldFrames > 0 ? compactNumber(alignedFrames / totalHoldFrames, 4) : null,
     profileThreshold: weightedAverage("profileThreshold"),
+    thresholdBands: valid.find((item) => item.thresholdBands)?.thresholdBands ?? null,
     scoringNoiseMode: valid[0].scoringNoiseMode,
     reps: valid.length,
   };
@@ -764,6 +777,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           holdObservedFrames: holdObservedFrameCountRef.current,
           activationPeak: holdActivationPeakRef.current,
           profileThreshold: profileActivationThreshold(movementProfile, current.id),
+          thresholdBands: profileThresholdBands(movementProfile, current.id),
           scoringNoiseMode,
           scoreValues: holdScoreValuesRef.current,
           dropReasonCounts: holdDropReasonCountsRef.current,
@@ -989,6 +1003,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               if (symResult != null) {
                 const profileExercise = getProfileExercise(movementProfile, current.id);
                 const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                const thresholdBands = profileThresholdBands(movementProfile, current.id);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
                 const coactivation = computeQuietRegionCoactivation(current.id, lm, neutralRef.current, noiseRef.current, facialTransformationMatrix, neutralMatrixRef.current, symResult.peak, scoringOptions);
                 if (coactivation) holdCoactivationRef.current = [...holdCoactivationRef.current, coactivation];
@@ -999,6 +1014,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                   rightDisp: compactNumber(symResult.rightDisp),
                   peak: compactNumber(symResult.peak),
                   profileThreshold: compactNumber(profileThreshold),
+                  thresholdBands,
                   activated,
                   dropReason: activated ? null : SCORE_DROP_REASONS.belowActivationThreshold,
                   normalizationMethod: scoringDiagnostic.normalizationMethod,
@@ -1069,10 +1085,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               } else {
                 const profileExercise = getProfileExercise(movementProfile, current.id);
                 const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                const thresholdBands = profileThresholdBands(movementProfile, current.id);
                 captureScoring = {
                   scoringModelVersion: SCORING_MODEL_VERSION,
                   activated: false,
                   profileThreshold: compactNumber(profileThreshold),
+                  thresholdBands,
                   reason: scoringDiagnostic.dropReason ?? SCORE_DROP_REASONS.noSymmetryResult,
                   dropReason: scoringDiagnostic.dropReason ?? SCORE_DROP_REASONS.noSymmetryResult,
                   normalizationMethod: scoringDiagnostic.normalizationMethod,

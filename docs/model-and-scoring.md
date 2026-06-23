@@ -637,23 +637,34 @@ For each assessment exercise, Mirror stores user/anatomical side metrics:
 - Peak user-right movement.
 - Average symmetry during the hold.
 - Estimated limited side.
-- A personalized activation threshold.
+- Personalized threshold bands.
 
-The activation threshold is currently heuristic:
+The profile now stores per-exercise threshold bands:
 
 ```text
-activationThreshold = max(max(left_peak, right_peak) * 0.35, 0.004)
+minimumVisible   = max(max(left_peak, right_peak) * 0.20, 0.002)
+reliableMovement = max(max(left_peak, right_peak) * 0.35, 0.004)
+baselineTarget   = max(left_peak, right_peak)
 ```
+
+`activationThreshold` is retained as a compatibility alias for
+`thresholdBands.reliableMovement`, which is still the threshold used by live
+sessions to decide whether a hold-frame movement is strong enough to count.
 
 Nostril flare uses a lower nose-specific threshold because its face-local movement is
 much smaller than smile, brow, or cheek exercises. New nose baselines use:
 
 ```text
-activationThreshold = max(max(left_peak, right_peak) * 0.25, NOSE_PROFILE_THRESHOLD_FLOOR)
+minimumVisible   = max(max(left_peak, right_peak) * 0.15, NOSE_PROFILE_THRESHOLD_FLOOR * 0.6)
+reliableMovement = max(max(left_peak, right_peak) * 0.25, NOSE_PROFILE_THRESHOLD_FLOOR)
+baselineTarget   = max(left_peak, right_peak)
 ```
 
 During sessions, existing saved nose profiles are capped at `NOSE_PROFILE_THRESHOLD_MAX`
-so older generic `0.004` thresholds do not block real nostril-flare frames.
+so older generic `0.004` thresholds do not block real nostril-flare frames. New
+session movement features and frame-sample scoring payloads store the threshold
+bands alongside `profileThreshold`, making replay exports auditable against
+minimum-visible, reliable, and baseline-target movement levels.
 
 This gives future sessions a user-specific movement scale instead of relying only on global constants.
 
@@ -934,7 +945,9 @@ scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
 mean absolute stored-vs-replayed score drift. Frames labeled with
 `visibleMovementLevel: "none"` are treated as negative examples; `trace`, `low`, `moderate`, and `strong`
 are treated as positive examples unless the label quality is `unusable` or
-`uncertain`.
+`uncertain`. When frame samples contain threshold bands, the evaluator also reports
+how many labeled frames landed above minimum-visible, reliable, and baseline-target
+movement, plus how many stayed below minimum-visible movement.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

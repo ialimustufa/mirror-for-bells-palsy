@@ -405,6 +405,11 @@ test("sub-threshold activation downweights samples to low confidence", () => {
   assert.equal(model.exercises["closed-smile"].confidence, "low");
 });
 
+test("sub-reliable threshold band activation downweights samples", () => {
+  const model = sixDays({ validScoredFrameCount: 10, activationPeak: 0.001, thresholdBands: { reliableMovement: 0.01 } });
+  assert.equal(model.exercises["closed-smile"].confidence, "low");
+});
+
 test("alignment, soft mode, and retake quality combine to low confidence", () => {
   const model = sixDays(
     { validScoredFrameCount: 10, alignedFrameRatio: 0.2, scoringNoiseMode: "soft" },
