@@ -93,6 +93,7 @@ test("personal recovery model detects improving affected-side trend", () => {
 
   assert.ok(entry.currentRatio > entry.baselineRatio);
   assert.ok(entry.trendSlopePctPerWeek > 0);
+  assert.equal(entry.trendStatus, "improving");
   assert.notEqual(entry.confidence, "collecting");
 });
 
@@ -216,6 +217,10 @@ test("normalize preserves trained balance, staleness, and legacy fields", () => 
   assert.equal(normEntry.baselineBalanceRatio, entry.baselineBalanceRatio);
   assert.equal(normEntry.currentRatioAsOf, entry.currentRatioAsOf);
   assert.equal(normEntry.isCurrentStale, false);
+  assert.equal(normEntry.trendStatus, entry.trendStatus);
+  assert.equal(normEntry.uncertaintyHalfWidth, entry.uncertaintyHalfWidth);
+  assert.equal(normEntry.currentRatioLow, entry.currentRatioLow);
+  assert.equal(normEntry.currentRatioHigh, entry.currentRatioHigh);
   assert.equal(normalized.legacyExcludedSampleCount, model.legacyExcludedSampleCount);
 });
 
@@ -229,6 +234,7 @@ test("normalize defaults missing balance/staleness/legacy fields", () => {
   assert.equal(entry.baselineBalanceRatio, null);
   assert.equal(entry.currentRatioAsOf, null);
   assert.equal(entry.isCurrentStale, false);
+  assert.equal(entry.trendStatus, "stable");
   assert.equal(normalized.legacyExcludedSampleCount, 0);
 });
 
@@ -273,6 +279,10 @@ test("confidence reaches high with dense low-variance data", () => {
   const model = trainPersonalRecoveryModel({ sessions, now: tsAt(9) });
 
   assert.equal(model.exercises["closed-smile"].confidence, "high");
+  assert.equal(model.exercises["closed-smile"].trendStatus, "stable");
+  assert.ok(model.exercises["closed-smile"].uncertaintyHalfWidth > 0);
+  assert.ok(model.exercises["closed-smile"].currentRatioLow < model.exercises["closed-smile"].currentRatio);
+  assert.ok(model.exercises["closed-smile"].currentRatioHigh > model.exercises["closed-smile"].currentRatio);
   assert.equal(model.status, "high");
 });
 
@@ -409,4 +419,19 @@ test("few frames, raw mode, and usable quality combine to low confidence", () =>
     { exercises: { "closed-smile": { quality: { key: "usable" } } } },
   );
   assert.equal(model.exercises["closed-smile"].confidence, "low");
+});
+
+test("weak capture quality marks trend status as worse capture quality", () => {
+  const sessions = [];
+  for (let day = 0; day < 6; day++) {
+    sessions.push(sessionAt(tsAt(day), exerciseScore("closed-smile", 1.0, {
+      balance: 0.8,
+      captureQuality: { key: "weak", score: 0.35 },
+      movementFeatures: { validScoredFrameCount: 10 },
+    })));
+  }
+  const model = trainPersonalRecoveryModel({ sessions, now: tsAt(5) });
+
+  assert.equal(model.exercises["closed-smile"].confidence, "low");
+  assert.equal(model.exercises["closed-smile"].trendStatus, "worse-capture-quality");
 });

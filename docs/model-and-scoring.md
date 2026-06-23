@@ -777,6 +777,7 @@ The report includes:
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
 - Per-rep symmetry chips.
+- Capture-quality flags, rejected-frame reasons, quiet-region movement summaries, and safety notes when the data suggests caution.
 - Target reps, hold seconds, and rest seconds used for each exercise.
 - A side-by-side image comparison with the neutral baseline frame on the left and the strongest movement frame on the right.
 - Higher-resolution captured rep snapshots when they were available.

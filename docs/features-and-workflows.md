@@ -12,6 +12,7 @@ This document collects the product behavior that used to live in the main README
 - Comfort levels that adjust reps, hold time, and rest time.
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
 - Printable session report that can be saved as a PDF for a physiotherapist.
+- Session-level scoring diagnostics with capture quality, rejected-frame reasons, quiet-region movement flags, and conservative safety notes.
 - A live `/try` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.
 
 ## Main Practice Flow
@@ -53,7 +54,7 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - Home and Progress show focus recommendations from the baseline profile and recent affected-side movement trends.
 - Existing image-side profile data is migrated to user/anatomical side fields on load; old session progress that cannot be recomputed is tagged as legacy instead of reused for affected-side trend charts.
 - Comfort level adjusts session reps, hold time, and rest time through local dosing rules.
-- The optional personal recovery model trains locally from saved movement progress. It estimates per-exercise current recovery, trend slope, variability, and confidence once enough sessions exist.
+- The optional personal recovery model trains locally from saved movement progress. It estimates per-exercise current recovery, trend slope, variability, confidence, uncertainty range, and a plain status once enough sessions exist.
 - Optional local data capture can store sampled landmarks/scoring metadata for debugging and future model work. It is disabled by default and does not capture raw video.
 - Exercises marked `Retake` can be recalibrated individually; partial baseline captures also merge missing add-on movements into the current profile.
 - The Baseline menu lets users select individual movement baselines to redo or reset. Redo uses the partial-retake flow; reset clears those movements from the current and first-baseline profiles until they are captured again.

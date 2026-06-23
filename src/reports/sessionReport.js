@@ -1,4 +1,5 @@
 import { COMFORT_DOSING } from "../domain/config";
+import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
 import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel, progressUsesLegacySideConvention } from "../ml/faceMetrics";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
@@ -24,6 +25,10 @@ function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+function formatRatioPct(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : "n/a";
+}
+
 function usableProgress(progress) {
   return progressUsesLegacySideConvention(progress) ? null : progress;
 }
@@ -43,8 +48,24 @@ function buildSessionReportHtml(s) {
   const initialMovement = usableProgress(s.initialMovementProgress);
   const scoresArr = s.scores || [];
   const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
+  const diagnostics = summarizeSessionDiagnostics(s);
+  const quality = diagnostics.captureQuality;
+  const diagnosticFlags = [
+    quality ? `Capture quality: ${quality.label ?? quality.key} (${formatRatioPct(quality.validFrameRatio)} valid frames, ${quality.rejectedFrameCount ?? 0} rejected)` : null,
+    diagnostics.topDropReasons.length ? `Top rejected frames: ${diagnostics.topDropReasons.map((item) => `${item.label} x${item.count}`).join(", ")}` : null,
+    diagnostics.coactivation && diagnostics.coactivation.risk !== "low" ? `Quiet-region movement: ${diagnostics.coactivation.risk}` : null,
+  ].filter(Boolean);
+  const diagnosticsBlock = diagnostics.hasDiagnostics ? `
+    <section class="diagnostics">
+      <h2>Data Quality And Safety Notes</h2>
+      ${diagnostics.scoringModelVersion ? `<div class="muted small">Scoring model version ${escapeHtml(diagnostics.scoringModelVersion)}</div>` : ""}
+      ${diagnostics.captureQualityNote ? `<p>${escapeHtml(diagnostics.captureQualityNote)}</p>` : ""}
+      ${diagnosticFlags.length ? `<ul>${diagnosticFlags.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+      ${diagnostics.safetyPrompts.length ? `<div class="safety">${diagnostics.safetyPrompts.map((item) => `<div>${escapeHtml(item)}</div>`).join("")}</div>` : ""}
+    </section>` : "";
 
-  const exerciseRows = scoresArr.map((e) => {
+  const exerciseRows = scoresArr.map((e, scoreIndex) => {
+    const scoreDiagnostics = diagnostics.exercises[scoreIndex];
     const pct = displayPct(e.avg);
     const color = scoreColor(e.avg);
     const repsArr = e.scores ?? [];
@@ -78,6 +99,15 @@ function buildSessionReportHtml(s) {
       : exerciseInitialBaseline
       ? `<div class="muted small">First baseline: ${escapeHtml(exerciseInitialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(exerciseInitialBaseline) ?? "")}</div>`
       : "";
+    const qualityLine = scoreDiagnostics?.captureQuality
+      ? `<div class="muted small">Data quality: ${escapeHtml(scoreDiagnostics.captureQuality.label ?? scoreDiagnostics.captureQuality.key)} · ${escapeHtml(formatRatioPct(scoreDiagnostics.captureQuality.validFrameRatio))} valid frames</div>`
+      : "";
+    const coactivationLine = scoreDiagnostics?.coactivation && scoreDiagnostics.coactivation.risk !== "low"
+      ? `<div class="muted small">Quiet-region movement: ${escapeHtml(scoreDiagnostics.coactivation.risk)}</div>`
+      : "";
+    const dropLine = scoreDiagnostics?.topDropReasons?.length
+      ? `<div class="muted small">Rejected frames: ${escapeHtml(scoreDiagnostics.topDropReasons.map((item) => `${item.label} x${item.count}`).join(", "))}</div>`
+      : "";
     const allSnapshots = e.snapshots || [];
     const movementSnap = allSnapshots.reduce((best, snap) => {
       if (!best) return snap;
@@ -109,6 +139,9 @@ function buildSessionReportHtml(s) {
             <div class="muted small">${escapeHtml(doseBits)}</div>
             ${baselineLine}
             ${initialBaselineLine}
+            ${qualityLine}
+            ${coactivationLine}
+            ${dropLine}
           </div>
           <div class="ex-score" style="color:${color}">${pct == null ? "—" : pct + "%"}</div>
         </div>
@@ -135,6 +168,12 @@ function buildSessionReportHtml(s) {
   .summary-meta { font-size: 13px; color: #57534E; line-height: 1.6; }
   .summary-meta strong { color: #1F1B16; }
   .baseline { padding: 12px 16px; background: rgba(122,143,115,0.12); border-radius: 8px; font-size: 13px; color: #4A6B47; margin-bottom: 12px; }
+  .diagnostics { padding: 14px 16px; background: #FAF7F0; border: 1px solid #E7E5E4; border-radius: 10px; margin: 16px 0; font-size: 13px; color: #57534E; }
+  .diagnostics h2 { margin-top: 0; }
+  .diagnostics p { margin: 8px 0; }
+  .diagnostics ul { margin: 8px 0 0; padding-left: 18px; }
+  .diagnostics li { margin: 3px 0; }
+  .safety { margin-top: 10px; padding-top: 10px; border-top: 1px solid #E7E5E4; color: #8F3C2A; line-height: 1.5; }
   .exercise { padding: 16px 0; border-top: 1px solid #E7E5E4; }
   .exercise:first-of-type { border-top: none; }
   .ex-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -179,6 +218,7 @@ function buildSessionReportHtml(s) {
 
     ${movement ? `<div class="baseline"><strong>Current baseline progress:</strong> affected side · ${escapeHtml(movementProgressLabel(movement) ?? "")}</div>` : baseline ? `<div class="baseline"><strong>Current baseline progress:</strong> ${escapeHtml(baseline.side)} side · ${escapeHtml(baselineProgressLabel(baseline) ?? "")}</div>` : ""}
     ${initialMovement ? `<div class="baseline"><strong>Affected side:</strong> ${escapeHtml((movementProgressLabel(initialMovement) ?? "").replace("from baseline", "from first baseline"))}${movementBalanceLabel(initialMovement) ? `<br /><strong>Affected vs proper side:</strong> ${escapeHtml(movementBalanceLabel(initialMovement).replace(/^affected vs proper: /, ""))}` : ""}</div>` : initialBaseline ? `<div class="baseline"><strong>First baseline progress:</strong> ${escapeHtml(initialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(initialBaseline) ?? "")}</div>` : ""}
+    ${diagnosticsBlock}
 
     <h2>By Exercise</h2>
     ${exerciseRows || '<div class="muted">No exercises recorded.</div>'}

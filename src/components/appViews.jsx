@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "rec
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
+import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exercisePlannedSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
@@ -1410,6 +1411,119 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
   );
 }
 
+function qualityColor(key) {
+  if (key === "strong") return "#A8C39F";
+  if (key === "usable") return "#D4A574";
+  if (key === "weak") return "#FFB48F";
+  return "#A8A29E";
+}
+
+function coactivationColor(risk) {
+  if (risk === "high") return "#FFB48F";
+  if (risk === "medium") return "#D4A574";
+  return "#A8C39F";
+}
+
+function trendStatusLabel(status) {
+  const labels = {
+    collecting: "collecting",
+    "low-confidence": "low confidence",
+    stable: "stable",
+    improving: "improving",
+    "worse-capture-quality": "worse capture quality",
+  };
+  return labels[status] ?? status ?? "collecting";
+}
+
+function percentLabel(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : null;
+}
+
+function SessionDiagnosticsPanel({ diagnostics }) {
+  if (!diagnostics?.hasDiagnostics) return null;
+  const quality = diagnostics.captureQuality;
+  const validRatio = percentLabel(quality?.validFrameRatio);
+  const rejectedRatio = percentLabel(quality?.rejectionRatio);
+  const coactivation = diagnostics.coactivation;
+  const showCoactivation = coactivation && coactivation.risk !== "low";
+  return (
+    <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(244, 239, 230, 0.06)", border: "1px solid rgba(244, 239, 230, 0.1)" }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">Scoring diagnostics</div>
+          {diagnostics.scoringModelVersion && <div className="text-[10px] opacity-45 mt-0.5">Model v{diagnostics.scoringModelVersion}</div>}
+        </div>
+        {quality && (
+          <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>
+            {quality.label ?? quality.key}
+          </div>
+        )}
+      </div>
+      {quality && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div>
+            <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{validRatio ?? "--"}</div>
+            <div className="text-[10px] uppercase tracking-wider opacity-50">valid frames</div>
+          </div>
+          <div>
+            <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{quality.rejectedFrameCount ?? 0}</div>
+            <div className="text-[10px] uppercase tracking-wider opacity-50">{rejectedRatio ? `${rejectedRatio} rejected` : "rejected"}</div>
+          </div>
+          <div>
+            <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{quality.observedFrameCount ?? 0}</div>
+            <div className="text-[10px] uppercase tracking-wider opacity-50">observed</div>
+          </div>
+        </div>
+      )}
+      {diagnostics.captureQualityNote && <div className="text-xs leading-relaxed opacity-70 mb-3">{diagnostics.captureQualityNote}</div>}
+      {diagnostics.topDropReasons.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {diagnostics.topDropReasons.map((item) => (
+            <span key={item.reason} className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "rgba(244,239,230,0.08)", color: "#F4EFE6" }}>
+              {item.label} x{item.count}
+            </span>
+          ))}
+        </div>
+      )}
+      {showCoactivation && (
+        <div className="rounded-xl px-3 py-2 mb-3" style={{ background: "rgba(212, 165, 116, 0.12)", color: coactivationColor(coactivation.risk) }}>
+          <div className="text-xs font-semibold">Quiet-region movement: {coactivation.risk}</div>
+          {coactivation.regions?.length > 0 && <div className="text-[11px] opacity-75 mt-0.5">{coactivation.regions.slice(0, 2).map((item) => item.region).join(", ")}</div>}
+        </div>
+      )}
+      {diagnostics.safetyPrompts.length > 0 && (
+        <div className="space-y-1.5">
+          {diagnostics.safetyPrompts.map((prompt) => (
+            <div key={prompt} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: "#FFD3C1" }}>
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />{prompt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExerciseDiagnosticsLine({ diagnostics }) {
+  if (!diagnostics) return null;
+  const quality = diagnostics.captureQuality;
+  const coactivation = diagnostics.coactivation;
+  const chips = [];
+  if (quality) chips.push({ key: "quality", label: `Quality ${quality.label ?? quality.key}`, color: qualityColor(quality.key) });
+  if (diagnostics.topDropReasons?.[0]) chips.push({ key: "drop", label: `${diagnostics.topDropReasons[0].label} x${diagnostics.topDropReasons[0].count}`, color: "#D4A574" });
+  if (coactivation && coactivation.risk !== "low") chips.push({ key: "coactivation", label: `Quiet movement ${coactivation.risk}`, color: coactivationColor(coactivation.risk) });
+  if (!chips.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {chips.map((chip) => (
+        <span key={chip.key} className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: `${chip.color}1F`, color: chip.color }}>
+          {chip.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 // Dual-mode: live mode receives `scores` (in-progress array) + `onFinish`; view mode
 // receives a saved `session` record + `onClose`. Both render the same comprehensive report.
 function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
@@ -1443,6 +1557,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
     comfortLevel,
     kind: effectiveKind,
   };
+  const diagnostics = summarizeSessionDiagnostics(reportSession);
   const overallPct = displayPct(overall);
   const [timelapse, setTimelapse] = useState(null); // { exerciseIdx, startIdx }
   const sessionN = (sessionsToday ?? 0) + 1;
@@ -1516,6 +1631,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
             )}
           </div>
         )}
+        <SessionDiagnosticsPanel diagnostics={diagnostics} />
         {nextFocus && (
           <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.2)" }}>
             <div className="text-xs uppercase tracking-wider opacity-55 mb-2">Next focus</div>
@@ -1535,6 +1651,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
             const scoreInitialMovement = usableProgress(s.initialMovementProgress);
             const scoreBaseline = usableProgress(s.baselineProgress);
             const scoreInitialBaseline = usableProgress(s.initialBaselineProgress);
+            const scoreDiagnostics = diagnostics.exercises[exIdx];
             return (
               <div key={`${s.exerciseId}-${exIdx}`} className="rounded-2xl p-4" style={{ background: "rgba(244, 239, 230, 0.06)" }}>
               <div className="flex items-center gap-3">
@@ -1547,6 +1664,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
                   {scoreInitialMovement && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · affected side · {movementProgressLabel(scoreInitialMovement)}</div>}
                   {scoreInitialMovement && movementBalanceLabel(scoreInitialMovement) && <div className="text-xs mt-0.5 opacity-70">{movementBalanceLabel(scoreInitialMovement)}</div>}
                   {!scoreInitialMovement && scoreInitialBaseline && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · {scoreInitialBaseline.side} side · {baselineProgressLabel(scoreInitialBaseline)}</div>}
+                  <ExerciseDiagnosticsLine diagnostics={scoreDiagnostics} />
                 </div>
                 {s.avg != null ? <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(s.avg) }}>{displayPct(s.avg)}%</div> : <div className="text-xs opacity-50">—</div>}
               </div>
@@ -1590,6 +1708,8 @@ function PastSessionRow({ session, onOpen, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const exCount = (session.exercises ?? session.scores ?? []).length;
   const progress = preferredMovementProgress(session) ?? preferredBaselineProgress(session);
+  const diagnostics = summarizeSessionDiagnostics(session);
+  const quality = diagnostics.captureQuality;
   const canDelete = typeof onDelete === "function";
   return (
     <div className="rounded-xl px-3 py-2.5 flex items-center gap-3 transition hover:bg-white" style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}>
@@ -1599,6 +1719,7 @@ function PastSessionRow({ session, onOpen, onDelete }) {
           <div className="text-sm flex items-center gap-2">
             <span>{exCount} exercise{exCount !== 1 ? "s" : ""}</span>
             {session.kind === "practice" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(184, 84, 58, 0.12)", color: "#B8543A" }}>Practice</span>}
+            {quality && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>{quality.label}</span>}
           </div>
           <div className="text-xs text-stone-500 tabular-nums">{formatDuration(session.duration)}{progress ? ` · ${progressSummaryLabel(progress)}` : ""}</div>
         </div>
@@ -2081,6 +2202,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
               const trend = item.trendSlopePctPerWeek;
               const trendLabel = trend == null ? "trend collecting" : `${trend >= 0 ? "+" : ""}${Math.round(trend)} pts/week`;
               const detailParts = [`${Math.round((item.currentRatio ?? 0) * 100)}% of first baseline`];
+              if (item.currentRatioLow != null && item.currentRatioHigh != null) detailParts.push(`range ${Math.round(item.currentRatioLow * 100)}-${Math.round(item.currentRatioHigh * 100)}%`);
               if (item.currentBalanceRatio != null) detailParts.push(`balance ${Math.round(item.currentBalanceRatio * 100)}%`);
               detailParts.push(trendLabel);
               if (item.isCurrentStale && item.currentRatioAsOf) detailParts.push(`as of ${item.currentRatioAsOf}`);
@@ -2090,7 +2212,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
                     <div className="text-sm font-medium truncate">{exercise?.name ?? item.exerciseId}</div>
                     <div className="text-xs text-stone-500">{detailParts.join(" · ")}</div>
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-stone-500 shrink-0">{item.confidence}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-stone-500 shrink-0">{trendStatusLabel(item.trendStatus ?? item.confidence)}</div>
                 </div>
               );
             })}
