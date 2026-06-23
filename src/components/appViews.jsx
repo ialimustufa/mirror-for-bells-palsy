@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus, Download, Upload } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
-import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC } from "../domain/assessment";
+import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC, summarizeAssessmentSession } from "../domain/assessment";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
 import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
@@ -99,6 +99,24 @@ function progressSummaryLabel(progress) {
 
 function progressSideLabel(progress) {
   return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
+}
+
+function sourceSessionForAssessment(assessment, sessions = []) {
+  if (!assessment) return null;
+  return sessions.find((session) => (
+    (assessment.sourceSessionId && session.id === assessment.sourceSessionId)
+    || (assessment.sourceSessionTs && session.ts === assessment.sourceSessionTs)
+  )) ?? null;
+}
+
+function assessmentWithClinicalScaleFallback(assessment, sourceSession) {
+  if (!assessment || assessment.clinicalScales) return assessment ?? null;
+  if (!sourceSession) return assessment;
+  const sourceSummary = summarizeAssessmentSession(sourceSession);
+  return {
+    ...assessment,
+    clinicalScales: sourceSummary.clinicalScales ?? null,
+  };
 }
 
 function clampJournalRating(value) {
@@ -298,8 +316,13 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
   const assessmentExercises = STANDARD_ASSESSMENT_EXERCISE_IDS.map((id) => EXERCISES.find((exercise) => exercise.id === id)).filter(Boolean);
   const assessmentDurationSec = assessmentExercises.reduce((sum, exercise) => sum + STANDARD_ASSESSMENT_REPS * exercise.holdSec + (STANDARD_ASSESSMENT_REPS + 1) * STANDARD_ASSESSMENT_REST_SEC, 0)
     + Math.max(0, assessmentExercises.length - 1) * INTERSTITIAL_SEC;
-  const latestAssessment = [...(data.assessments ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))[0] ?? null;
+  const latestAssessmentRaw = [...(data.assessments ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))[0] ?? null;
+  const latestAssessment = assessmentWithClinicalScaleFallback(latestAssessmentRaw, sourceSessionForAssessment(latestAssessmentRaw, data.sessions));
   const latestAssessmentDate = latestAssessment?.date ? formatSessionDate(latestAssessment) : null;
+  const latestClinicalScales = latestAssessment?.clinicalScales?.status === "estimated" ? latestAssessment.clinicalScales.scales : null;
+  const latestClinicalLabel = latestClinicalScales
+    ? `HB ${latestClinicalScales.houseBrackmann.grade} · SB ${Math.round(latestClinicalScales.sunnybrook.compositeScore)}`
+    : null;
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -438,7 +461,7 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
           </div>
           {latestAssessment && (
             <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ background: "rgba(122,143,115,0.16)", color: "#4A6B47" }}>
-              {latestAssessment.averageVoluntaryMovement != null ? `${Math.round(latestAssessment.averageVoluntaryMovement * 100)}%` : "saved"}
+              {latestClinicalLabel ?? (latestAssessment.averageVoluntaryMovement != null ? `${Math.round(latestAssessment.averageVoluntaryMovement * 100)}%` : "saved")}
             </div>
           )}
         </div>
@@ -1833,11 +1856,12 @@ function PastSessionsList({ sessions, onOpen, onDelete }) {
 }
 
 function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
-  const zones = assessment.zones ?? [];
-  const quality = assessment.captureQuality;
-  const coactivation = assessment.coactivationRisk;
-  const restingAsymmetry = assessment.resting?.averageAsymmetryRatio;
-  const clinicalScales = assessment.clinicalScales?.status === "estimated" ? assessment.clinicalScales.scales : null;
+  const displayAssessment = assessmentWithClinicalScaleFallback(assessment, sourceSession);
+  const zones = displayAssessment.zones ?? [];
+  const quality = displayAssessment.captureQuality;
+  const coactivation = displayAssessment.coactivationRisk;
+  const restingAsymmetry = displayAssessment.resting?.averageAsymmetryRatio;
+  const clinicalScales = displayAssessment.clinicalScales?.status === "estimated" ? displayAssessment.clinicalScales.scales : null;
   const hb = clinicalScales?.houseBrackmann;
   const sunnybrook = clinicalScales?.sunnybrook;
   return (
@@ -1856,7 +1880,7 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
         </div>
         <div className="text-xs text-stone-500">
           {[
-            assessment.averageVoluntaryMovement != null ? `${Math.round(assessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved",
+            displayAssessment.averageVoluntaryMovement != null ? `${Math.round(displayAssessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved",
             Number.isFinite(restingAsymmetry) ? `${Math.round(restingAsymmetry * 100)}% rest asymmetry` : null,
             hb ? `HB ${hb.grade}` : null,
             sunnybrook ? `Sunnybrook ${Math.round(sunnybrook.compositeScore)}` : null,
@@ -1876,10 +1900,7 @@ function PastAssessmentsList({ assessments, sessions, onOpen }) {
       <div className="text-sm font-semibold mb-3">Past assessments</div>
       <div className="space-y-1.5">
         {sorted.map((assessment) => {
-          const sourceSession = sessions.find((session) => (
-            (assessment.sourceSessionId && session.id === assessment.sourceSessionId)
-            || (assessment.sourceSessionTs && session.ts === assessment.sourceSessionTs)
-          ));
+          const sourceSession = sourceSessionForAssessment(assessment, sessions);
           return <PastAssessmentRow key={assessment.sourceSessionId ?? assessment.sourceSessionTs ?? assessment.ts} assessment={assessment} sourceSession={sourceSession} onOpen={onOpen} />;
         })}
       </div>

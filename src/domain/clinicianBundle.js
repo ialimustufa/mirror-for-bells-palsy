@@ -121,7 +121,9 @@ function compactSession(session = {}) {
 
 function compactAssessment(assessment = {}, sessions = []) {
   const sourceSession = sessions.find((session) => sessionMatchesAssessment(session, assessment)) ?? null;
+  const sourceSummary = sourceSession ? summarizeAssessmentSession(sourceSession) : null;
   const normalized = assessment.zones ? assessment : summarizeAssessmentSession(sourceSession ?? assessment);
+  const clinicalScales = normalized.clinicalScales ?? sourceSummary?.clinicalScales ?? null;
   return {
     ts: normalized.ts ?? null,
     date: normalized.date ?? null,
@@ -131,7 +133,7 @@ function compactAssessment(assessment = {}, sessions = []) {
     coactivationRisk: normalized.coactivationRisk ?? null,
     captureQuality: normalized.captureQuality ?? null,
     resting: normalized.resting ?? null,
-    clinicalScales: normalized.clinicalScales ?? null,
+    clinicalScales,
     zones: recordArray(normalized.zones).map((zone) => ({
       zone: zone.zone,
       label: zone.label,

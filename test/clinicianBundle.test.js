@@ -107,3 +107,53 @@ test("clinician bundle exports assessment trend, sessions, journals, images, and
   assert.equal(lines[0].kind, CLINICIAN_BUNDLE_LINES_KIND);
   assert.equal(lines.some((line) => line.section === "frameSample"), true);
 });
+
+test("clinician bundle derives clinical scale estimates for legacy assessment summaries from source sessions", () => {
+  const source = {
+    stores: {
+      appState: [{
+        id: "appState",
+        assessments: [{
+          date: "2026-06-22",
+          ts: 220,
+          sourceSessionId: "assessment-session",
+          averageVoluntaryMovement: 0.72,
+          resting: { averageAsymmetryRatio: 0.12 },
+          zones: [{ zone: "eye", label: "Eye", exerciseIds: ["eye-close"], voluntaryMovement: 0.7 }],
+        }],
+      }],
+      sessions: [{
+        id: "assessment-session",
+        date: "2026-06-22",
+        ts: 220,
+        kind: "assessment",
+        restingMetrics: {
+          version: 1,
+          averageAsymmetryRatio: 0.08,
+          metrics: {
+            palpebralFissure: { label: "Palpebral fissure", userLeft: 0.05, userRight: 0.052, asymmetryRatio: 0.03 },
+            nasolabialMidface: { label: "Nasolabial/midface proxy", userLeft: 0.06, userRight: 0.064, asymmetryRatio: 0.05 },
+            oralCommissure: { label: "Oral commissure vertical position", userLeft: 0.58, userRight: 0.59, asymmetryRatio: 0.02 },
+          },
+        },
+        scores: [
+          { exerciseId: "eyebrow-raise", initialMovementProgress: { affectedProgressRatio: 0.95 }, captureQuality: { key: "strong" } },
+          { exerciseId: "eye-close", initialMovementProgress: { affectedProgressRatio: 0.9 }, captureQuality: { key: "strong" } },
+          { exerciseId: "open-smile", initialMovementProgress: { affectedProgressRatio: 0.82 }, captureQuality: { key: "strong" } },
+          { exerciseId: "nose-wrinkle", initialMovementProgress: { affectedProgressRatio: 0.75 }, captureQuality: { key: "usable" } },
+          { exerciseId: "pucker", initialMovementProgress: { affectedProgressRatio: 0.8 }, captureQuality: { key: "strong" } },
+        ],
+      }],
+      sessionImages: [],
+      sessionFrameSamples: [],
+    },
+  };
+
+  const records = buildClinicianBundleRecords(source, { recentSessionLimit: 1, exportedAt: "2026-06-23T00:00:00.000Z" });
+  const [assessment] = recordsBySection(records, "assessmentTrend");
+
+  assert.equal(assessment.clinicalScales.status, "estimated");
+  assert.equal(assessment.clinicalScales.coverage.usableMovementCount, 5);
+  assert.equal(assessment.clinicalScales.scales.houseBrackmann.grade, "II");
+  assert.ok(assessment.clinicalScales.scales.sunnybrook.compositeScore >= 80);
+});
