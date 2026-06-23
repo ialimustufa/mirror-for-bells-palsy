@@ -120,6 +120,18 @@ test("personal recovery model downweights noisy outlier sessions", () => {
   assert.ok(entry.trendSlopePctPerWeek < 80);
 });
 
+test("personal recovery model prioritizes assessment samples over same-day practice", () => {
+  const sessions = [0, 2, 4, 6, 8].flatMap((day, index) => [
+    sessionAt(tsAt(day, 8), exerciseScore("closed-smile", 1 + index * 0.02), { kind: "assessment" }),
+    sessionAt(tsAt(day, 18), exerciseScore("closed-smile", 1.8), { kind: "session" }),
+  ]);
+
+  const model = trainPersonalRecoveryModel({ sessions });
+  const entry = model.exercises["closed-smile"];
+
+  assert.ok(entry.currentRatio < 1.2);
+});
+
 test("personal recovery model keeps first-baseline progress as the trend anchor after retakes", () => {
   const model = trainPersonalRecoveryModel({
     sessions: [

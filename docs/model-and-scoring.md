@@ -693,6 +693,7 @@ The profile is used in normal app behavior after it is saved:
 - `buildSessionExercises` applies comfort-level dosing before a session starts.
 - Live feedback can show the focused side's current movement relative to the working baseline.
 - Exercise summaries and saved sessions store legacy `baselineProgress` plus the newer affected-side `movementProgress`.
+- Personal recovery trend training gives controlled assessment samples higher weight than normal sessions and downweights standalone practice runs, weak capture quality, coactivation risk, sub-threshold movement, raw/soft scoring modes, and weak profile baselines.
 - Session summaries can open a printable report intended to be saved as a PDF for a physiotherapist.
 - The Progress screen charts affected-side movement from the first saved baseline over time.
 - `MovementProfileCard` shows the current focus list and latest per-exercise progress from saved sessions.

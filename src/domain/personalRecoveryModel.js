@@ -4,6 +4,7 @@ import { MOVEMENT_SIDE_CONVENTION, progressUsesLegacySideConvention, roundMetric
 const PERSONAL_RECOVERY_MODEL_VERSION = 2;
 const PERSONAL_MODEL_MIN_SAMPLES = 5;
 const PERSONAL_MODEL_MIN_DATES = 3;
+const PERSONAL_MODEL_MAX_SAMPLE_WEIGHT = 1.25;
 const DAY_MS = 1000 * 60 * 60 * 24;
 const RECENT_WINDOW_DAYS = 14;
 
@@ -83,6 +84,8 @@ function scoreOnlyHasLegacyProgress(score) {
 
 function sampleWeight(session, score, progress, profileExercise) {
   let weight = 1;
+  if (session?.kind === "assessment") weight *= 1.2;
+  else if (session?.kind === "practice") weight *= 0.75;
   const features = score?.movementFeatures;
   const captureQuality = score?.captureQuality ?? session?.captureQuality;
   const validFrames = features?.validScoredFrameCount ?? progress?.reps ?? score?.scores?.length;
@@ -108,7 +111,7 @@ function sampleWeight(session, score, progress, profileExercise) {
   else if (scoringMode === "soft") weight *= 0.85;
   if (profileExercise?.quality?.key === "retake") weight *= 0.65;
   if (profileExercise?.quality?.key === "usable") weight *= 0.9;
-  return Math.max(0.05, Math.min(1, weight));
+  return Math.max(0.05, Math.min(PERSONAL_MODEL_MAX_SAMPLE_WEIGHT, weight));
 }
 
 function samplesFromSessions(sessions = [], movementProfile = null) {
