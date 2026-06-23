@@ -26,6 +26,13 @@ test("summarizeAssessmentSession creates rest, voluntary, and coactivation secti
     ts: 123,
     scoringModelVersion: 2,
     hasBaselineSnapshot: true,
+    restingMetrics: {
+      version: 1,
+      averageAsymmetryRatio: 0.12,
+      metrics: {
+        palpebralFissure: { label: "Palpebral fissure", userLeft: 0.04, userRight: 0.06, asymmetryRatio: 0.33, narrowerSide: "left" },
+      },
+    },
     scores: [
       {
         exerciseId: "eyebrow-raise",
@@ -47,6 +54,8 @@ test("summarizeAssessmentSession creates rest, voluntary, and coactivation secti
 
   assert.equal(assessment.kind, "standard-assessment");
   assert.equal(assessment.resting.baselineSnapshotAvailable, true);
+  assert.equal(assessment.resting.averageAsymmetryRatio, 0.12);
+  assert.equal(assessment.resting.metrics.metrics.palpebralFissure.narrowerSide, "left");
   assert.equal(assessment.zones.length, 3);
   assert.equal(assessment.zones.find((zone) => zone.zone === "eye").coactivationRisk, "medium");
   assert.equal(assessment.coactivationRisk, "medium");

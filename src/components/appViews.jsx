@@ -1810,6 +1810,7 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
   const zones = assessment.zones ?? [];
   const quality = assessment.captureQuality;
   const coactivation = assessment.coactivationRisk;
+  const restingAsymmetry = assessment.resting?.averageAsymmetryRatio;
   return (
     <button
       onClick={() => sourceSession && onOpen?.(sourceSession)}
@@ -1824,7 +1825,12 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
           {quality && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>{quality.label ?? quality.key}</span>}
           {coactivation && coactivation !== "low" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${coactivationColor(coactivation)}22`, color: coactivationColor(coactivation) }}>quiet {coactivation}</span>}
         </div>
-        <div className="text-xs text-stone-500">{assessment.averageVoluntaryMovement != null ? `${Math.round(assessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved"}</div>
+        <div className="text-xs text-stone-500">
+          {[
+            assessment.averageVoluntaryMovement != null ? `${Math.round(assessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved",
+            Number.isFinite(restingAsymmetry) ? `${Math.round(restingAsymmetry * 100)}% rest asymmetry` : null,
+          ].filter(Boolean).join(" · ")}
+        </div>
       </div>
       {sourceSession ? <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" /> : <div className="text-xs text-stone-400 shrink-0">record only</div>}
     </button>

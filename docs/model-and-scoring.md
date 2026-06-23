@@ -826,10 +826,21 @@ eyebrow-raise, eye-close, open-smile, nose-wrinkle, pucker
 
 Each assessment stores a compact summary in `assessments` with:
 
-- Rest section: whether a neutral calibration review image is available.
+- Rest section: whether a neutral calibration review image is available plus compact resting asymmetry metrics.
 - Voluntary movement sections grouped by brow/forehead, eye, midface/nose, and mouth zones.
 - Coactivation risk from quiet-region movement recorded during the assessment.
 - Source session timestamp so the original report and images can still be opened.
+
+Resting asymmetry metrics are computed from the neutral calibration landmarks in
+the same face-local frame used by the scorer. They are practice-review metrics,
+not a clinical grade:
+
+- Palpebral fissure: per-side eyelid aperture, with the narrower user side.
+- Nasolabial/midface proxy: per-side midface distance from the face midline.
+- Oral commissure vertical position: per-side mouth-corner height, with the lower user side.
+
+Only compact rounded metric summaries are saved in `restingMetrics`; raw neutral
+landmarks are not stored as part of the assessment summary.
 
 Assessments are also saved as `kind: "assessment"` session records for local image
 hydration and PDF generation, but they do not count toward daily practice goals or
@@ -845,6 +856,7 @@ The report includes:
 - Pre-calibration setup quality, when available.
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
+- Resting asymmetry metrics for assessment reports when neutral calibration was available.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.

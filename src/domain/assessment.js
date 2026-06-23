@@ -111,6 +111,7 @@ function summarizeAssessmentSession(session = {}) {
   const zones = summarizeAssessmentZones(scores);
   const voluntaryValues = zones.map((zone) => zone.voluntaryMovement).filter(Number.isFinite);
   const coactivationRisk = zones.reduce((risk, zone) => strongestRisk(risk, zone.coactivationRisk), null);
+  const restingMetrics = session.restingMetrics && typeof session.restingMetrics === "object" ? session.restingMetrics : null;
   return {
     version: STANDARD_ASSESSMENT_VERSION,
     kind: STANDARD_ASSESSMENT_KIND,
@@ -123,6 +124,8 @@ function summarizeAssessmentSession(session = {}) {
     captureQuality: session.captureQuality ?? null,
     resting: {
       baselineSnapshotAvailable: Boolean(session.baselineSnapshot || session.hasBaselineSnapshot || session.baselineImageId),
+      metrics: restingMetrics,
+      averageAsymmetryRatio: restingMetrics?.averageAsymmetryRatio ?? null,
       note: "Neutral rest is captured during calibration and used as the local comparison baseline.",
     },
     zones,

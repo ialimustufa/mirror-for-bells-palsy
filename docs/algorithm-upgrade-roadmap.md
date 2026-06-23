@@ -20,9 +20,9 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
 - Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
 - Still pending in Phase 1: replay-calibrated threshold changes.
-- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
+- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
-- Still pending in Phases 2-5: deeper resting asymmetry metrics, clinician bundle export packaging, validation dataset format, rollback/release gates, and full safety prompt coverage.
+- Still pending in Phases 2-5: clinician bundle export packaging, validation dataset format, rollback/release gates, and full safety prompt coverage.
 
 ## Product Features Worth Adding
 
@@ -179,7 +179,7 @@ Goal: make reports easier to interpret without pretending to be a diagnosis.
 Work:
 
 - Implement a local standardized assessment record with zones: brow/forehead, eye, midface/nose, mouth.
-- Add resting asymmetry metrics for palpebral fissure, nasolabial/midface proxy, and oral commissure position.
+- Add resting asymmetry metrics for palpebral fissure, nasolabial/midface proxy, and oral commissure position. Status: implemented as compact face-local neutral calibration metrics.
 - Add voluntary movement metrics for the standard movements.
 - Add coactivation metrics during those same movements.
 - Add report language that maps Mirror metrics to "rest / voluntary movement / coactivation" sections.

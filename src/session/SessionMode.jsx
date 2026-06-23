@@ -8,7 +8,7 @@ import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
-import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, SCORE_DROP_REASONS, SCORING_MODEL_VERSION, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetryDiagnostic, computeMovementProgressFromDisplacements, computeNoiseFloor, computeQuietRegionCoactivation, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
+import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, SCORE_DROP_REASONS, SCORING_MODEL_VERSION, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetryDiagnostic, computeMovementProgressFromDisplacements, computeNoiseFloor, computeQuietRegionCoactivation, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeRestingAsymmetry, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
   faceMissing: "Find your face in the camera.",
@@ -1297,7 +1297,28 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const initialMovementProgress = summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress");
     const captureQuality = summarizeSessionCaptureQuality(exerciseScores);
     const frameSamples = dataCaptureEnabled && frameSamplesRef.current.length ? frameSamplesRef.current : undefined;
-    onComplete({ scoringModelVersion: SCORING_MODEL_VERSION, date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, scoringNoiseMode, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, setupQuality, captureQuality, baselineSnapshot: baselineSnapshotRef.current, frameSamples, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
+    const restingMetrics = summarizeRestingAsymmetry(neutralRef.current, neutralMatrixRef.current);
+    onComplete({
+      scoringModelVersion: SCORING_MODEL_VERSION,
+      date: todayISO(),
+      duration,
+      exercises: exerciseScores.map((e) => e.exerciseId),
+      scores: exerciseScores,
+      sessionAvg,
+      scoringNoiseMode,
+      baselineProgress,
+      initialBaselineProgress,
+      movementProgress,
+      initialMovementProgress,
+      setupQuality,
+      captureQuality,
+      baselineSnapshot: baselineSnapshotRef.current,
+      ...(restingMetrics ? { restingMetrics } : {}),
+      frameSamples,
+      comfortLevel: session.comfortLevel,
+      kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"),
+      ts: Date.now(),
+    });
   };
 
   if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} movementProgress={summarizeSessionMovementProgress(exerciseScores)} initialMovementProgress={summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress")} onFinish={handleFinish} />;

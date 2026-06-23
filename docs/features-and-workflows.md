@@ -14,6 +14,7 @@ This document collects the product behavior that used to live in the main README
 - Comfort levels that adjust reps, hold time, and rest time.
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
 - A standardized assessment mode that saves assessment summaries separately from daily practice sessions.
+- Resting asymmetry metrics for assessment reports, including eye aperture, midface proxy, and mouth-corner position.
 - Printable session report that can be saved as a PDF for a physiotherapist.
 - Session-level scoring diagnostics with capture quality, rejected-frame reasons, quiet-region movement flags, and conservative safety notes.
 - A live `/try` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.

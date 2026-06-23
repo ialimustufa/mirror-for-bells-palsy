@@ -30,6 +30,34 @@ function formatRatioPct(value) {
   return Number.isFinite(value) ? `${Math.round(value * 100)}%` : "n/a";
 }
 
+function formatRestMetricValue(value) {
+  return Number.isFinite(value) ? value.toFixed(3) : "n/a";
+}
+
+function restingMetricSidePhrase(metric) {
+  const entries = [
+    ["narrowerSide", "narrower"],
+    ["smallerSide", "smaller"],
+    ["lowerSide", "lower"],
+    ["higherSide", "higher"],
+  ];
+  for (const [key, label] of entries) {
+    const side = metric?.[key];
+    if (!side || side === "balanced") continue;
+    return `${label} ${side}`;
+  }
+  return "balanced";
+}
+
+function restingMetricRows(restingMetrics) {
+  const metrics = restingMetrics?.metrics;
+  if (!metrics || typeof metrics !== "object") return [];
+  return ["palpebralFissure", "nasolabialMidface", "oralCommissure"]
+    .map((key) => metrics[key])
+    .filter(Boolean)
+    .map((metric) => `${metric.label}: L ${formatRestMetricValue(metric.userLeft)}, R ${formatRestMetricValue(metric.userRight)} · ${restingMetricSidePhrase(metric)} · asym ${formatRatioPct(metric.asymmetryRatio)}`);
+}
+
 function usableProgress(progress) {
   return progressUsesLegacySideConvention(progress) ? null : progress;
 }
@@ -51,6 +79,7 @@ function buildSessionReportHtml(s) {
   const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
   const diagnostics = summarizeSessionDiagnostics(s);
   const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
+  const restingRows = restingMetricRows(assessment?.resting?.metrics);
   const quality = diagnostics.captureQuality;
   const diagnosticFlags = [
     diagnostics.setupQuality ? `Setup quality: ${diagnostics.setupQuality.label ?? diagnostics.setupQuality.key}${diagnostics.setupQuality.score != null ? ` (${Math.round(diagnostics.setupQuality.score * 100)}%)` : ""}` : null,
@@ -73,6 +102,7 @@ function buildSessionReportHtml(s) {
         <div>
           <div class="assessment-label">Rest</div>
           <div class="muted small">${assessment.resting.baselineSnapshotAvailable ? "Neutral calibration image captured for review." : "Neutral calibration was used for scoring; no review image is attached."}</div>
+          ${restingRows.length ? `<ul class="resting-metrics">${restingRows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<div class="muted small">Resting asymmetry metrics were not available for this assessment.</div>`}
         </div>
         <div>
           <div class="assessment-label">Voluntary movement</div>
@@ -202,6 +232,7 @@ function buildSessionReportHtml(s) {
   .assessment h2 { margin-top: 0; color: #4A6B47; }
   .assessment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px; }
   .assessment-label { font-weight: 700; color: #1F1B16; margin-bottom: 2px; }
+  .resting-metrics { margin: 8px 0 0 0; padding-left: 16px; color: #4A6B47; }
   .zone-list { margin-top: 12px; line-height: 1.6; }
   .exercise { padding: 16px 0; border-top: 1px solid #E7E5E4; }
   .exercise:first-of-type { border-top: none; }

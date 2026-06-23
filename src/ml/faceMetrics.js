@@ -579,6 +579,100 @@ function faceFrameNormalize(lm, facialTransformationMatrix = null) {
   return out;
 }
 
+const RESTING_ASYMMETRY_VERSION = 1;
+const RESTING_EYE_TOP = {
+  left: [173, 157, 158, 159, 160, 161, 246],
+  right: [398, 384, 385, 386, 387, 388, 466],
+};
+const RESTING_EYE_BOTTOM = {
+  left: [7, 163, 144, 145, 153, 154, 155],
+  right: [249, 390, 373, 374, 380, 381, 382],
+};
+const RESTING_MIDFACE = {
+  midline: [1, 4, 5, 195, 197],
+  left: [50, 187, 205, 207, 216, 61, 84, 91, 146],
+  right: [280, 411, 425, 427, 436, 291, 314, 321, 375],
+};
+const RESTING_ORAL_COMMISSURE = {
+  left: [61, 84],
+  right: [291, 314],
+};
+
+function compactMetricValue(value, digits = 4) {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function userSideMetric({ label, rawLeft, rawRight, lowSideLabel = "smallerSide", highSideLabel = "largerSide" }) {
+  if (!Number.isFinite(rawLeft) || !Number.isFinite(rawRight)) return null;
+  const userLeft = rawRight;
+  const userRight = rawLeft;
+  const difference = userLeft - userRight;
+  const absoluteDifference = Math.abs(difference);
+  const smallerSide = userLeft < userRight ? "left" : userRight < userLeft ? "right" : "balanced";
+  const largerSide = userLeft > userRight ? "left" : userRight > userLeft ? "right" : "balanced";
+  return {
+    label,
+    userLeft: compactMetricValue(userLeft),
+    userRight: compactMetricValue(userRight),
+    difference: compactMetricValue(difference),
+    absoluteDifference: compactMetricValue(absoluteDifference),
+    asymmetryRatio: compactMetricValue(absoluteDifference / Math.max(Math.abs(userLeft), Math.abs(userRight), 0.001)),
+    [lowSideLabel]: smallerSide,
+    [highSideLabel]: largerSide,
+  };
+}
+
+function eyeAperture(frame, rawSide) {
+  const top = avgY(frame, RESTING_EYE_TOP[rawSide]);
+  const bottom = avgY(frame, RESTING_EYE_BOTTOM[rawSide]);
+  return top == null || bottom == null ? null : Math.max(0, bottom - top);
+}
+
+function midfaceDistanceFromMidline(frame, rawSide) {
+  const mid = avgXY(frame, RESTING_MIDFACE.midline);
+  const side = avgXY(frame, RESTING_MIDFACE[rawSide]);
+  if (!mid || !side) return null;
+  return rawSide === "left" ? Math.max(0, mid.x - side.x) : Math.max(0, side.x - mid.x);
+}
+
+function oralCommissureY(frame, rawSide) {
+  return avgY(frame, RESTING_ORAL_COMMISSURE[rawSide]);
+}
+
+function summarizeRestingAsymmetry(landmarks, facialTransformationMatrix = null) {
+  const frame = faceFrameNormalize(landmarks, facialTransformationMatrix);
+  if (!frame) return null;
+  const palpebralFissure = userSideMetric({
+    label: "Palpebral fissure",
+    rawLeft: eyeAperture(frame, "left"),
+    rawRight: eyeAperture(frame, "right"),
+    lowSideLabel: "narrowerSide",
+    highSideLabel: "widerSide",
+  });
+  const nasolabialMidface = userSideMetric({
+    label: "Nasolabial/midface proxy",
+    rawLeft: midfaceDistanceFromMidline(frame, "left"),
+    rawRight: midfaceDistanceFromMidline(frame, "right"),
+    lowSideLabel: "smallerSide",
+    highSideLabel: "largerSide",
+  });
+  const oralCommissure = userSideMetric({
+    label: "Oral commissure vertical position",
+    rawLeft: oralCommissureY(frame, "left"),
+    rawRight: oralCommissureY(frame, "right"),
+    lowSideLabel: "higherSide",
+    highSideLabel: "lowerSide",
+  });
+  const metrics = { palpebralFissure, nasolabialMidface, oralCommissure };
+  const values = Object.values(metrics).map((item) => item?.asymmetryRatio).filter(Number.isFinite);
+  return {
+    version: RESTING_ASYMMETRY_VERSION,
+    coordinateFrame: facialTransformRotation(facialTransformationMatrix) ? "matrix-face-local-v1" : "eye-line-face-local-v1",
+    metrics,
+    averageAsymmetryRatio: values.length ? compactMetricValue(values.reduce((sum, value) => sum + value, 0) / values.length) : null,
+  };
+}
+
 function noiseFloorValue(noiseFloor, index) {
   if (!noiseFloor) return 0;
   const values = noiseFloorValues(noiseFloor);
@@ -2643,6 +2737,7 @@ export {
   scoringOptionsFrom,
   summarizeBaselineProgress,
   summarizeMovementProgress,
+  summarizeRestingAsymmetry,
   summarizeSessionBaselineProgress,
   summarizeSessionMovementProgress,
   inferLimitedSide,
