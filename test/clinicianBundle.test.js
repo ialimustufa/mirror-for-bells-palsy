@@ -77,6 +77,7 @@ test("clinician bundle exports assessment trend, sessions, journals, images, and
   assert.equal(manifest.summary.sessions, 1);
   assert.equal(manifest.summary.assessments, 1);
   assert.equal(manifest.summary.journalEntries, 1);
+  assert.equal(manifest.summary.journalSafetyPrompts, 1);
   assert.equal(manifest.summary.images, 2);
   assert.equal(manifest.summary.frameSamples, 1);
   assert.equal(manifest.summary.containsImageDataUrls, true);
@@ -85,6 +86,7 @@ test("clinician bundle exports assessment trend, sessions, journals, images, and
   assert.equal(assessments[0].averageVoluntaryMovement, 0.72);
   assert.equal(assessments[0].resting.averageAsymmetryRatio, 0.18);
   assert.equal(journals[0].notes, "Dry eye in the evening.");
+  assert.deepEqual(journals[0].safetyPrompts.map((prompt) => prompt.id), ["eye-protection"]);
   assert.deepEqual(images.map((image) => image.id).sort(), ["img-assessment-baseline", "img-assessment-rep"]);
   assert.deepEqual(samples.map((sample) => sample.id), ["sample-assessment"]);
 

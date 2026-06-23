@@ -5,6 +5,7 @@ import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, M
 import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC } from "../domain/assessment";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
+import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exercisePlannedSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
@@ -1472,6 +1473,29 @@ function percentLabel(value) {
   return Number.isFinite(value) ? `${Math.round(value * 100)}%` : null;
 }
 
+function JournalSafetyPromptCard({ prompts }) {
+  if (!prompts?.length) return null;
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "rgba(184, 84, 58, 0.08)", border: "1px solid rgba(184, 84, 58, 0.16)" }}>
+      <div className="flex items-start gap-2 mb-3">
+        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#B8543A" }} />
+        <div>
+          <div className="text-sm font-semibold">Safety notes</div>
+          <div className="text-xs text-stone-600">From recent journal entries</div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {prompts.map((item) => (
+          <div key={item.id} className="text-xs leading-relaxed flex items-start gap-2" style={{ color: item.severity === "urgent" ? "#8F3A25" : "#5E4A39" }}>
+            <span className="mt-1 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: item.severity === "urgent" ? "#B8543A" : "#D4A574" }} />
+            <span>{item.prompt}{item.entryCount > 1 ? ` (${item.entryCount} entries)` : ""}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SessionDiagnosticsPanel({ diagnostics }) {
   if (!diagnostics?.hasDiagnostics) return null;
   const quality = diagnostics.captureQuality;
@@ -2242,6 +2266,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
   const journalChartData = useMemo(() => data.journal.length === 0 ? [] : data.journal.slice(-21).map((j) => ({ date: new Date(j.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), symmetry: j.symmetry })), [data.journal]);
   const aiSymmetryData = useMemo(() => practiceSessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [practiceSessions]);
   const assessmentTrendData = useMemo(() => assessments.filter((assessment) => assessment.averageVoluntaryMovement != null).slice(-21).map((assessment) => ({ date: new Date(assessment.date ?? assessment.ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: Math.round(assessment.averageVoluntaryMovement * 100) })), [assessments]);
+  const journalSafetyPrompts = useMemo(() => summarizeJournalSafetyPrompts(data.journal), [data.journal]);
   const baselineProgressData = useMemo(() => practiceSessions.map((s) => {
     const progress = preferredMovementProgress(s) ?? preferredBaselineProgress(s);
     const ratio = progress?.affectedProgressRatio ?? progress?.ratio;
@@ -2271,6 +2296,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
         <StatCard label="Last 7 days" value={last7DaysSessions} unit="sessions" />
         <StatCard label="All time" value={totalSessions} unit="sessions" />
       </div>
+      <JournalSafetyPromptCard prompts={journalSafetyPrompts} />
       <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>

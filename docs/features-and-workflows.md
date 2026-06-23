@@ -18,6 +18,7 @@ This document collects the product behavior that used to live in the main README
 - Printable session report that can be saved as a PDF for a physiotherapist.
 - Local clinician bundle export with assessment trends, selected report images, journal notes, diagnostics, and replay frame samples when available.
 - Session-level scoring diagnostics with capture quality, rejected-frame reasons, quiet-region movement flags, and conservative safety notes.
+- Recent journal-note safety prompts for eye dryness, pain or strain, significant fatigue, and new or worsening symptoms.
 - A live `/try` demo page with face mesh, color-coded regions, ranked muscle activations, and an expression detector.
 
 ## Main Practice Flow
@@ -25,6 +26,15 @@ This document collects the product behavior that used to live in the main README
 The main app route at `/` guides a user through camera setup, calibration, exercise preview, rest, hold, interstitial feedback, and summary. It can score holds when the model and camera are available, and it still supports unscored guided practice when they are not.
 
 Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends.
+
+## Safety Prompts
+
+Mirror shows conservative local prompts from two sources:
+
+- Session diagnostics: weak setup/capture quality, quiet-region coactivation, and low-scoring eye-closure captures.
+- Recent journal notes: user-written mentions of eye dryness, pain or strain, significant fatigue, or new/worsening symptoms.
+
+These prompts are not diagnoses. They tell the user when to keep practice gentle, avoid interpreting noisy data as progress, follow their clinician's eye-protection plan, or seek medical advice for concerning new or worsening symptoms.
 
 ## Local Data Exports
 

@@ -869,6 +869,23 @@ The report includes:
 `shareSessionReport` opens that report in a new window and triggers the browser print flow.
 The intended user action is saving the print output as a PDF and sending that PDF to a physiotherapist.
 
+### Safety Prompt Sources
+
+Safety prompts are conservative practice guidance, not diagnosis. They are generated
+locally from:
+
+- Session diagnostics: weak pre-calibration setup, weak or unscored capture quality,
+  quiet-region coactivation, and low eye-closure scores that may be relevant to eye
+  protection.
+- Recent journal notes: text mentions of eye dryness/irritation, pain or strain,
+  significant fatigue, and new or worsening symptoms such as sudden worsening,
+  numbness, speech changes, vision changes, dizziness, confusion, limb weakness, or
+  severe headache.
+
+Journal-note prompts are grouped in Progress and exported as prompt metadata on
+clinician-bundle journal records. Obvious negated notes such as "no pain" do not
+raise a prompt.
+
 ### Clinician Bundle Export
 
 The Progress view can also export a local JSONL clinician bundle. This is a
@@ -877,7 +894,7 @@ shareable review package, not a restore backup. The bundle includes:
 - Assessment trend rows from compact `assessments` records.
 - Recent sessions plus source sessions referenced by assessments.
 - Per-exercise progress, capture-quality summaries, rejected-frame reasons, and safety prompts.
-- Journal entries, including user notes about fatigue, dryness, discomfort, or symptoms.
+- Journal entries, including user notes and local safety prompt metadata for fatigue, dryness, discomfort, or symptoms.
 - Selected report image records for included sessions: neutral baseline images and rep snapshots.
 - Frame-sample records for included sessions when local data capture was enabled, so a clinician or developer can replay the audit trail.
 

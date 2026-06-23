@@ -1,4 +1,5 @@
 import { summarizeAssessmentSession } from "./assessment";
+import { summarizeJournalEntrySafetyPrompts, summarizeJournalSafetyPrompts } from "./safetyPrompts";
 import { summarizeSessionDiagnostics } from "./sessionDiagnostics";
 
 const CLINICIAN_BUNDLE_LINES_KIND = "mirror-clinician-review-bundle-jsonl";
@@ -149,6 +150,7 @@ function compactJournalEntry(entry = {}) {
     symmetry: Number.isFinite(entry.symmetry) ? entry.symmetry : null,
     mood: entry.mood ?? null,
     notes: entry.notes ?? "",
+    safetyPrompts: summarizeJournalEntrySafetyPrompts(entry),
   };
 }
 
@@ -219,6 +221,7 @@ function buildClinicianBundleRecords(source = {}, options = {}) {
       sessions: includedSessions.length,
       assessments: assessments.length,
       journalEntries: journal.length,
+      journalSafetyPrompts: summarizeJournalSafetyPrompts(journal).length,
       images: images.length,
       frameSamples: frameSamples.length,
       dateRange: dateRange([...includedSessions, ...assessments, ...journal]),

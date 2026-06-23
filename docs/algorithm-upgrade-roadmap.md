@@ -22,7 +22,8 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Still pending in Phase 1: replay-calibrated threshold changes.
 - Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, neutral calibration saves compact resting asymmetry metrics, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses, and it downweights weak capture quality and coactivation risk.
-- Still pending in Phases 2-5: validation dataset format, rollback/release gates, and full safety prompt coverage.
+- Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
+- Still pending in Phases 4-5: validation dataset format and rollback/release gates.
 
 ## Product Features Worth Adding
 
@@ -117,6 +118,8 @@ Add conservative, non-diagnostic prompts for:
 - New or worsening neurological symptoms.
 - Pain, strain, or significant fatigue after exercises.
 - Very noisy data that should not be interpreted as progress.
+
+Status: implemented through session diagnostics plus recent journal-note safety prompts in Progress and clinician bundle exports.
 
 Why it helps:
 
