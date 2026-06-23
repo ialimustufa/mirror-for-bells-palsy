@@ -173,7 +173,7 @@ Work:
 
 - Move MediaPipe inference into a Web Worker because the official web guide notes that `detect()` and `detectForVideo()` are synchronous and block the UI thread. Status: implemented with a main-thread fallback for browsers without worker bitmap support.
 - Add pose, occlusion, and landmark-stability quality scores. Status: setup quality records centered/level alignment, landmark stability, and an occlusion/glare risk proxy from face presence, brightness, and contrast.
-- Tune calibration quality thresholds using the stricter core landmarks already captured by `coreAvgNoise`.
+- Tune calibration quality thresholds using the stricter core landmarks already captured by `coreAvgNoise`. Status: profile status and profile comparisons prefer `coreAvgNoise`, with legacy `avgNoise` fallback for older profiles.
 - Add exercise-specific direction vectors for smile, pucker, cheek puff/suck, eye closure, and vowels instead of relying only on generic displacement magnitude. Status: implemented for those families with movement-specific neutral jitter keys.
 - Add quiet-region movement penalties for the first synkinesis-aware feedback.
 

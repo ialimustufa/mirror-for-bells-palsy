@@ -2157,7 +2157,7 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
               </div>
             ))}
             {comparison.noiseDelta != null && (
-              <div className="text-[11px] opacity-60">Calibration noise {comparison.noiseDelta <= 0 ? "decreased" : "increased"} by {Math.abs(comparison.noiseDelta).toFixed(5)}</div>
+              <div className="text-[11px] opacity-60">{comparison.noiseLabel ?? "Calibration noise"} {comparison.noiseDelta <= 0 ? "decreased" : "increased"} by {Math.abs(comparison.noiseDelta).toFixed(5)}</div>
             )}
           </div>
         </div>

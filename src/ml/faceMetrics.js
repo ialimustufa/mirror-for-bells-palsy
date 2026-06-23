@@ -2457,13 +2457,33 @@ function signedPointDelta(delta) {
   return `${pts > 0 ? "+" : ""}${pts} pts`;
 }
 
+function calibrationQualityMetric(profile) {
+  if (profile?.calibrationQuality?.coreAvgNoise != null) {
+    return {
+      value: profile.calibrationQuality.coreAvgNoise,
+      source: "coreAvgNoise",
+      label: "Core calibration noise",
+    };
+  }
+  if (profile?.calibrationQuality?.avgNoise != null) {
+    return {
+      value: profile.calibrationQuality.avgNoise,
+      source: "avgNoise",
+      label: "Calibration noise",
+    };
+  }
+  return { value: null, source: null, label: "Calibration noise" };
+}
+
 function compareMovementProfiles(current, previous) {
   if (!current || !previous) return null;
   const avgSymmetryDelta = current.initialAvgSymmetry != null && previous.initialAvgSymmetry != null
     ? current.initialAvgSymmetry - previous.initialAvgSymmetry
     : null;
-  const noiseDelta = current.calibrationQuality?.avgNoise != null && previous.calibrationQuality?.avgNoise != null
-    ? current.calibrationQuality.avgNoise - previous.calibrationQuality.avgNoise
+  const currentNoise = calibrationQualityMetric(current);
+  const previousNoise = calibrationQualityMetric(previous);
+  const noiseDelta = currentNoise.value != null && previousNoise.value != null
+    ? currentNoise.value - previousNoise.value
     : null;
   const previousExercises = previous.exercises ?? {};
   const exerciseDeltas = profileExerciseEntries(current)
@@ -2479,6 +2499,8 @@ function compareMovementProfiles(current, previous) {
     archivedDate: formatProfileDate(previous.archivedAt),
     avgSymmetryDelta,
     noiseDelta,
+    noiseMetric: currentNoise.source ?? previousNoise.source,
+    noiseLabel: currentNoise.label,
     exerciseDeltas,
   };
 }

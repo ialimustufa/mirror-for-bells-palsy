@@ -725,6 +725,8 @@ otherwise             -> Noisy
 
 `calibrationQuality.coreQualityPoints` is persisted with new profiles so reports and
 future threshold tuning can identify which landmark subset produced `coreAvgNoise`.
+Profile retake comparisons use the same core metric when available, falling back to
+legacy average noise only for older profiles.
 
 Profiles are also considered stale after:
 
