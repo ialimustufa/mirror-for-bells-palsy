@@ -245,6 +245,7 @@ export function mergeMovementProfileRetake(currentProfile, partialProfile) {
     lastPartialRetakeAt: Date.now(),
     lastPartialRetakeExerciseIds: retakenExerciseIds,
     lastPartialCalibrationQuality: partialProfile.calibrationQuality,
+    lastPartialSetupQuality: partialProfile.setupQuality ?? null,
     exercises,
     initialAvgSymmetry: averageProfileSymmetry(exercises),
   };

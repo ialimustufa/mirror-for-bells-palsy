@@ -36,7 +36,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 
 Add a pre-session setup view that scores lighting, distance, face angle, glasses/occlusion risk, frame rate, and camera stability before calibration starts.
 
-Status: implemented with local setup-quality sampling before calibration, compact setup/capture summaries on saved sessions, and action-oriented coaching for weak setup signals.
+Status: implemented with local setup-quality sampling before calibration, compact setup/capture summaries on saved sessions and baseline profiles, and action-oriented coaching for weak setup signals.
 
 Why it helps:
 
@@ -47,7 +47,7 @@ Why it helps:
 Implementation notes:
 
 - Reuse face presence, pose deviation, eye-line level, and detection FPS signals.
-- Persist a compact `captureQuality` summary on each session and baseline profile.
+- Persist a compact `captureQuality`/setup-quality summary on each session and baseline profile.
 - Show plain-language coaching only when it changes the user's next action.
 
 ### 2. Standardized Assessment Mode

@@ -1946,7 +1946,7 @@ function effectiveProfileThreshold(exerciseId, threshold) {
   return threshold;
 }
 
-function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatrix, exerciseStats, affectedSide, comfortLevel, scoringNoiseMode = DEFAULT_SCORING_NOISE_MODE }) {
+function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatrix, exerciseStats, affectedSide, comfortLevel, scoringNoiseMode = DEFAULT_SCORING_NOISE_MODE, setupQuality = null }) {
   const exercises = {};
   for (const stat of exerciseStats) {
     const leftBaseline = stat.leftRobustAvg ?? stat.leftAvg;
@@ -1998,6 +1998,7 @@ function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatri
     scoringNoiseMode: normalizeScoringNoiseMode(scoringNoiseMode),
     affectedSide,
     comfortLevel,
+    setupQuality,
     neutralLandmarks: compactLandmarks(neutral),
     noiseFloor: compactNoiseFloor(noise),
     normalization: {

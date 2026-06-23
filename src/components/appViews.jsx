@@ -2112,10 +2112,14 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
           )}
         </div>
       )}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
           <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Profile</div>
           <div className="text-sm font-semibold tabular-nums">v{profile.version ?? "—"}</div>
+        </div>
+        <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
+          <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Setup</div>
+          <div className="text-sm font-semibold truncate" style={{ color: qualityColor(profile.setupQuality?.key) }}>{profile.setupQuality?.label ?? profile.setupQuality?.key ?? "—"}</div>
         </div>
         <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
           <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Noise</div>

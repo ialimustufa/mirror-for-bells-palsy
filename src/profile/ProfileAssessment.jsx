@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { X, CameraOff, ChevronRight, Info, Volume2, VolumeX } from "lucide-react";
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, PROFILE_BASELINE_TOP_FRACTION, PROFILE_EXERCISE_NEUTRAL_MIN_FRAMES, PROFILE_HOLD_SEC, PROFILE_REST_RETRY_LIMIT, PROFILE_REST_SEC } from "../domain/config";
+import { SETUP_SAMPLE_TARGET, summarizeCaptureSetupQuality } from "../domain/captureSetupQuality";
 import { EXERCISE_BY_ID, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES } from "../domain/exercises";
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
@@ -17,6 +18,7 @@ const BASELINE_SETUP_STEPS = [
 ];
 
 const BASELINE_PHASE_INSTRUCTIONS = {
+  setup: "Center your face while Mirror checks lighting, distance, frame stability, and face visibility before calibration.",
   calibrate: "Relax your face and keep your head still while Mirror records your neutral baseline.",
   rest: "Return to a resting face. This short reset becomes the starting point for the next movement.",
   hold: "Follow the movement cue gently, hold steady, then let the timer guide you back to rest.",
@@ -53,6 +55,82 @@ function finalizeAssessmentStats(stat, exercise) {
     rightPeak: stat.rightPeak,
     symPeak: stat.symPeak,
   };
+}
+
+function compactNumber(value, digits = 5) {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function sampleVideoLighting(video, canvas) {
+  if (!video || !canvas || !video.videoWidth || !video.videoHeight) return null;
+  const width = 24;
+  const height = 16;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  try {
+    ctx.drawImage(video, 0, 0, width, height);
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let sum = 0;
+    const values = [];
+    for (let i = 0; i < data.length; i += 4) {
+      const value = (data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722) / 255;
+      values.push(value);
+      sum += value;
+    }
+    const brightness = sum / values.length;
+    const variance = values.reduce((acc, value) => acc + (value - brightness) ** 2, 0) / values.length;
+    return { brightness: compactNumber(brightness, 4), contrast: compactNumber(Math.sqrt(variance), 4) };
+  } catch {
+    return null;
+  }
+}
+
+function eyeDistance(lm) {
+  if (!lm?.[33] || !lm?.[263]) return null;
+  return Math.hypot(lm[263].x - lm[33].x, lm[263].y - lm[33].y);
+}
+
+function setupQualityColor(key) {
+  if (key === "strong") return "#A8C39F";
+  if (key === "usable") return "#D4A574";
+  if (key === "weak") return "#FFB48F";
+  return "#A8A29E";
+}
+
+function BaselineSetupQualityPanel({ summary }) {
+  if (!summary) return null;
+  const color = setupQualityColor(summary.key);
+  const pct = summary.score != null ? Math.round(summary.score * 100) : null;
+  const progress = Math.min(1, (summary.sampleCount ?? 0) / SETUP_SAMPLE_TARGET);
+  const items = summary.actionItems?.length
+    ? summary.actionItems
+    : summary.ready
+      ? ["Setup looks ready for baseline calibration."]
+      : ["Hold still while Mirror checks camera quality."];
+  return (
+    <div className="absolute left-4 right-4 bottom-4 rounded-2xl p-3" style={{ background: "rgba(31, 27, 22, 0.78)", border: `1px solid ${color}88`, color: "#F4EFE6" }}>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">Setup quality</div>
+          <div className="text-sm font-semibold" style={{ color }}>{summary.label}</div>
+        </div>
+        <div className="text-2xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color }}>{pct == null ? "--" : pct}</div>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: "rgba(244,239,230,0.14)" }}>
+        <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: color }} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <div className="text-[10px] opacity-65">Face {summary.facePresenceRatio == null ? "--" : `${Math.round(summary.facePresenceRatio * 100)}%`}</div>
+        <div className="text-[10px] opacity-65">Centered {summary.alignmentRatio == null ? "--" : `${Math.round(summary.alignmentRatio * 100)}%`}</div>
+        <div className="text-[10px] opacity-65">FPS {summary.fps == null ? "--" : Math.round(summary.fps)}</div>
+      </div>
+      <div className="space-y-1">
+        {items.map((item) => <div key={item} className="text-xs leading-relaxed opacity-80">{item}</div>)}
+      </div>
+    </div>
+  );
 }
 
 function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onTogglePref, onComplete, onSkip }) {
@@ -118,16 +196,20 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
   const [postureAligned, setPostureAligned] = useState(false);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationStatus, setCalibrationStatus] = useState("Preparing tracker");
+  const [setupQuality, setSetupQuality] = useState(null);
   const [restStatus, setRestStatus] = useState("Relax your face before the movement.");
   const [liveScore, setLiveScore] = useState(null);
   const [liveBalance, setLiveBalance] = useState(null);
   const [exerciseStats, setExerciseStats] = useState([]);
   const videoRef = useRef(null);
   const overlayRef = useRef(null);
+  const lightingCanvasRef = useRef(null);
   const neutralRef = useRef(null);
   const noiseRef = useRef(null);
   const neutralBsRef = useRef(null);
   const neutralMatrixRef = useRef(null);
+  const setupSamplesRef = useRef([]);
+  const lastSetupSampleAtRef = useRef(0);
   const calibBufferRef = useRef([]);
   const calibBsBufferRef = useRef([]);
   const calibMatrixBufferRef = useRef([]);
@@ -152,12 +234,22 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
   const retakeCount = exerciseStats.filter((s) => s.quality?.key === "retake").length;
   const autoPaused = trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
 
+  const recordSetupSample = useCallback((sample) => {
+    const now = sample?.ts ?? Date.now();
+    if (now - lastSetupSampleAtRef.current < 120) return;
+    lastSetupSampleAtRef.current = now;
+    setupSamplesRef.current = [...setupSamplesRef.current.slice(-80), { ...sample, ts: now }];
+    setSetupQuality(summarizeCaptureSetupQuality(setupSamplesRef.current));
+  }, []);
+
   useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, exIdx, phase]);
 
   useEffect(() => () => { flushSpeech(); }, []);
 
   useEffect(() => {
-    if (phase === "calibrate") {
+    if (phase === "setup") {
+      speak(voiceEnabled, "Camera setup. Center your face and hold still.");
+    } else if (phase === "calibrate") {
       speak(voiceEnabled, "Calibration. Center your face and stay relaxed.");
     } else if (phase === "preview") {
       speak(voiceEnabled, `Up next: ${current.name}. ${current.instruction}`);
@@ -169,6 +261,13 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
       speak(voiceEnabled, "Session complete. Well done.");
     }
   }, [phase, exIdx, voiceEnabled, current?.name, current?.instruction]);
+
+  useEffect(() => {
+    if (phase !== "setup") return;
+    setupSamplesRef.current = [];
+    lastSetupSampleAtRef.current = 0;
+    setSetupQuality(summarizeCaptureSetupQuality([]));
+  }, [phase]);
 
   useEffect(() => {
     if (phase !== "calibrate") return;
@@ -267,8 +366,10 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
         const bsArr = result.faceBlendshapes?.[0]?.categories;
         const rawMatrix = firstFacialTransformationMatrix(result);
         if (rawLm) {
-          const lm = smoothLandmarks(latestRef.current?.landmarks, rawLm);
-          const facialTransformationMatrix = smoothFacialTransformationMatrix(latestRef.current?.facialTransformationMatrix, rawMatrix);
+          const prevLm = latestRef.current?.landmarks;
+          const prevMatrix = latestRef.current?.facialTransformationMatrix;
+          const lm = smoothLandmarks(prevLm, rawLm);
+          const facialTransformationMatrix = smoothFacialTransformationMatrix(prevMatrix, rawMatrix);
           const bsMap = {};
           if (bsArr) for (const c of bsArr) bsMap[c.categoryName] = c.score;
           latestRef.current = { landmarks: lm, blendshapes: bsMap, facialTransformationMatrix };
@@ -276,7 +377,20 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
           const aligned = alignment.aligned;
           setPostureAligned((prev) => (prev === aligned ? prev : aligned));
 
-          if (phase === "calibrate") {
+          if (phase === "setup") {
+            const lighting = sampleVideoLighting(v, lightingCanvasRef.current);
+            const stabilityDelta = prevLm ? normalizedFrameDelta(lm, prevLm, facialTransformationMatrix, prevMatrix) : null;
+            recordSetupSample({
+              facePresent: true,
+              aligned,
+              centerOff: compactNumber(alignment.centerOff),
+              tiltRad: compactNumber(alignment.tiltRad),
+              stabilityDelta: compactNumber(stabilityDelta),
+              eyeDistance: compactNumber(eyeDistance(lm), 4),
+              brightness: lighting?.brightness ?? null,
+              contrast: lighting?.contrast ?? null,
+            });
+          } else if (phase === "calibrate") {
             if (!aligned) {
               calibBufferRef.current = [];
               calibBsBufferRef.current = [];
@@ -368,7 +482,15 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
           setPostureAligned(false);
           setLiveScore(null);
           setLiveBalance(null);
-          if (phase === "calibrate") {
+          if (phase === "setup") {
+            const lighting = sampleVideoLighting(v, lightingCanvasRef.current);
+            recordSetupSample({
+              facePresent: false,
+              aligned: false,
+              brightness: lighting?.brightness ?? null,
+              contrast: lighting?.contrast ?? null,
+            });
+          } else if (phase === "calibrate") {
             calibBufferRef.current = [];
             calibBsBufferRef.current = [];
             calibMatrixBufferRef.current = [];
@@ -388,7 +510,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
     };
     raf = requestAnimationFrame(tick);
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [activeCamera, faceLandmarker, latestRef, phase, current.id, scoringDiagnosticsEnabled, scoringNoiseMode]);
+  }, [activeCamera, faceLandmarker, latestRef, phase, current.id, recordSetupSample, scoringDiagnosticsEnabled, scoringNoiseMode]);
 
   const handleBegin = () => {
     setExerciseStats([]);
@@ -401,7 +523,12 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
     exerciseNoiseRef.current = null;
     exerciseNeutralBsRef.current = null;
     exerciseNeutralMatrixRef.current = null;
-    primeSpeech(voiceEnabled, { text: "Calibration. Center your face and stay relaxed.", volume: 1 });
+    primeSpeech(voiceEnabled, { text: "Camera setup. Center your face and hold still.", volume: 1 });
+    setPhase("setup");
+  };
+
+  const beginCalibrationFromSetup = () => {
+    flushSpeech();
     setPhase("calibrate");
   };
 
@@ -424,6 +551,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
       affectedSide: isPartialRetake ? existingProfile?.affectedSide ?? affectedSide : affectedSide,
       comfortLevel: isPartialRetake ? existingProfile?.comfortLevel ?? comfortLevel : comfortLevel,
       scoringNoiseMode,
+      setupQuality,
     });
     onComplete(profile, { retakeExerciseIds: isPartialRetake ? exerciseIds : null });
   };
@@ -521,6 +649,11 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
               {retakeCount} baseline movement{retakeCount === 1 ? "" : "s"} had low-quality capture. You can still save this profile, but those exercises should be retaken later.
             </div>
           )}
+          {setupQuality && (
+            <div className="rounded-2xl p-3 mb-4 text-xs" style={{ background: `${setupQualityColor(setupQuality.key)}22`, color: setupQualityColor(setupQuality.key), border: `1px solid ${setupQualityColor(setupQuality.key)}44` }}>
+              Setup quality saved: {setupQuality.label}. {setupQuality.actionItems?.[0] ?? "Camera setup looked ready for this baseline."}
+            </div>
+          )}
           <div className="space-y-2 mb-6">
             {exerciseStats.map((stat) => (
               <div key={stat.exerciseId} className="rounded-2xl p-3 flex items-center gap-3" style={{ background: "rgba(244,239,230,0.06)" }}>
@@ -607,7 +740,9 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
   }
 
   const calibrationPct = Math.round((calibrationProgress / CALIBRATION_FRAMES) * 100);
-  const phaseTone = phase === "calibrate"
+  const phaseTone = phase === "setup"
+    ? { tag: "CAMERA CHECK", title: "Setup check", prompt: setupQuality?.actionItems?.[0] ?? "Center your face and hold still.", color: setupQualityColor(setupQuality?.key) }
+    : phase === "calibrate"
     ? { tag: "CALIBRATING", title: "Stay relaxed", prompt: calibrationStatus, color: "#D4A574" }
     : phase === "hold"
       ? { tag: "ASSESS", title: current.name, prompt: current.instruction, color: "#B8543A" }
@@ -620,7 +755,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
       <div className="flex flex-col w-full h-full lg:w-[440px] lg:h-[860px] lg:max-h-[92vh] lg:rounded-3xl lg:overflow-hidden lg:shadow-2xl" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
         <div className="flex items-center justify-between p-4 shrink-0">
           <button onClick={handleCancel} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Skip baseline"><X className="w-5 h-5" /></button>
-          <div className="text-xs opacity-70">{phase === "calibrate" ? "Neutral baseline" : `Exercise ${exIdx + 1} of ${exercises.length}`}</div>
+          <div className="text-xs opacity-70">{phase === "setup" ? "Camera setup" : phase === "calibrate" ? "Neutral baseline" : `Exercise ${exIdx + 1} of ${exercises.length}`}</div>
           <div className="flex gap-2">
             {onTogglePref && (
               <button onClick={handleToggleVoice} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Toggle voice">{voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}</button>
@@ -637,7 +772,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
           <div className="rounded-2xl p-3.5 transition-colors duration-300" style={{ background: "rgba(244,239,230,0.06)", borderLeft: `3px solid ${phaseTone.color}` }}>
             <div className="flex items-center gap-2 mb-1.5">
               <div className="text-[10px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full" style={{ background: phaseTone.color, color: "#1F1B16" }}>{phaseTone.tag}</div>
-              {phase !== "calibrate" && <div className="text-[11px] opacity-70">{current.region}</div>}
+              {phase !== "calibrate" && phase !== "setup" && <div className="text-[11px] opacity-70">{current.region}</div>}
             </div>
             <div className="text-2xl mb-1" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>{phaseTone.title}</div>
             <div className="text-xs leading-relaxed min-h-[2.5em]" style={{ color: phaseTone.color }}>{displayPrompt}</div>
@@ -649,6 +784,7 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
             <>
               <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} />
               <canvas ref={overlayRef} className="absolute inset-0 w-full h-full pointer-events-none" />
+              <canvas ref={lightingCanvasRef} style={{ display: "none" }} />
             </>
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -666,6 +802,8 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
             <div className="absolute top-4 right-4"><RealtimeFeedback symmetry={liveScore} balance={liveBalance} /></div>
           )}
 
+          {phase === "setup" && <BaselineSetupQualityPanel summary={setupQuality} />}
+
           {autoPaused && (
             <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
               <div className="rounded-2xl px-4 py-3 text-center shadow-xl" style={{ background: "rgba(31, 27, 22, 0.88)", border: "1px solid rgba(212, 165, 116, 0.75)", color: "#F4EFE6" }}>
@@ -676,15 +814,24 @@ function ProfileAssessment({ existingProfile, retakeExerciseIds, prefs, onToggle
           )}
 
           <div className="absolute inset-x-0 top-0 h-1 transition-colors duration-300" style={{ background: phaseTone.color }} />
-          <div className="absolute inset-x-0 bottom-0 flex justify-center pointer-events-none">
-            <div className="p-6 w-full flex justify-center" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.85) 0%, rgba(31,27,22,0.4) 55%, transparent 100%)" }}>
-              <div className="text-7xl tabular-nums transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color, letterSpacing: "-0.03em" }}>
-                {phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
+          {phase !== "setup" && (
+            <div className="absolute inset-x-0 bottom-0 flex justify-center pointer-events-none">
+              <div className="p-6 w-full flex justify-center" style={{ background: "linear-gradient(to top, rgba(31,27,22,0.85) 0%, rgba(31,27,22,0.4) 55%, transparent 100%)" }}>
+                <div className="text-7xl tabular-nums transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color, letterSpacing: "-0.03em" }}>
+                  {phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
+        {phase === "setup" && (
+          <div className="p-4 shrink-0" style={{ borderTop: `2px solid ${phaseTone.color}` }}>
+            <button onClick={beginCalibrationFromSetup} className="w-full rounded-full px-6 py-4 font-semibold flex items-center justify-center gap-2 text-base" style={{ background: "#B8543A", color: "#F4EFE6" }}>
+              Continue<ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {showHelp && (

@@ -69,6 +69,7 @@ The profile captures:
 - Initial movement metrics for the starter baseline set, stored as user/anatomical left/right even though the camera preview is mirrored.
 - Per-exercise robust baseline movement ranges, initial symmetry, estimated limited side, and activation thresholds.
 - Per-exercise baseline quality labels so weak captures can be retaken without treating the whole profile as bad.
+- Baseline profiles retain a compact setup-quality summary for lighting, centering, stability, distance, and occlusion/glare risk.
 
 The first saved profile is preserved as `initialMovementProfile`, while the current working profile is stored as `movementProfile`:
 
@@ -86,4 +87,4 @@ The first saved profile is preserved as `initialMovementProfile`, while the curr
 - The Baseline menu lets users select individual movement baselines to redo or reset. Redo uses the partial-retake flow; reset clears those movements from the current and first-baseline profiles until they are captured again.
 - After the first counted daily session, Mirror prompts for a journal entry if today is not logged yet. The progress rating is prefilled from detected session symmetry or movement progress and can be edited before saving.
 - Calibration coaching explains whether the user needs to center, level, hold steadier, or wait for more exercise-rest frames.
-- Session reports retain the pre-calibration setup quality summary so weak lighting, distance, or stability is visible later.
+- Session reports and baseline profiles retain the pre-calibration setup quality summary so weak lighting, distance, or stability is visible later.

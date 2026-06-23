@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APP_SIDE_CONVENTION_VERSION, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "../src/domain/appData.js";
+import { APP_SIDE_CONVENTION_VERSION, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "../src/domain/appData.js";
 import { compareMovementProfiles, LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION } from "../src/ml/faceMetrics.js";
 
 const EXERCISE_ID = "closed-smile";
@@ -117,6 +117,31 @@ test("returns the original profile when reset has no matching baselines", () => 
   };
 
   assert.equal(resetMovementProfileBaselines(profile, ["closed-smile"], 1234), profile);
+});
+
+test("partial retakes record setup quality without replacing the profile setup summary", () => {
+  const merged = mergeMovementProfileRetake(
+    {
+      setupQuality: { key: "strong", sampleCount: 24 },
+      calibrationQuality: { avgNoise: 0.01 },
+      exercises: {
+        "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.6 },
+      },
+    },
+    {
+      setupQuality: { key: "weak", sampleCount: 24 },
+      calibrationQuality: { avgNoise: 0.04 },
+      exercises: {
+        "open-smile": { exerciseId: "open-smile", initialSymmetry: 0.8 },
+      },
+    },
+  );
+
+  assert.deepEqual(merged.setupQuality, { key: "strong", sampleCount: 24 });
+  assert.deepEqual(merged.lastPartialSetupQuality, { key: "weak", sampleCount: 24 });
+  assert.deepEqual(merged.lastPartialCalibrationQuality, { avgNoise: 0.04 });
+  assert.deepEqual(merged.lastPartialRetakeExerciseIds, ["open-smile"]);
+  assert.equal(merged.initialAvgSymmetry, 0.7);
 });
 
 test("movement profile comparison uses strict core calibration noise when available", () => {

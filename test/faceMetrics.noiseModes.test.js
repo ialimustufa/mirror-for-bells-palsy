@@ -150,6 +150,7 @@ test("movement profiles tag scoring mode and save compact directional noise", ()
     affectedSide: "right",
     comfortLevel: "gentle",
     scoringNoiseMode: "soft",
+    setupQuality: { key: "usable", score: 0.76, sampleCount: 24 },
     exerciseStats: [{
       exerciseId: "eyebrow-raise",
       name: "Eyebrow raise",
@@ -168,6 +169,7 @@ test("movement profiles tag scoring mode and save compact directional noise", ()
   });
 
   assert.equal(profile.scoringNoiseMode, "soft");
+  assert.deepEqual(profile.setupQuality, { key: "usable", score: 0.76, sampleCount: 24 });
   assert.ok(Array.isArray(profile.noiseFloor.values));
   assert.deepEqual(profile.noiseFloor.directional.browGap, { left: 0.001234, right: 0.001111 });
   assert.deepEqual(profile.exercises["eyebrow-raise"].thresholdBands, {
