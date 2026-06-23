@@ -937,10 +937,15 @@ rate, and measurement drift against the same examples.
 Run:
 
 ```bash
+npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
+npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
 ```
 
-The evaluator replays labeled frame samples through the current scorer and reports
+The label-sheet command creates a CSV for clinician, user, or developer review.
+The merge command copies reviewed label fields back into a new JSONL dataset
+without changing the original export. The evaluator replays labeled frame samples
+through the current scorer and reports
 scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
 mean absolute stored-vs-replayed score drift. Frames labeled with
 `visibleMovementLevel: "none"` are treated as negative examples; `trace`, `low`, `moderate`, and `strong`

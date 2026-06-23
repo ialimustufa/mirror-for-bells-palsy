@@ -10,6 +10,8 @@ npm run build    # production bundle
 npm run lint
 npm run replay:frames -- backup.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
+npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
+npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run release:check # lint + tests + build + release doc checks
 ```
 
