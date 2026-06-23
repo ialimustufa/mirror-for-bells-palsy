@@ -89,6 +89,19 @@ test("validation evaluation reports labeled replay accuracy and error rates", ()
   assert.equal(result.validation.falsePositiveRate, 0);
   assert.equal(result.validation.falseNegativeRate, 0);
   assert.equal(result.validation.accuracy, 1);
+  assert.deepEqual(result.validation.byExercise, [{
+    exerciseId: "closed-smile",
+    labeledFrameCount: 2,
+    positiveCount: 1,
+    negativeCount: 1,
+    truePositive: 1,
+    trueNegative: 1,
+    falsePositive: 0,
+    falseNegative: 0,
+    accuracy: 1,
+    falsePositiveRate: 0,
+    falseNegativeRate: 0,
+  }]);
   assert.deepEqual(result.validation.thresholdBandCounts, {
     withBands: 2,
     aboveMinimumVisible: 1,

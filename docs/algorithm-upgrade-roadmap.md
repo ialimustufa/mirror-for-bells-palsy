@@ -26,7 +26,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
 - Phase 4 validation dataset format: implemented as an explicit local JSONL export with frame-sample records and label templates for intended movement, affected side, quality, visible movement level, and coactivation notes.
 - Phase 4 validation label workflow: implemented CSV label-sheet export and label merge scripts so clinician/user/developer-reviewed labels can be attached to validation JSONL datasets.
-- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, and score drift. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`.
+- Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, score drift, and per-exercise error rates. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`; model-readiness decisions can be generated with `npm run validation:model-readiness`.
 - Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, a machine-readable `docs/validation-status.json`, and documentation checks for medical, privacy, and validation status.
 - Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets and applying reviewed calibration reports to production constants.
 
@@ -224,7 +224,7 @@ Work:
 - Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local frame-sample JSONL exports.
 - Label movement attempts with: intended movement, affected side, quality, visible movement level, and coactivation notes.
 - Compare MediaPipe landmark output on Bell's palsy faces against clinician-reviewed landmarks or region movement labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is still required.
-- Evaluate whether a lightweight correction model or clinical-domain landmark model is justified.
+- Evaluate whether a lightweight correction model or clinical-domain landmark model is justified. Status: implemented as `npm run validation:model-readiness`, which fails closed without enough reviewed data, recommends threshold review before model training, and does not justify clinical-domain landmark models without reviewed landmark annotations.
 
 Exit criteria:
 

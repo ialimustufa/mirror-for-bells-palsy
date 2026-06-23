@@ -9,6 +9,41 @@ function compactRate(numerator, denominator) {
   return denominator > 0 ? Number((numerator / denominator).toFixed(4)) : null;
 }
 
+function createValidationCounts() {
+  return {
+    labeledFrameCount: 0,
+    truePositive: 0,
+    trueNegative: 0,
+    falsePositive: 0,
+    falseNegative: 0,
+  };
+}
+
+function recordValidationPrediction(counts, expectedPositive, replayScored) {
+  counts.labeledFrameCount += 1;
+  if (expectedPositive && replayScored) counts.truePositive += 1;
+  else if (!expectedPositive && !replayScored) counts.trueNegative += 1;
+  else if (!expectedPositive && replayScored) counts.falsePositive += 1;
+  else if (expectedPositive && !replayScored) counts.falseNegative += 1;
+}
+
+function summarizeValidationCounts(counts) {
+  const positiveCount = counts.truePositive + counts.falseNegative;
+  const negativeCount = counts.trueNegative + counts.falsePositive;
+  return {
+    labeledFrameCount: counts.labeledFrameCount,
+    positiveCount,
+    negativeCount,
+    truePositive: counts.truePositive,
+    trueNegative: counts.trueNegative,
+    falsePositive: counts.falsePositive,
+    falseNegative: counts.falseNegative,
+    accuracy: compactRate(counts.truePositive + counts.trueNegative, counts.labeledFrameCount),
+    falsePositiveRate: compactRate(counts.falsePositive, negativeCount),
+    falseNegativeRate: compactRate(counts.falseNegative, positiveCount),
+  };
+}
+
 function frameKey(frame = {}) {
   return [
     frame.id ?? "",
@@ -62,11 +97,8 @@ function evaluateValidationFrameSamples(samples = [], options = {}) {
     labels.set(frameKey(sample), movementClassFromLabel(label));
   }
 
-  let labeledFrameCount = 0;
-  let truePositive = 0;
-  let trueNegative = 0;
-  let falsePositive = 0;
-  let falseNegative = 0;
+  const aggregateCounts = createValidationCounts();
+  const byExerciseCounts = new Map();
   const thresholdBandCounts = {
     withBands: 0,
     aboveMinimumVisible: 0,
@@ -77,7 +109,11 @@ function evaluateValidationFrameSamples(samples = [], options = {}) {
   for (const frame of replay.frames) {
     const expectedPositive = labels.get(frameKey(frame));
     if (expectedPositive == null) continue;
-    labeledFrameCount += 1;
+    recordValidationPrediction(aggregateCounts, expectedPositive, frame.replayScored);
+    const exerciseId = frame.exerciseId ?? "unknown";
+    const exerciseCounts = byExerciseCounts.get(exerciseId) ?? createValidationCounts();
+    recordValidationPrediction(exerciseCounts, expectedPositive, frame.replayScored);
+    byExerciseCounts.set(exerciseId, exerciseCounts);
     if (frame.thresholdBands && Number.isFinite(frame.bandPeak)) {
       thresholdBandCounts.withBands += 1;
       const minimumVisible = frame.thresholdBands.minimumVisible;
@@ -88,29 +124,17 @@ function evaluateValidationFrameSamples(samples = [], options = {}) {
       if (Number.isFinite(baselineTarget) && frame.bandPeak >= baselineTarget) thresholdBandCounts.aboveBaselineTarget += 1;
       if (Number.isFinite(minimumVisible) && frame.bandPeak < minimumVisible) thresholdBandCounts.belowMinimumVisible += 1;
     }
-    if (expectedPositive && frame.replayScored) truePositive += 1;
-    else if (!expectedPositive && !frame.replayScored) trueNegative += 1;
-    else if (!expectedPositive && frame.replayScored) falsePositive += 1;
-    else if (expectedPositive && !frame.replayScored) falseNegative += 1;
   }
 
-  const positiveCount = truePositive + falseNegative;
-  const negativeCount = trueNegative + falsePositive;
   return {
     ...replay,
     validation: {
-      labeledFrameCount,
-      positiveCount,
-      negativeCount,
-      truePositive,
-      trueNegative,
-      falsePositive,
-      falseNegative,
-      accuracy: compactRate(truePositive + trueNegative, labeledFrameCount),
-      falsePositiveRate: compactRate(falsePositive, negativeCount),
-      falseNegativeRate: compactRate(falseNegative, positiveCount),
+      ...summarizeValidationCounts(aggregateCounts),
       meanAbsScoreDelta: replay.meanAbsScoreDelta,
       thresholdBandCounts,
+      byExercise: [...byExerciseCounts.entries()]
+        .map(([exerciseId, counts]) => ({ exerciseId, ...summarizeValidationCounts(counts) }))
+        .sort((a, b) => a.exerciseId.localeCompare(b.exerciseId)),
     },
   };
 }

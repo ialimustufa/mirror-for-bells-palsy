@@ -941,6 +941,7 @@ npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
+npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
 ```
 
 The label-sheet command creates a CSV for clinician, user, or developer review.
@@ -953,7 +954,9 @@ mean absolute stored-vs-replayed score drift. Frames labeled with
 are treated as positive examples unless the label quality is `unusable` or
 `uncertain`. When frame samples contain threshold bands, the evaluator also reports
 how many labeled frames landed above minimum-visible, reliable, and baseline-target
-movement, plus how many stayed below minimum-visible movement.
+movement, plus how many stayed below minimum-visible movement. It also reports
+per-exercise validation rates so weak movement families are visible instead of
+being hidden by aggregate accuracy.
 
 The threshold calibration command groups reviewed labels by exercise and writes a
 recommendation report. It includes current reliable thresholds, positive/negative
@@ -961,6 +964,15 @@ peak summaries, recommended minimum-visible/reliable/baseline-target bands, and
 projected false-positive/false-negative rates at the recommended reliable threshold.
 The report does not change production constants; a human review step is still
 required before changing scoring behavior.
+
+The model-readiness command reads either a reviewed dataset JSONL file or a
+validation report JSON file and writes a conservative decision report. It fails
+closed when reviewed frame, positive/negative, or exercise coverage is too small.
+When reviewed replay disagreement is mild, it recommends threshold review before
+model training. When disagreement is high after that threshold workflow, it flags
+lightweight correction-model review. It does not justify a clinical-domain landmark
+model from movement labels alone; that requires reviewed landmark-localization
+annotations.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset

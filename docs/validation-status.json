@@ -9,7 +9,7 @@
   "productionThresholdConstantsCalibrated": false,
   "clinicalFacingScoresAllowed": false,
   "notes": [
-    "Validation export, label-sheet, merge, evaluation, and threshold calibration report tooling are implemented.",
+    "Validation export, label-sheet, merge, evaluation, threshold calibration, and model-readiness report tooling are implemented.",
     "No clinician-reviewed validation dataset is committed in this repository.",
     "Production threshold constants should not be changed from calibration reports until reviewed datasets are available."
   ]
