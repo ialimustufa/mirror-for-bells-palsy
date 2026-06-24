@@ -1111,8 +1111,9 @@ report artifacts. Clinical agreement report paths must point to Markdown reports
 with the Mirror clinical-scale agreement heading, a passing confidence-standard
 status, primary House-Brackmann/Sunnybrook/eFACE rows, primary Wilson lower
 bounds meeting the configured standard, House-Brackmann case-mix coverage,
-current estimator-version evidence, explicit reference-standard controls, and
-release-control text. Clinical reviewer-agreement report paths must point to JSON
+current estimator-version evidence, the 80% usable-movement coverage floor,
+complete/minimum estimate evidence-tier controls, explicit reference-standard
+controls, and release-control text. Clinical reviewer-agreement report paths must point to JSON
 `mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
 eligible reviewer sheets, no metadata blockers, at least 30 paired labels on each
 primary scale, at least 80% observed reviewer agreement, and Wilson lower-bound

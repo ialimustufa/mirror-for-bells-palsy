@@ -207,7 +207,8 @@ status, all three primary scale rows, Wilson lower-bound agreement meeting the
 minimum, explicit reference-standard controls, an eligible blinded independent
 label count meeting the minimum reviewed-assessment floor, a House-Brackmann
 case-mix section meeting the severity-band minimum, current estimator-version
-evidence, a reviewer-agreement artifact meeting the paired-label floor plus the
+evidence, the 80% usable-movement coverage floor, complete/minimum estimate
+evidence-tier controls, a reviewer-agreement artifact meeting the paired-label floor plus the
 observed-agreement and Wilson lower-bound reviewer-agreement gates, and
 release-control text. A status update that only changes counts or report paths
 without matching artifacts must fail the release check.

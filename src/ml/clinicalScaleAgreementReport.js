@@ -159,12 +159,16 @@ function caseMixLines(validation = {}, readiness = {}) {
 }
 
 function referenceStandardControlLines(validation = {}, readiness = {}) {
+  const minUsableMovementCoverageRatio = readiness.thresholds?.minUsableMovementCoverageRatio
+    ?? validation.standard?.minUsableMovementCoverageRatio
+    ?? 0.8;
   return [
     "## Reference Standard Controls",
     "",
     `- Eligible blinded independent clinical labels: ${validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0}`,
     "- Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded` to show Mirror estimates were hidden before target assignment.",
     `- Estimator version control: counted labels require clinical-scale estimator version v${readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? "n/a"}.`,
+    `- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least ${Math.round(minUsableMovementCoverageRatio * 100)}% usable movement coverage, and valid in-range primary estimate values.`,
     "- Independence control: counted labels require clinician-assigned or adjudicated `labelSource` metadata, not Mirror/copied/algorithmic labels.",
     "- Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.",
     "- Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.",
@@ -204,6 +208,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     `- eFACE total target: within ${readiness.thresholds?.efaceTolerance ?? validation.standard?.efaceTolerance ?? 10} points`,
     `- Confidence interval: ${Math.round((readiness.thresholds?.confidenceInterval?.confidenceLevel ?? validation.standard?.confidenceInterval?.confidenceLevel ?? 0.95) * 100)}% Wilson score interval`,
     `- Clinical-scale estimator version: v${readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? "n/a"}`,
+    `- Minimum usable movement coverage: ${formatPercent(readiness.thresholds?.minUsableMovementCoverageRatio ?? validation.standard?.minUsableMovementCoverageRatio ?? 0.8)}`,
     "",
     "## Dataset Summary",
     "",
@@ -242,7 +247,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     "- Index estimate: Mirror standard-assessment clinical-scale estimates generated from local practice data.",
     "- Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from `docs/clinical-scale-review-protocol.md`.",
-    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, `labelSource`, clinical `reviewerRole`, and valid primary target fields must be present before rows count toward readiness.",
+    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier/coverage controls, `labelSource`, clinical `reviewerRole`, and valid primary target fields must be present before rows count toward readiness.",
     "- Primary performance measures: tolerance-based agreement rate, missing-estimate count, mean absolute delta, and Wilson confidence interval.",
     "- Error review: out-of-tolerance assessment rows listed above for adjudication and scorer review.",
     "- Release control: this report alone cannot enable clinical-facing scores; `docs/validation-status.json` must be reviewed and updated separately.",

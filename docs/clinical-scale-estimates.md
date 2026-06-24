@@ -156,7 +156,8 @@ reasons, and mismatch samples that a release reviewer needs before any
 validation-status update. The release status artifact checker requires the report
 to document the eligible blinded independent label count, all three
 House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
-current clinical-scale estimator version, and the
+current clinical-scale estimator version, the 80% usable-movement coverage
+floor, the complete/minimum estimate evidence-tier gate, and the
 `sourceLabelSheetMode`/`reviewBlinded`/estimator `version`/`labelSource`
 controls before a clinical agreement artifact can support clinical-facing score
 availability.

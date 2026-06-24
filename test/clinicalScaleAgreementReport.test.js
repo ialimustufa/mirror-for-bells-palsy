@@ -31,6 +31,7 @@ function validationReport(overrides = {}) {
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
       minReviewedAssessments: 30,
+      minUsableMovementCoverageRatio: 0.8,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
       confidenceInterval: {
@@ -80,6 +81,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Status: meets-clinical-scale-confidence-standard/);
   assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
   assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+  assert.match(markdown, /Minimum usable movement coverage: 80\.0%/);
   assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
   assert.match(markdown, /eFACE total \| within 10 points/);
@@ -96,9 +98,13 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
   assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);
   assert.match(markdown, new RegExp(`Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+  assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates with status `estimated`/);
+  assert.match(markdown, /complete\/minimum evidence tier/);
+  assert.match(markdown, /at least 80% usable movement coverage/);
+  assert.match(markdown, /valid in-range primary estimate values/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
   assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role/);
-  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, `labelSource`, clinical `reviewerRole`/);
+  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier\/coverage controls, `labelSource`, clinical `reviewerRole`/);
   assert.match(markdown, /human-reviewed release decision/);
   assert.match(markdown, /TRIPOD\+AI/);
   assert.match(markdown, /STARD 2015/);

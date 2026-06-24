@@ -19,6 +19,7 @@ const BASE_STATUS = {
     minReviewedAssessments: 30,
     minHouseBrackmannSeverityBands: 3,
     minAssessmentsPerSeverityBand: 3,
+    minUsableMovementCoverageRatio: 0.8,
     confidenceInterval: "wilson-95",
     clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
     reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -40,6 +41,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Evidence Standard
 
 - Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}
+- Minimum usable movement coverage: 80.0%
 
 ## Dataset Summary
 
@@ -71,6 +73,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 - Eligible blinded independent clinical labels: ${reviewedCount}
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
+- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, and valid in-range primary estimate values.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
 - Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.
@@ -78,7 +81,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage controls, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -246,6 +249,7 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].minimumUsableMovementCoverageRatio, 0.8);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].comparedAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryPairedCount, 30);
@@ -358,6 +362,7 @@ test("validation status rejects weak clinical scale minimum standards", () => {
         minReviewedAssessments: 12,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
+        minUsableMovementCoverageRatio: 0.8,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -377,6 +382,7 @@ test("validation status rejects missing clinical scale review protocol", () => {
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
+        minUsableMovementCoverageRatio: 0.8,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       },
@@ -408,6 +414,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
+        minUsableMovementCoverageRatio: 0.8,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -424,6 +431,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 2,
         minAssessmentsPerSeverityBand: 3,
+        minUsableMovementCoverageRatio: 0.8,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -440,12 +448,23 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 2,
+        minUsableMovementCoverageRatio: 0.8,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
     }),
     /minAssessmentsPerSeverityBand/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        ...BASE_STATUS.clinicalScaleMinimumStandard,
+        minUsableMovementCoverageRatio: 0.7,
+      },
+    }),
+    /minUsableMovementCoverageRatio/,
   );
 });
 
@@ -595,6 +614,35 @@ test("validation status artifacts reject clinical agreement reports without blin
       }),
     }),
     /reference-standard controls section/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports without estimate evidence controls", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport()
+          .replace("- Minimum usable movement coverage: 80.0%\n", "")
+          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 80% usable movement coverage, and valid in-range primary estimate values.\n", ""),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /usable movement coverage/,
   );
 });
 

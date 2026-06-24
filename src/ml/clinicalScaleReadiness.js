@@ -13,6 +13,7 @@ function normalizeThresholds(options = {}) {
     minReviewedAssessments: Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments)),
     minHouseBrackmannSeverityBands: Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
     minAssessmentsPerSeverityBand: Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand)),
+    minUsableMovementCoverageRatio: options.minUsableMovementCoverageRatio ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minUsableMovementCoverageRatio,
     confidenceLevel: options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel,
     clinicalScaleEstimateVersion: options.clinicalScaleEstimateVersion ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion,
   };
