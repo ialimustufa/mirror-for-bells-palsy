@@ -56,6 +56,45 @@ function assertStringArray(value, field) {
   }
 }
 
+function assertIntegerAtLeast(value, minimum, field) {
+  assertCondition(Number.isInteger(value) && value >= minimum, `${field} must be an integer at least ${minimum}`);
+}
+
+function assertNumberAtLeast(value, minimum, field) {
+  assertCondition(Number.isFinite(value) && value >= minimum, `${field} must be at least ${minimum}`);
+}
+
+function assertRatioMatches(value, expected, field) {
+  assertCondition(
+    Number.isFinite(value) && Number.isFinite(expected) && Math.abs(value - expected) <= 0.0005,
+    `${field} must match the referenced report artifact value ${expected}`,
+  );
+}
+
+function assertClinicalScaleAvailabilityEvidence(status, scaleKey, scale) {
+  const fieldPrefix = `clinicalScaleAvailability.${scaleKey}`;
+  assertCondition(
+    status.clinicalScaleAgreementReports.includes(scale.clinicalAgreementReport),
+    `${fieldPrefix}.clinicalAgreementReport must reference a listed clinical scale agreement report`,
+  );
+  assertCondition(
+    status.clinicalScaleReviewerAgreementReports.includes(scale.reviewerAgreementReport),
+    `${fieldPrefix}.reviewerAgreementReport must reference a listed clinical scale reviewer agreement report`,
+  );
+  assertCondition(
+    scale.clinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion,
+    `${fieldPrefix}.clinicalScaleEstimateVersion must be ${status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion}`,
+  );
+  assertIntegerAtLeast(scale.reviewedLabelCount, status.clinicalScaleMinimumStandard.minReviewedAssessments, `${fieldPrefix}.reviewedLabelCount`);
+  assertIntegerAtLeast(scale.distinctValidationCaseCount, status.clinicalScaleMinimumStandard.minDistinctClinicalCases, `${fieldPrefix}.distinctValidationCaseCount`);
+  assertNumberAtLeast(scale.observedAgreementRate, status.clinicalScaleMinimumStandard.minAgreementRate, `${fieldPrefix}.observedAgreementRate`);
+  assertNumberAtLeast(scale.agreementWilsonLowerBound, status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound, `${fieldPrefix}.agreementWilsonLowerBound`);
+  assertIntegerAtLeast(scale.reviewerPairedLabelCount, status.clinicalScaleMinimumStandard.minReviewedAssessments, `${fieldPrefix}.reviewerPairedLabelCount`);
+  assertIntegerAtLeast(scale.reviewerDistinctValidationCaseCount, status.clinicalScaleMinimumStandard.minDistinctClinicalCases, `${fieldPrefix}.reviewerDistinctValidationCaseCount`);
+  assertNumberAtLeast(scale.reviewerObservedAgreementRate, status.clinicalScaleMinimumStandard.minAgreementRate, `${fieldPrefix}.reviewerObservedAgreementRate`);
+  assertNumberAtLeast(scale.reviewerAgreementWilsonLowerBound, status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound, `${fieldPrefix}.reviewerAgreementWilsonLowerBound`);
+}
+
 function assertClinicalScaleAvailability(value, status) {
   assertCondition(value && typeof value === "object" && !Array.isArray(value), "clinicalScaleAvailability must be an object");
   for (const key of Object.keys(value)) {
@@ -75,6 +114,7 @@ function assertClinicalScaleAvailability(value, status) {
         status.clinicalFacingScoresAllowed === true,
         `clinicalScaleAvailability.${scaleKey}.clinicalFacingScoresAllowed requires clinicalFacingScoresAllowed true`,
       );
+      assertClinicalScaleAvailabilityEvidence(status, scaleKey, scale);
     }
   }
   if (status.clinicalFacingScoresAllowed) {
@@ -528,6 +568,32 @@ function reviewerAgreementReportMeetsScaleSet(report, status, scaleKeys) {
   );
 }
 
+function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports) {
+  for (const scaleKey of enabledClinicalScaleKeys(status)) {
+    const fieldPrefix = `clinicalScaleAvailability.${scaleKey}`;
+    const scale = status.clinicalScaleAvailability[scaleKey];
+    const clinicalReport = clinicalAgreementReports.find((report) => report.path === scale.clinicalAgreementReport);
+    const reviewerReport = clinicalReviewerAgreementReports.find((report) => report.path === scale.reviewerAgreementReport);
+    assertCondition(clinicalReport, `${fieldPrefix}.clinicalAgreementReport must reference a validated clinical scale agreement report artifact`);
+    assertCondition(reviewerReport, `${fieldPrefix}.reviewerAgreementReport must reference a validated clinical scale reviewer agreement report artifact`);
+    const clinicalRow = clinicalReport.primaryScaleAgreementRows?.[scaleKey];
+    const reviewerKey = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.reviewerKey;
+    const reviewerRow = reviewerKey ? reviewerReport.byScale?.[reviewerKey] : null;
+    assertCondition(clinicalRow, `${fieldPrefix}.clinicalAgreementReport must include a ${scaleKey} agreement row`);
+    assertCondition(reviewerRow, `${fieldPrefix}.reviewerAgreementReport must include a ${scaleKey} reviewer agreement row`);
+    assertCondition(scale.clinicalScaleEstimateVersion === clinicalReport.clinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the clinical agreement report`);
+    assertCondition(scale.clinicalScaleEstimateVersion === reviewerReport.requiredClinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the reviewer agreement report`);
+    assertCondition(scale.reviewedLabelCount === clinicalRow.labeledCount, `${fieldPrefix}.reviewedLabelCount must match the referenced clinical agreement report`);
+    assertCondition(scale.distinctValidationCaseCount === clinicalReport.distinctClinicalCaseCount, `${fieldPrefix}.distinctValidationCaseCount must match the referenced clinical agreement report`);
+    assertRatioMatches(scale.observedAgreementRate, clinicalRow.agreementRate, `${fieldPrefix}.observedAgreementRate`);
+    assertRatioMatches(scale.agreementWilsonLowerBound, clinicalRow.agreementWilsonLowerBound, `${fieldPrefix}.agreementWilsonLowerBound`);
+    assertCondition(scale.reviewerPairedLabelCount === reviewerRow.pairedCount, `${fieldPrefix}.reviewerPairedLabelCount must match the referenced reviewer agreement report`);
+    assertCondition(scale.reviewerDistinctValidationCaseCount === reviewerReport.distinctValidationCaseCount, `${fieldPrefix}.reviewerDistinctValidationCaseCount must match the referenced reviewer agreement report`);
+    assertRatioMatches(scale.reviewerObservedAgreementRate, reviewerRow.withinToleranceRate, `${fieldPrefix}.reviewerObservedAgreementRate`);
+    assertRatioMatches(scale.reviewerAgreementWilsonLowerBound, reviewerRow.withinToleranceConfidenceInterval?.lower, `${fieldPrefix}.reviewerAgreementWilsonLowerBound`);
+  }
+}
+
 async function readArtifactText(path, options = {}) {
   if (options.readArtifactText) return options.readArtifactText(path);
   try {
@@ -624,6 +690,7 @@ async function validateStatusArtifacts(status, options = {}) {
       reviewerReportMeetingMinimum,
       "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, distinct pseudonymous reviewer ids, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
     );
+    clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports);
   }
   if (status.productionThresholdConstantsCalibrated) {
     const readyExerciseCount = thresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);

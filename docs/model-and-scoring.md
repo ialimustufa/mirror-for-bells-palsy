@@ -1209,7 +1209,9 @@ summary pointing to the listed clinical and reviewer agreement reports and
 showing current estimator version, reviewed-label count, distinct-case count,
 observed agreement, Wilson lower bound, reviewer paired-label count, reviewer
 distinct-case count, reviewer observed agreement, and reviewer Wilson lower
-bound. It also audits the
+bound. `npm run validation:status` cross-checks those per-scale summaries
+against the parsed report artifacts, so a status file cannot promote a scale by
+entering unsupported counts, rates, Wilson lower bounds, or report paths. It also audits the
 machine-readable minimum standard before using clinical-facing wording: the
 30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
 Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence

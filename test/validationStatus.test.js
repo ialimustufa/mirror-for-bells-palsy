@@ -4,18 +4,40 @@ import { validateStatus, validateStatusArtifacts } from "../scripts/validation-s
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement-2026-06-24.md";
+const REVIEWER_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json";
+const THRESHOLD_CALIBRATION_REPORT_PATH = "docs/validation/threshold-calibration-2026-06-23.json";
+
+function enabledScaleEvidence(overrides = {}) {
+  return {
+    clinicalFacingScoresAllowed: true,
+    clinicalAgreementReport: CLINICAL_AGREEMENT_REPORT_PATH,
+    reviewerAgreementReport: REVIEWER_AGREEMENT_REPORT_PATH,
+    clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+    reviewedLabelCount: 30,
+    distinctValidationCaseCount: 30,
+    observedAgreementRate: 1,
+    agreementWilsonLowerBound: 0.887,
+    reviewerPairedLabelCount: 30,
+    reviewerDistinctValidationCaseCount: 30,
+    reviewerObservedAgreementRate: 1,
+    reviewerAgreementWilsonLowerBound: 0.887,
+    ...overrides,
+  };
+}
+
 const DISABLED_CLINICAL_SCALE_AVAILABILITY = {
   houseBrackmann: { clinicalFacingScoresAllowed: false },
   sunnybrook: { clinicalFacingScoresAllowed: false },
   eface: { clinicalFacingScoresAllowed: false },
 };
 const ENABLED_CLINICAL_SCALE_AVAILABILITY = {
-  houseBrackmann: { clinicalFacingScoresAllowed: true },
-  sunnybrook: { clinicalFacingScoresAllowed: true },
-  eface: { clinicalFacingScoresAllowed: true },
+  houseBrackmann: enabledScaleEvidence(),
+  sunnybrook: enabledScaleEvidence(),
+  eface: enabledScaleEvidence(),
 };
 const HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY = {
-  houseBrackmann: { clinicalFacingScoresAllowed: true },
+  houseBrackmann: enabledScaleEvidence(),
   sunnybrook: { clinicalFacingScoresAllowed: false },
   eface: { clinicalFacingScoresAllowed: false },
 };
@@ -372,6 +394,61 @@ test("validation status accepts documented clinical agreement state", () => {
   assert.equal(status.clinicalFacingScoresAllowed, true);
 });
 
+test("validation status rejects enabled per-scale availability without evidence summaries", () => {
+  const passingStatus = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  assert.throws(
+    () => validateStatus({
+      ...passingStatus,
+      clinicalScaleAvailability: {
+        ...HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+        houseBrackmann: { clinicalFacingScoresAllowed: true },
+      },
+    }),
+    /houseBrackmann\.clinicalAgreementReport/,
+  );
+
+  const weakEvidence = [
+    { override: { clinicalAgreementReport: "docs/validation/other-report.md" }, blocker: /houseBrackmann\.clinicalAgreementReport/ },
+    { override: { reviewerAgreementReport: "docs/validation/other-reviewer-report.json" }, blocker: /houseBrackmann\.reviewerAgreementReport/ },
+    { override: { clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1 }, blocker: /houseBrackmann\.clinicalScaleEstimateVersion/ },
+    { override: { reviewedLabelCount: 29 }, blocker: /houseBrackmann\.reviewedLabelCount/ },
+    { override: { distinctValidationCaseCount: 9 }, blocker: /houseBrackmann\.distinctValidationCaseCount/ },
+    { override: { observedAgreementRate: 0.79 }, blocker: /houseBrackmann\.observedAgreementRate/ },
+    { override: { agreementWilsonLowerBound: 0.79 }, blocker: /houseBrackmann\.agreementWilsonLowerBound/ },
+    { override: { reviewerPairedLabelCount: 29 }, blocker: /houseBrackmann\.reviewerPairedLabelCount/ },
+    { override: { reviewerDistinctValidationCaseCount: 9 }, blocker: /houseBrackmann\.reviewerDistinctValidationCaseCount/ },
+    { override: { reviewerObservedAgreementRate: 0.79 }, blocker: /houseBrackmann\.reviewerObservedAgreementRate/ },
+    { override: { reviewerAgreementWilsonLowerBound: 0.79 }, blocker: /houseBrackmann\.reviewerAgreementWilsonLowerBound/ },
+  ];
+
+  for (const { override, blocker } of weakEvidence) {
+    assert.throws(
+      () => validateStatus({
+        ...passingStatus,
+        clinicalScaleAvailability: {
+          ...HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+          houseBrackmann: enabledScaleEvidence(override),
+        },
+      }),
+      blocker,
+    );
+  }
+});
+
 test("validation status rejects unknown status values", () => {
   assert.throws(
     () => validateStatus({
@@ -511,6 +588,52 @@ test("validation status artifacts accept scale-specific clinical availability fo
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.agreementWilsonLowerBound, 0.488);
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.status, "not-ready");
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].byScale.sunnybrookComposite.meetsMinimumStandard, false);
+});
+
+test("validation status artifacts reject per-scale evidence summaries that do not match their reports", async () => {
+  const passingStatus = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+  };
+  const mismatchedEvidence = [
+    { override: { reviewedLabelCount: 31 }, blocker: /houseBrackmann\.reviewedLabelCount/ },
+    { override: { distinctValidationCaseCount: 31 }, blocker: /houseBrackmann\.distinctValidationCaseCount/ },
+    { override: { observedAgreementRate: 0.99 }, blocker: /houseBrackmann\.observedAgreementRate/ },
+    { override: { agreementWilsonLowerBound: 0.888 }, blocker: /houseBrackmann\.agreementWilsonLowerBound/ },
+    { override: { reviewerPairedLabelCount: 31 }, blocker: /houseBrackmann\.reviewerPairedLabelCount/ },
+    { override: { reviewerDistinctValidationCaseCount: 31 }, blocker: /houseBrackmann\.reviewerDistinctValidationCaseCount/ },
+    { override: { reviewerObservedAgreementRate: 0.99 }, blocker: /houseBrackmann\.reviewerObservedAgreementRate/ },
+    { override: { reviewerAgreementWilsonLowerBound: 0.888 }, blocker: /houseBrackmann\.reviewerAgreementWilsonLowerBound/ },
+  ];
+
+  for (const { override, blocker } of mismatchedEvidence) {
+    await assert.rejects(
+      () => validateStatusArtifacts({
+        ...passingStatus,
+        clinicalScaleAvailability: {
+          ...HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+          houseBrackmann: enabledScaleEvidence(override),
+        },
+      }, {
+        readArtifactText: artifactReader({
+          [CLINICAL_AGREEMENT_REPORT_PATH]: houseBrackmannOnlyClinicalAgreementReport(),
+          [REVIEWER_AGREEMENT_REPORT_PATH]: houseBrackmannOnlyClinicalReviewerAgreementReport(),
+          [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+        }),
+      }),
+      blocker,
+    );
+  }
 });
 
 test("validation status artifacts reject reviewer agreement reports with too few paired labels", async () => {
@@ -1082,6 +1205,13 @@ test("validation status rejects clinical-facing scores without reviewed coverage
     () => validateStatus({
       ...BASE_STATUS,
       status: "clinical-scale-agreement-reviewed",
+      reviewedDatasetCount: 2,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 30,
+      readyExerciseCount: 5,
+      clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+      clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+      thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
@@ -1161,7 +1291,7 @@ test("validation status rejects clinical-facing scores without clinical agreemen
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
-    /clinical scale agreement reports/,
+    /clinicalScaleAvailability\.houseBrackmann\.clinicalAgreementReport/,
   );
 });
 
@@ -1180,7 +1310,7 @@ test("validation status rejects clinical-facing scores without reviewer agreemen
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
-    /clinical scale reviewer agreement reports/,
+    /clinicalScaleAvailability\.houseBrackmann\.reviewerAgreementReport/,
   );
 });
 

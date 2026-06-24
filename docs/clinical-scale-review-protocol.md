@@ -300,6 +300,11 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   presented as an estimate, but it cannot make any scale clinical-facing unless
   the global `clinicalFacingScoresAllowed` release gate is also true. If the
   global gate is true, at least one primary scale must be explicitly enabled.
+  Every enabled scale must also carry a status-file evidence summary that names
+  the clinical agreement report, names the reviewer-agreement report, records
+  the current estimator version, and repeats the report-backed label counts,
+  distinct-case counts, observed agreement rates, and Wilson lower bounds for
+  both clinician-label agreement and reviewer agreement.
 
 Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.
@@ -315,7 +320,8 @@ movement coverage floor, complete/minimum estimate evidence-tier controls,
 scale-specific input provenance, a reviewer-agreement artifact meeting the
 paired-label and distinct validation-case floors, distinct pseudonymous reviewer
 ids, plus the observed-agreement and Wilson lower-bound reviewer-agreement gates
-for every enabled scale plus the same House-Brackmann severity-band spread, and
+for every enabled scale plus the same House-Brackmann severity-band spread,
+per-scale status evidence summaries that match the referenced artifacts, and
 release-control text. A
 status update that only changes counts or report paths without matching
 artifacts must fail the release check.
