@@ -236,12 +236,30 @@ function incrementReasonCounts(counts, reasons = []) {
   for (const reason of reasons) incrementReasonCount(counts, reason);
 }
 
+function validPrimaryReviewScaleKeys(row = {}) {
+  return PRIMARY_REVIEW_SCALE_KEYS.filter((scaleKey) => scaleValue(scaleKey, row[scaleKey]) != null);
+}
+
+function primaryReviewScaleLabelIssueReasons(row = {}, scaleKeys = PRIMARY_REVIEW_SCALE_KEYS) {
+  return scaleKeys
+    .filter((scaleKey) => scaleValue(scaleKey, row[scaleKey]) == null)
+    .map((scaleKey) => `missing valid ${scaleKey} label`);
+}
+
+function hasAnyPairedPrimaryReviewScale(reviewerA = {}, reviewerB = {}) {
+  return PRIMARY_REVIEW_SCALE_KEYS.some((scaleKey) => (
+    scaleValue(scaleKey, reviewerA?.[scaleKey]) != null
+    && scaleValue(scaleKey, reviewerB?.[scaleKey]) != null
+  ));
+}
+
 function reviewerRowEligibility(row = {}, options = {}) {
   const reviewerRole = String(row.reviewerRole ?? "").trim();
   const confidence = String(row.clinicianConfidence ?? "").trim();
   const sourceLabelSheetMode = String(row.sourceLabelSheetMode ?? "").trim();
   const reviewBlinded = String(row.reviewBlinded ?? "").trim();
   const labelSource = String(row.labelSource ?? "").trim();
+  const requiredPrimaryScaleKeys = options.requiredPrimaryScaleKeys ?? PRIMARY_REVIEW_SCALE_KEYS;
   const reasons = [];
   reasons.push(...estimateEvidenceReasons(row, options));
   if (!reviewerRole) {
@@ -267,7 +285,7 @@ function reviewerRowEligibility(row = {}, options = {}) {
   } else if (!INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN.test(labelSource)) {
     reasons.push("label source is not recognized as independent clinical");
   }
-  for (const scaleKey of PRIMARY_REVIEW_SCALE_KEYS) {
+  for (const scaleKey of requiredPrimaryScaleKeys) {
     if (scaleValue(scaleKey, row[scaleKey]) == null) reasons.push(`missing valid ${scaleKey} label`);
   }
   return {
@@ -278,21 +296,30 @@ function reviewerRowEligibility(row = {}, options = {}) {
 
 function reviewerSheetEligibility(rowsById, reviewer, options = {}) {
   const reasonCounts = {};
+  const primaryScaleLabelIssueReasonCounts = {};
   const issues = [];
   let eligibleAssessmentCount = 0;
   for (const [assessmentId, row] of rowsById.entries()) {
-    const eligibility = reviewerRowEligibility(row, options);
-    if (eligibility.eligible) {
+    const eligibility = reviewerRowEligibility(row, {
+      ...options,
+      requiredPrimaryScaleKeys: [],
+    });
+    if (eligibility.eligible && validPrimaryReviewScaleKeys(row).length) {
       eligibleAssessmentCount += 1;
+      incrementReasonCounts(primaryScaleLabelIssueReasonCounts, primaryReviewScaleLabelIssueReasons(row));
       continue;
     }
-    for (const reason of eligibility.reasons) incrementReasonCount(reasonCounts, reason);
-    issues.push({ reviewer, assessmentId, reasons: eligibility.reasons });
+    const reasons = eligibility.eligible
+      ? primaryReviewScaleLabelIssueReasons(row)
+      : eligibility.reasons;
+    incrementReasonCounts(reasonCounts, reasons);
+    issues.push({ reviewer, assessmentId, reasons });
   }
   return {
     eligibleAssessmentCount,
     ineligibleAssessmentCount: issues.length,
     ineligibleReasons: reasonCounts,
+    primaryScaleLabelIssueReasons: primaryScaleLabelIssueReasonCounts,
     issues: issues.slice(0, 20),
   };
 }
@@ -306,8 +333,14 @@ function reviewerPairEligibility(assessmentId, reviewerA, reviewerB, options = {
     return { assessmentId, eligible: false, reasons };
   }
 
-  const reviewerAEligibility = reviewerRowEligibility(reviewerA, options);
-  const reviewerBEligibility = reviewerRowEligibility(reviewerB, options);
+  const reviewerAEligibility = reviewerRowEligibility(reviewerA, {
+    ...options,
+    requiredPrimaryScaleKeys: [],
+  });
+  const reviewerBEligibility = reviewerRowEligibility(reviewerB, {
+    ...options,
+    requiredPrimaryScaleKeys: [],
+  });
   reasons.push(...reviewerAEligibility.reasons.map((reason) => `reviewer A: ${reason}`));
   reasons.push(...reviewerBEligibility.reasons.map((reason) => `reviewer B: ${reason}`));
 
@@ -324,6 +357,9 @@ function reviewerPairEligibility(assessmentId, reviewerA, reviewerB, options = {
   }
   if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) {
     reasons.push("reviewer sheets have mismatched estimate evidence");
+  }
+  if (options.requirePairedPrimaryLabels !== false && !hasAnyPairedPrimaryReviewScale(reviewerA, reviewerB)) {
+    reasons.push("missing paired primary reviewer labels");
   }
 
   return {
@@ -577,6 +613,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     const pairEligibility = reviewerPairEligibility(assessmentId, reviewerA, reviewerB, {
       ...estimateEvidenceOptions,
       clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
+      requirePairedPrimaryLabels: false,
     });
     if (reviewerA && reviewerB && clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) {
       estimateVersionMismatches.push({
@@ -593,9 +630,19 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       });
     }
     if (pairEligibility.eligible) {
-      eligibleReviewerPairCount += 1;
       for (const scaleKey of REVIEW_SCALE_KEYS) {
         updateScaleAccumulator(accumulators[scaleKey], assessmentId, reviewerValue(reviewerA, scaleKey), reviewerValue(reviewerB, scaleKey));
+      }
+      if (hasAnyPairedPrimaryReviewScale(reviewerA, reviewerB)) {
+        eligibleReviewerPairCount += 1;
+      } else {
+        const excludedPair = {
+          assessmentId,
+          eligible: false,
+          reasons: ["missing paired primary reviewer labels"],
+        };
+        incrementReasonCounts(excludedReviewerPairReasons, excludedPair.reasons);
+        excludedReviewerPairs.push(excludedPair);
       }
     } else {
       incrementReasonCounts(excludedReviewerPairReasons, pairEligibility.reasons);
@@ -674,6 +721,8 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerBIneligibleAssessmentCount: reviewerBEligibility.ineligibleAssessmentCount,
       reviewerAIneligibleReasons: reviewerAEligibility.ineligibleReasons,
       reviewerBIneligibleReasons: reviewerBEligibility.ineligibleReasons,
+      reviewerAPrimaryScaleLabelIssueReasons: reviewerAEligibility.primaryScaleLabelIssueReasons,
+      reviewerBPrimaryScaleLabelIssueReasons: reviewerBEligibility.primaryScaleLabelIssueReasons,
       reviewerAEstimateVersionCounts,
       reviewerBEstimateVersionCounts,
       reviewerAStaleOrMissingEstimateVersionCount,

@@ -128,6 +128,37 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
   assert.deepEqual(report.blockingReasons, []);
 });
 
+test("clinical-scale reviewer agreement lets primary scales meet evidence independently", () => {
+  const rows = Array.from({ length: 30 }, (_, index) => ({
+    assessmentId: `assessment-${index + 1}:clinical-scale`,
+    houseBrackmannGrade: index % 3 === 0 ? "II" : index % 3 === 1 ? "III" : "V",
+  }));
+
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.comparedAssessmentCount, 30);
+  assert.equal(report.summary.eligibleReviewerPairCount, 30);
+  assert.equal(report.summary.excludedReviewerPairCount, 0);
+  assert.equal(report.summary.reviewerAEligibleAssessmentCount, 30);
+  assert.equal(report.summary.reviewerBEligibleAssessmentCount, 30);
+  assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 0);
+  assert.equal(report.summary.readyPrimaryScaleCount, 1);
+  assert.equal(report.summary.reviewerAPrimaryScaleLabelIssueReasons["missing valid sunnybrookComposite label"], 30);
+  assert.equal(report.summary.reviewerBPrimaryScaleLabelIssueReasons["missing valid efaceTotal label"], 30);
+  assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 30);
+  assert.equal(report.byScale.houseBrackmannGrade.withinToleranceRate, 1);
+  assert.equal(report.byScale.houseBrackmannGrade.meetsMinimumStandard, true);
+  assert.equal(report.byScale.sunnybrookComposite.pairedCount, 0);
+  assert.equal(report.byScale.sunnybrookComposite.meetsMinimumStandard, false);
+  assert.equal(report.byScale.efaceTotal.pairedCount, 0);
+  assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, false);
+  assert.match(report.blockingReasons.join("\n"), /sunnybrookComposite/);
+  assert.match(report.blockingReasons.join("\n"), /efaceTotal/);
+});
+
 test("clinical-scale adjudication CSV preserves raw reviewer labels and can be merged after adjudication", () => {
   const reviewerA = reviewerCsv([
     { assessmentId: "assessment-1:clinical-scale", houseBrackmannGrade: "III", sunnybrookComposite: 76, efaceTotal: 73, notes: "A note" },

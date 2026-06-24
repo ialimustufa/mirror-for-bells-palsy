@@ -126,16 +126,18 @@ default minimum standard is:
   blinded`, is explicitly marked blinded to Mirror estimates, has an independent
   clinician-assigned or adjudicated `labelSource`,
   has the current clinical-scale estimator `version`, has a recognized clinician
-  or adjudicated reviewer role, is not marked uncertain, and contains valid
-  primary HB, Sunnybrook, and eFACE total labels.
+  or adjudicated reviewer role, is not marked uncertain, and contains a valid
+  target for the primary scale being counted. Missing another primary target does
+  not remove the valid target from its own denominator.
   The paired Mirror estimate must also have `status: estimated`, a v2
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
-  at least 80% usable movement coverage, and valid in-range primary estimate
-  values before the reviewed row can enter an agreement denominator.
+  and at least 80% usable movement coverage. Missing or invalid estimates are
+  reported as missing estimates in that scale's denominator rather than
+  excluding other valid scale labels on the row.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,
-  stale-version, missing-version, unblinded, incomplete, and out-of-range rows
-  are excluded from the readiness denominators and reported as excluded label
-  rows.
+  stale-version, missing-version, unblinded, incomplete, and rows with no valid
+  primary target are excluded from the readiness denominators and reported as
+  excluded label rows.
 - A Wilson 95% binomial confidence interval is reported for each agreement rate
   and the lower bound is a blocking release gate, so a raw 80% observed rate on
   a small validation set cannot pass by itself.
@@ -151,8 +153,9 @@ After `npm run validation:clinical-readiness`, use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
 to create the human-readable clinical-scale agreement report. That Markdown
 report packages the dataset summary, excluded-label reason counts, agreement
-table, Wilson intervals, missing estimate counts, estimator-version counts,
-reference-standard control statements, House-Brackmann case-mix table,
+table, Wilson intervals, missing estimate counts, scale-specific label gaps,
+estimator-version counts, reference-standard control statements,
+House-Brackmann case-mix table,
 scale-specific availability recommendations, blocking reasons, and mismatch
 samples that a release reviewer needs before any validation-status update. The
 release status artifact checker requires the report

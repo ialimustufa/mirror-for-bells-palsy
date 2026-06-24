@@ -83,14 +83,17 @@ Exclude an assessment row from clinical readiness counts when:
 - The row is missing a recognized clinician/adjudication `reviewerRole`.
 - The `reviewerRole` is marked as development rehearsal, developer, user,
   patient, caregiver, demo, test, or other non-clinical review.
-- Any primary target is missing or outside its valid range:
+- No primary target is present in a valid range. Valid ranges are
   `houseBrackmannGrade` I-VI/1-6, `sunnybrookComposite` 0-100, and
-  `efaceTotal` 0-100.
+  `efaceTotal` 0-100. A missing or out-of-range target removes that specific
+  scale from its denominator, but it does not remove other valid primary targets
+  on the same assessment.
 
-The evaluator enforces these exclusions before counting reviewed clinical-scale
-assessments. Excluded label rows are reported separately with reason counts so a
-failed readiness gate can be audited without treating rehearsal data as clinical
-evidence.
+The evaluator enforces row-level provenance exclusions before counting reviewed
+clinical-scale assessments. Valid primary targets then count scale by scale.
+Excluded label rows and scale-specific label gaps are reported separately with
+reason counts so a failed readiness gate can be audited without treating
+rehearsal data as clinical evidence.
 
 ## Review Process
 
@@ -107,8 +110,10 @@ npm run validate:dataset -- reviewed-dataset.jsonl validation-report.json
 npm run validation:clinical-readiness -- validation-report.json clinical-readiness-report.json
 ```
 
-6. Inspect the clinical readiness report. Passing requires all primary scales to
-   meet the configured observed agreement and Wilson lower-bound standard.
+6. Inspect the clinical readiness report. The full all-primary status requires
+   all primary scales to meet the configured observed agreement and Wilson
+   lower-bound standard. Scale-specific availability recommendations may identify
+   one primary scale that is evidence-eligible while another remains estimate-only.
 7. Only after human review of the dataset, label process, and readiness report
    should `docs/validation-status.json` be updated.
 
@@ -117,7 +122,9 @@ npm run validation:clinical-readiness -- validation-report.json clinical-readine
 Clinical-scale readiness uses the machine-readable standard in
 `docs/validation-status.json`:
 
-- At least 30 reviewed clinical-scale assessment labels.
+- At least 30 reviewed clinical-scale assessment labels before the full
+  all-primary status can pass, and at least 30 valid reviewed labels for any
+  primary scale before that scale can pass.
 - At least 80% observed House-Brackmann agreement within one grade.
 - At least 80% observed Sunnybrook composite agreement within 10 points.
 - At least 80% observed eFACE total agreement within 10 points.
@@ -128,13 +135,14 @@ Clinical-scale readiness uses the machine-readable standard in
 - At least three eligible labels in each represented House-Brackmann severity
   band.
 - Only eligible blinded, independently clinician-assigned or adjudicated rows
-  with the current clinical-scale estimator version and valid primary labels
-  count toward the reviewed-assessment floor and per-scale agreement
-  denominators.
+  with the current clinical-scale estimator version count toward the
+  reviewed-assessment floor. A valid primary target then counts only for that
+  scale's agreement denominator.
 - The paired Mirror estimate must also be a current-version `status: estimated`
   row with a complete or minimum evidence tier, at least 80% usable movement
-  coverage, and valid in-range primary estimate values before the reviewed label
-  can count.
+  coverage. A missing or invalid estimate is reported in that scale's denominator
+  as a missing estimate rather than excluding other valid scale labels on the
+  row.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson lower-bound gate is used because a raw observed percentage can hide

@@ -59,6 +59,14 @@ function compactNumber(value, digits = 4) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 }
 
+function incrementReasonCount(counts, reason) {
+  counts[reason] = (counts[reason] ?? 0) + 1;
+}
+
+function incrementReasonCounts(counts, reasons = []) {
+  for (const reason of reasons) incrementReasonCount(counts, reason);
+}
+
 function zScoreForConfidenceLevel(confidenceLevel) {
   return WILSON_Z_BY_CONFIDENCE_LEVEL[confidenceLevel] ?? WILSON_Z_BY_CONFIDENCE_LEVEL[DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel];
 }
@@ -255,6 +263,7 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   const labelSource = String(label.labelSource ?? "").trim();
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
     ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
+  const requiredPrimaryScales = options.requiredPrimaryScales ?? PRIMARY_CLINICAL_SCALE_LABELS;
   const estimateVersion = clinicalScaleEstimateVersion(record);
   const estimateMetadata = clinicalScaleEstimateMetadata(record);
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio
@@ -271,13 +280,6 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   }
   if (!Number.isFinite(estimateMetadata.usableMovementCoverageRatio) || estimateMetadata.usableMovementCoverageRatio < minUsableMovementCoverageRatio) {
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
-  }
-  if (estimate.houseBrackmann == null) reasons.push("missing valid houseBrackmann estimate");
-  if (!Number.isFinite(estimate.sunnybrookComposite) || estimate.sunnybrookComposite < 0 || estimate.sunnybrookComposite > 100) {
-    reasons.push("missing valid sunnybrookComposite estimate");
-  }
-  if (!Number.isFinite(estimate.efaceTotal) || estimate.efaceTotal < 0 || estimate.efaceTotal > 100) {
-    reasons.push("missing valid efaceTotal estimate");
   }
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
@@ -302,7 +304,8 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   } else if (!INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN.test(labelSource)) {
     reasons.push("label source is not recognized as independent clinical/adjudicated");
   }
-  for (const scale of PRIMARY_CLINICAL_SCALE_LABELS) {
+  for (const scale of requiredPrimaryScales) {
+    if (estimate[scale] == null) reasons.push(`missing valid ${scale} estimate`);
     if (labels[scale] == null) reasons.push(`missing valid ${scale} label`);
   }
   return {
@@ -319,11 +322,11 @@ function clinicalScaleEstimate(record = {}) {
   const eface = scales.eface ?? {};
   return {
     houseBrackmann: parseHouseBrackmannGrade(houseBrackmann.numericGrade ?? houseBrackmann.grade),
-    sunnybrookComposite: numericLabel(sunnybrook.compositeScore),
-    efaceTotal: numericLabel(eface.totalScore),
-    efaceStatic: numericLabel(eface.staticScore),
-    efaceDynamic: numericLabel(eface.dynamicScore),
-    efaceSynkinesis: numericLabel(eface.synkinesisScore),
+    sunnybrookComposite: boundedNumericLabel(sunnybrook.compositeScore),
+    efaceTotal: boundedNumericLabel(eface.totalScore),
+    efaceStatic: boundedNumericLabel(eface.staticScore),
+    efaceDynamic: boundedNumericLabel(eface.dynamicScore),
+    efaceSynkinesis: boundedNumericLabel(eface.synkinesisScore),
   };
 }
 
@@ -334,6 +337,22 @@ function hasAnyClinicalLabel(labels = {}) {
 function hasAnyRawClinicalLabel(record = {}) {
   const label = record.label ?? {};
   return CLINICAL_LABEL_SOURCE_FIELDS.some((field) => String(label[field] ?? "").trim());
+}
+
+function validPrimaryClinicalScaleLabels(labels = {}) {
+  return PRIMARY_CLINICAL_SCALE_LABELS.filter((scale) => labels[scale] != null);
+}
+
+function primaryScaleLabelIssueReasons(labels = {}, scales = PRIMARY_CLINICAL_SCALE_LABELS) {
+  return scales
+    .filter((scale) => labels[scale] == null)
+    .map((scale) => `missing valid ${scale} label`);
+}
+
+function primaryScaleEstimateIssueReasons(estimate = {}, scales = PRIMARY_CLINICAL_SCALE_LABELS) {
+  return scales
+    .filter((scale) => estimate[scale] == null)
+    .map((scale) => `missing valid ${scale} estimate`);
 }
 
 function createAgreementAccumulator(scale, agreementLabel, tolerance) {
@@ -476,6 +495,8 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   let estimatedAssessmentCount = 0;
   let excludedClinicalLabelCount = 0;
   const excludedClinicalLabelReasons = {};
+  const primaryScaleLabelIssueReasonCounts = {};
+  const primaryScaleEstimateIssueReasonCounts = {};
   const estimateVersionCounts = {};
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
     ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
@@ -492,14 +513,21 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     const eligibility = clinicalLabelEligibility(record, labels, estimate, {
       clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
       minUsableMovementCoverageRatio,
+      requiredPrimaryScales: [],
     });
     if (!eligibility.eligible) {
       excludedClinicalLabelCount += 1;
-      for (const reason of eligibility.reasons) {
-        excludedClinicalLabelReasons[reason] = (excludedClinicalLabelReasons[reason] ?? 0) + 1;
-      }
+      incrementReasonCounts(excludedClinicalLabelReasons, eligibility.reasons);
       continue;
     }
+    const validPrimaryScales = validPrimaryClinicalScaleLabels(labels);
+    if (!validPrimaryScales.length) {
+      excludedClinicalLabelCount += 1;
+      incrementReasonCounts(excludedClinicalLabelReasons, primaryScaleLabelIssueReasons(labels));
+      continue;
+    }
+    incrementReasonCounts(primaryScaleLabelIssueReasonCounts, primaryScaleLabelIssueReasons(labels));
+    incrementReasonCounts(primaryScaleEstimateIssueReasonCounts, primaryScaleEstimateIssueReasons(estimate, validPrimaryScales));
     reviewedAssessmentCount += 1;
     const severityBand = houseBrackmannSeverityBand(labels.houseBrackmann);
     if (severityBand) houseBrackmannCaseMixCounts[severityBand] += 1;
@@ -553,6 +581,8 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       reviewedAssessmentCount,
       excludedClinicalLabelCount,
       excludedClinicalLabelReasons,
+      primaryScaleLabelIssueReasons: primaryScaleLabelIssueReasonCounts,
+      primaryScaleEstimateIssueReasons: primaryScaleEstimateIssueReasonCounts,
       estimatedAssessmentCount,
       estimateVersionCounts,
       currentClinicalScaleEstimateVersionAssessmentCount: estimateVersionCounts[estimateVersionCountKey(requiredClinicalScaleEstimateVersion)] ?? 0,

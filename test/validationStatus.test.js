@@ -89,15 +89,15 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 - Eligible blinded independent clinical labels: ${reviewedCount}
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
-- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, and valid in-range primary estimate values.
+- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, and at least 80% usable movement coverage. Scale-specific rows with missing or invalid estimates are reported in that scale's denominator as missing estimates.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
-- Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.
+- Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.
 
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage controls, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage controls, \`labelSource\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -873,7 +873,7 @@ test("validation status artifacts reject clinical agreement reports without esti
       readArtifactText: artifactReader({
         "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport()
           .replace("- Minimum usable movement coverage: 80.0%\n", "")
-          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 80% usable movement coverage, and valid in-range primary estimate values.\n", ""),
+          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, and at least 80% usable movement coverage. Scale-specific rows with missing or invalid estimates are reported in that scale's denominator as missing estimates.\n", ""),
         "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),

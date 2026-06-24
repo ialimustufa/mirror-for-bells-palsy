@@ -59,10 +59,11 @@ checks for:
 - Runtime clinical-scale presentation policy, which reads `docs/validation-status.json` before app panels or reports can use clinical-facing wording.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
-  from the current clinical-scale estimator version with valid primary HB,
-  Sunnybrook, and eFACE total targets; stale-version, missing-version, unblinded,
-  copied, rehearsal, non-clinician, uncertain, incomplete, or out-of-range rows
-  are excluded and reported separately.
+  from the current clinical-scale estimator version. Valid primary HB,
+  Sunnybrook, and eFACE total targets count scale by scale; stale-version,
+  missing-version, unblinded, copied, rehearsal, non-clinician, uncertain,
+  incomplete, or no-valid-primary-target rows are excluded and reported
+  separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
@@ -81,10 +82,10 @@ checks for:
   tier, or usable-movement coverage, before adjudication output can support
   readiness.
 - Reviewer-agreement reports must compute primary agreement only from eligible
-  reviewer pairs and must show at least 30 eligible paired primary labels, zero
-  excluded reviewer pairs, at least 80% observed reviewer agreement, and a 95%
-  Wilson lower bound meeting the configured 80% agreement floor for each primary
-  scale.
+  reviewer pairs and must show at least 30 eligible paired labels for each
+  enabled primary scale, zero excluded reviewer pairs, at least 80% observed
+  reviewer agreement, and a 95% Wilson lower bound meeting the configured 80%
+  agreement floor for that scale.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced
   clinical-scale agreement reports must have 95% Wilson lower bounds meeting the
   configured 80% agreement floor.

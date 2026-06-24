@@ -157,6 +157,8 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       reviewedAssessmentCount: clinicalValidation.summary?.reviewedAssessmentCount ?? 0,
       excludedClinicalLabelCount: clinicalValidation.summary?.excludedClinicalLabelCount ?? 0,
       excludedClinicalLabelReasons: clinicalValidation.summary?.excludedClinicalLabelReasons ?? {},
+      primaryScaleLabelIssueReasons: clinicalValidation.summary?.primaryScaleLabelIssueReasons ?? {},
+      primaryScaleEstimateIssueReasons: clinicalValidation.summary?.primaryScaleEstimateIssueReasons ?? {},
       assessmentClinicalScaleRecords: clinicalValidation.summary?.assessmentClinicalScaleRecords ?? 0,
       estimateVersionCounts: clinicalValidation.summary?.estimateVersionCounts ?? {},
       currentClinicalScaleEstimateVersionAssessmentCount: clinicalValidation.summary?.currentClinicalScaleEstimateVersionAssessmentCount ?? 0,

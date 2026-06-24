@@ -1040,11 +1040,12 @@ with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
 version; stale or missing estimator-version rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
-"estimated"` with a complete/minimum v2 evidence tier, at least 80% usable
-movement coverage, and valid in-range primary estimate values, so insufficient
-or malformed estimate rows cannot inflate the reviewed-label denominator. This
-report does not make Mirror estimates clinician-assigned grades; it only
-documents agreement against reviewed target labels for the local validation set.
+"estimated"` with a complete/minimum v2 evidence tier and at least 80% usable
+movement coverage. Valid primary targets count scale by scale; a missing or
+invalid estimate is reported as a missing estimate for that scale rather than
+excluding other valid targets on the row. This report does not make Mirror
+estimates clinician-assigned grades; it only documents agreement against
+reviewed target labels for the local validation set.
 
 The threshold calibration command groups reviewed labels by exercise and writes a
 recommendation report. It includes current reliable thresholds, positive/negative
@@ -1064,11 +1065,12 @@ annotations.
 
 The clinical-readiness command reads a reviewed dataset, combined validation
 report, or clinical-scale validation report and writes a release decision for the
-clinical-scale estimates. It requires the primary House-Brackmann, Sunnybrook
-composite, and eFACE total checks to meet the 30-assessment, 80% observed
-agreement, and 80% Wilson lower-bound standard, plus the House-Brackmann
-severity-band case-mix gate and current clinical-scale estimator-version
-evidence for the all-primary-scale status to pass. It also emits
+clinical-scale estimates. It evaluates House-Brackmann, Sunnybrook composite,
+and eFACE total rows independently, requiring each passing scale to meet the
+30-label, 80% observed agreement, and 80% Wilson lower-bound standard. The
+all-primary-scale status also requires all primary checks, the House-Brackmann
+severity-band case-mix gate, and current clinical-scale estimator-version
+evidence to pass. It also emits
 `clinicalScaleAvailabilityRecommendation` entries for the House-Brackmann,
 Sunnybrook, and eFACE status keys, so a reviewer can see which individual scale
 rows are evidence-eligible after human review when the full set is not ready.

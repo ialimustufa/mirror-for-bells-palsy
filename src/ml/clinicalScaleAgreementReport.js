@@ -168,10 +168,10 @@ function referenceStandardControlLines(validation = {}, readiness = {}) {
     `- Eligible blinded independent clinical labels: ${validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0}`,
     "- Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded` to show Mirror estimates were hidden before target assignment.",
     `- Estimator version control: counted labels require clinical-scale estimator version v${readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? "n/a"}.`,
-    `- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least ${Math.round(minUsableMovementCoverageRatio * 100)}% usable movement coverage, and valid in-range primary estimate values.`,
+    `- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, and at least ${Math.round(minUsableMovementCoverageRatio * 100)}% usable movement coverage. Scale-specific rows with missing or invalid estimates are reported in that scale's denominator as missing estimates.`,
     "- Independence control: counted labels require clinician-assigned or adjudicated `labelSource` metadata, not Mirror/copied/algorithmic labels.",
     "- Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.",
-    "- Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.",
+    "- Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.",
   ];
 }
 
@@ -272,7 +272,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     "- Index estimate: Mirror standard-assessment clinical-scale estimates generated from local practice data.",
     "- Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from `docs/clinical-scale-review-protocol.md`.",
-    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier/coverage controls, `labelSource`, clinical `reviewerRole`, and valid primary target fields must be present before rows count toward readiness.",
+    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier/coverage controls, `labelSource`, and clinical `reviewerRole` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.",
     "- Primary performance measures: tolerance-based agreement rate, missing-estimate count, mean absolute delta, and Wilson confidence interval.",
     "- Error review: out-of-tolerance assessment rows listed above for adjudication and scorer review.",
     "- Release control: this report alone cannot enable clinical-facing scores; `docs/validation-status.json` must be reviewed and updated separately.",

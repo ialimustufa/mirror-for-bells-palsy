@@ -272,6 +272,41 @@ test("clinical scale evaluation passes only when Wilson lower-bound agreement cl
   assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
 });
 
+test("clinical scale evaluation lets primary scales meet evidence independently", () => {
+  const records = clinicalAgreementRecords(30, 30).map((line) => ({
+    ...line,
+    record: {
+      ...line.record,
+      label: {
+        ...line.record.label,
+        sunnybrookComposite: "",
+        efaceTotal: "",
+        efaceStatic: "",
+        efaceDynamic: "",
+        efaceSynkinesis: "",
+      },
+    },
+  }));
+
+  const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 30);
+  assert.equal(report.summary.readyPrimaryScaleCount, 1);
+  assert.equal(report.summary.meetsMinimumStandard, false);
+  assert.equal(report.summary.readyForClinicalFacingScoring, false);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
+  assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 30);
+  assert.equal(report.byScale.houseBrackmann.meetsMinimumStandard, true);
+  assert.equal(report.byScale.sunnybrookComposite.labeledCount, 0);
+  assert.equal(report.byScale.sunnybrookComposite.meetsMinimumStandard, false);
+  assert.equal(report.byScale.efaceTotal.labeledCount, 0);
+  assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, false);
+  assert.equal(report.summary.primaryScaleLabelIssueReasons["missing valid sunnybrookComposite label"], 30);
+  assert.equal(report.summary.primaryScaleLabelIssueReasons["missing valid efaceTotal label"], 30);
+  assert.match(report.blockingReasons.join("\n"), /sunnybrookComposite/);
+  assert.match(report.blockingReasons.join("\n"), /efaceTotal/);
+});
+
 test("clinical scale evaluation fails closed when 80 percent observed agreement has a low Wilson lower bound", () => {
   const records = clinicalAgreementRecords(30, 24);
 
@@ -345,17 +380,21 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
   });
 
   assert.equal(report.summary.assessmentClinicalScaleRecords, 9);
-  assert.equal(report.summary.reviewedAssessmentCount, 1);
-  assert.equal(report.summary.excludedClinicalLabelCount, 8);
+  assert.equal(report.summary.reviewedAssessmentCount, 3);
+  assert.equal(report.summary.excludedClinicalLabelCount, 6);
   assert.equal(report.summary.excludedClinicalLabelReasons["reviewer role is marked non-clinical or rehearsal"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinician confidence is uncertain"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["source label sheet was not generated in blinded mode"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["review was not marked blinded to Mirror estimates"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["label source is marked non-independent or copied"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["missing valid houseBrackmann label"], 1);
-  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid efaceTotal label"], 2);
-  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid sunnybrookComposite label"], 2);
-  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.summary.primaryScaleLabelIssueReasons["missing valid sunnybrookComposite label"], 1);
+  assert.equal(report.summary.primaryScaleLabelIssueReasons["missing valid efaceTotal label"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid efaceTotal label"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid sunnybrookComposite label"], 1);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 3);
+  assert.equal(report.byScale.sunnybrookComposite.labeledCount, 2);
+  assert.equal(report.byScale.efaceTotal.labeledCount, 2);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
 });
@@ -417,14 +456,15 @@ test("clinical scale evaluation excludes labels paired with insufficient estimat
     minAssessmentsPerSeverityBand: 1,
   });
 
-  assert.equal(report.summary.reviewedAssessmentCount, 1);
-  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.reviewedAssessmentCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelCount, 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate status is not estimated"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate evidence tier is missing or insufficient"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate movement coverage is below the minimum standard"], 1);
-  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid efaceTotal estimate"], 1);
-  assert.equal(report.byScale.efaceTotal.labeledCount, 1);
-  assert.equal(report.byScale.efaceTotal.agreementRate, 1);
+  assert.equal(report.summary.primaryScaleEstimateIssueReasons["missing valid efaceTotal estimate"], 1);
+  assert.equal(report.byScale.efaceTotal.labeledCount, 2);
+  assert.equal(report.byScale.efaceTotal.missingEstimateCount, 1);
+  assert.equal(report.byScale.efaceTotal.agreementRate, 0.5);
 });
 
 test("clinical scale evaluation rejects filled labels that lack clinical reviewer roles", () => {
