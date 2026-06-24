@@ -399,6 +399,26 @@ test("clinical scale evaluation fails closed without enough reviewed assessments
   assert.equal(report.byScale.houseBrackmann.meetsMinimumStandard, false);
 });
 
+test("clinical scale evaluation excludes duplicated assessment ids from reviewed denominators", () => {
+  const records = clinicalAgreementRecords(30, 30);
+  const duplicate = JSON.parse(JSON.stringify(records[0]));
+  const report = evaluateClinicalScaleEstimates([...records, duplicate], {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+  });
+
+  assert.equal(report.summary.assessmentClinicalScaleRecords, 31);
+  assert.equal(report.summary.uniqueAssessmentClinicalScaleRecords, 29);
+  assert.deepEqual(report.summary.duplicateClinicalScaleAssessmentIds, ["assessment-1:clinical-scale"]);
+  assert.equal(report.summary.duplicateClinicalScaleAssessmentIdCount, 1);
+  assert.equal(report.summary.duplicateClinicalScaleAssessmentRecordCount, 2);
+  assert.equal(report.summary.reviewedAssessmentCount, 29);
+  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["duplicate clinical-scale assessment id"], 2);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 29);
+  assert.equal(report.summary.meetsMinimumStandard, false);
+  assert.match(report.blockingReasons.join("\n"), /duplicateAssessmentIds/);
+});
+
 test("clinical scale evaluation only counts eligible clinician-reviewed primary labels", () => {
   const estimate = { hb: 3, sunnybrook: 72, eface: 70 };
   const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };

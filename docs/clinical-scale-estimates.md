@@ -177,7 +177,10 @@ default minimum standard is:
   has the current clinical-scale estimator `version`, has a recognized clinician
   or adjudicated reviewer role, is not marked uncertain, and contains a valid
   target for the primary scale being counted. Missing another primary target does
-  not remove the valid target from its own denominator.
+  not remove the valid target from its own denominator. The row must also have a
+  stable assessment id that appears only once; duplicate or missing assessment
+  ids are excluded and block release readiness so a single reviewed assessment
+  cannot inflate denominators.
   The paired Mirror estimate must also have `status: estimated`, a v5
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
   at least 80% usable movement coverage, used/omitted movement exercise IDs that
@@ -220,7 +223,8 @@ After `npm run validation:clinical-readiness`, use
 to create the human-readable clinical-scale agreement report. That Markdown
 report packages the dataset summary, excluded-label reason counts, agreement
 table, Wilson intervals, missing estimate counts, scale-specific label gaps,
-estimator-version counts, reference-standard control statements,
+duplicate/missing assessment-id counts, estimator-version counts,
+reference-standard control statements,
 House-Brackmann case-mix table,
 agreement sample plan,
 scale-specific availability recommendations, blocking reasons, and mismatch

@@ -1082,7 +1082,9 @@ exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`,
 Sunnybrook/eFACE input-completeness provenance, required, available, and missing
 resting metric keys, and `estimateCalculationUsesCompleteRestingMetrics: true`;
 inconsistent or missing movement, scale-input, or resting-metric provenance
-excludes the reviewed row. House-Brackmann agreement treats the paired estimate
+excludes the reviewed row. Duplicate or missing clinical-scale assessment ids
+also block readiness so one reviewed assessment cannot inflate agreement
+denominators. House-Brackmann agreement treats the paired estimate
 as missing unless the estimate provenance shows the required gentle eye-closure
 input was used. Sunnybrook and eFACE primary agreement comparisons require
 complete scale-specific movement input; normalized 4/5 Sunnybrook/eFACE
@@ -1195,7 +1197,7 @@ House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
 observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
 coverage, an agreement sample plan, current estimator-version evidence, the 80%
 usable-movement coverage floor, complete/minimum estimate evidence-tier controls,
-explicit
+unique assessment-id controls, explicit
 movement, scale-input, and resting-metric provenance controls, explicit
 reference-standard controls, and release-control text. When all three primary
 scales are enabled, the report status must also be the passing

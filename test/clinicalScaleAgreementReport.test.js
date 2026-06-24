@@ -63,6 +63,9 @@ function validationReport(overrides = {}) {
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
+      uniqueAssessmentClinicalScaleRecords: 30,
+      duplicateClinicalScaleAssessmentIdCount: 0,
+      missingClinicalScaleAssessmentIdCount: 0,
       reviewedAssessmentCount: 30,
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
@@ -121,6 +124,9 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /eFACE static/);
   assert.match(markdown, /95% Wilson score interval/);
   assert.match(markdown, /Excluded clinical-label rows: 0/);
+  assert.match(markdown, /Unique assessment clinical-scale records: 30/);
+  assert.match(markdown, /Duplicate assessment IDs: 0/);
+  assert.match(markdown, /Rows missing assessment IDs: 0/);
   assert.match(markdown, new RegExp(`Estimate version counts: ${CURRENT_ESTIMATOR_VERSION_KEY}: 30`));
   assert.match(markdown, /House-Brackmann Case Mix/);
   assert.match(markdown, /Required severity bands: 3/);
@@ -130,6 +136,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Reference Standard Controls/);
   assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
   assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);
+  assert.match(markdown, /Unique assessment control: counted labels require one stable assessment id/);
   assert.match(markdown, new RegExp(`Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates with status `estimated`/);
   assert.match(markdown, /complete\/minimum evidence tier/);

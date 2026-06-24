@@ -254,6 +254,23 @@ function extractAssessmentClinicalScaleRecords(records = []) {
     .filter(Boolean);
 }
 
+function clinicalAssessmentRecordId(record = {}) {
+  return String(record.id ?? record.assessmentId ?? record.sourceSummary?.assessmentId ?? "").trim();
+}
+
+function duplicateClinicalAssessmentIds(records = []) {
+  const counts = new Map();
+  for (const record of records) {
+    const id = clinicalAssessmentRecordId(record);
+    if (!id) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([id]) => id)
+    .sort();
+}
+
 function numericLabel(value) {
   if (value == null) return null;
   if (typeof value === "string" && !value.trim()) return null;
@@ -866,6 +883,8 @@ function summarizeHouseBrackmannCaseMix(counts = {}, options = {}) {
 
 function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const assessmentRecords = extractAssessmentClinicalScaleRecords(records);
+  const duplicateAssessmentIds = duplicateClinicalAssessmentIds(assessmentRecords);
+  const duplicateAssessmentIdSet = new Set(duplicateAssessmentIds);
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
   const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound;
   const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
@@ -897,18 +916,38 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const primaryScaleLabelIssueReasonCounts = {};
   const primaryScaleEstimateIssueReasonCounts = {};
   const estimateVersionCounts = {};
+  let missingClinicalScaleAssessmentIdCount = 0;
+  let duplicateClinicalScaleAssessmentRecordCount = 0;
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
     ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
   const houseBrackmannCaseMixCounts = createHouseBrackmannCaseMixCounts();
   for (const record of assessmentRecords) {
+    const assessmentId = clinicalAssessmentRecordId(record);
     const labels = clinicalScaleLabels(record);
     const estimate = clinicalScaleEstimate(record);
+    const hasClinicalLabel = hasAnyClinicalLabel(labels) || hasAnyRawClinicalLabel(record);
+    if (!assessmentId) {
+      missingClinicalScaleAssessmentIdCount += 1;
+      if (hasClinicalLabel) {
+        excludedClinicalLabelCount += 1;
+        incrementReasonCount(excludedClinicalLabelReasons, "missing clinical-scale assessment id");
+      }
+      continue;
+    }
+    if (duplicateAssessmentIdSet.has(assessmentId)) {
+      duplicateClinicalScaleAssessmentRecordCount += 1;
+      if (hasClinicalLabel) {
+        excludedClinicalLabelCount += 1;
+        incrementReasonCount(excludedClinicalLabelReasons, "duplicate clinical-scale assessment id");
+      }
+      continue;
+    }
     const estimateVersion = clinicalScaleEstimateVersion(record);
     if (Object.values(estimate).some((value) => value != null)) {
       estimatedAssessmentCount += 1;
       incrementEstimateVersionCount(estimateVersionCounts, estimateVersion);
     }
-    if (!hasAnyClinicalLabel(labels) && !hasAnyRawClinicalLabel(record)) continue;
+    if (!hasClinicalLabel) continue;
     const eligibility = clinicalLabelEligibility(record, labels, estimate, {
       clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
       minUsableMovementCoverageRatio,
@@ -943,6 +982,12 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const readyPrimaryScales = primaryScales.filter((scale) => byScale[scale].meetsMinimumStandard);
   const caseMix = summarizeHouseBrackmannCaseMix(houseBrackmannCaseMixCounts, caseMixOptions);
   const blockingReasons = [];
+  if (duplicateAssessmentIds.length) {
+    blockingReasons.push(`duplicateAssessmentIds: ${duplicateAssessmentIds.length} clinical-scale assessment id${duplicateAssessmentIds.length === 1 ? " is" : "s are"} duplicated`);
+  }
+  if (missingClinicalScaleAssessmentIdCount > 0) {
+    blockingReasons.push(`missingAssessmentIds: ${missingClinicalScaleAssessmentIdCount} clinical-scale assessment row${missingClinicalScaleAssessmentIdCount === 1 ? " is" : "s are"} missing a stable assessment id`);
+  }
   if (reviewedAssessmentCount < minReviewedAssessments) {
     blockingReasons.push(`needs at least ${minReviewedAssessments} reviewed clinical-scale assessments`);
   }
@@ -981,6 +1026,11 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     },
     summary: {
       assessmentClinicalScaleRecords: assessmentRecords.length,
+      uniqueAssessmentClinicalScaleRecords: assessmentRecords.length - missingClinicalScaleAssessmentIdCount - duplicateClinicalScaleAssessmentRecordCount,
+      duplicateClinicalScaleAssessmentIds: duplicateAssessmentIds.slice(0, 20),
+      duplicateClinicalScaleAssessmentIdCount: duplicateAssessmentIds.length,
+      duplicateClinicalScaleAssessmentRecordCount,
+      missingClinicalScaleAssessmentIdCount,
       reviewedAssessmentCount,
       excludedClinicalLabelCount,
       excludedClinicalLabelReasons,

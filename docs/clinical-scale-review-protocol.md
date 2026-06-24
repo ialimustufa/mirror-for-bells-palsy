@@ -57,6 +57,8 @@ fill the review metadata fields:
 An assessment can be used for clinical-scale agreement only when:
 
 - It is a standard assessment export row with `section: "assessmentClinicalScale"`.
+- It has a stable `assessmentId`/record id that appears only once in the
+  reviewed clinical-scale dataset and reviewer sheet.
 - The source session has enough visual evidence for a reviewer to assign the
   requested target labels.
 - The reviewer can identify the intended movement set and affected side from the
@@ -89,12 +91,17 @@ Exclude an assessment row from clinical readiness counts when:
   scale from its denominator, but it does not remove other valid primary targets
   on the same assessment. Validation label schema v5 records these columns as
   `primaryTargetFields` rather than all-or-nothing required fields.
+- The row is missing a stable assessment id, or the same assessment id appears
+  more than once in the reviewed dataset or reviewer sheet. Duplicate ids can
+  inflate denominators and must be recollected or deduplicated before readiness.
 
 The evaluator enforces row-level provenance exclusions before counting reviewed
 clinical-scale assessments. Valid primary targets then count scale by scale.
-Excluded label rows and scale-specific label gaps are reported separately with
-reason counts so a failed readiness gate can be audited without treating
-rehearsal data as clinical evidence.
+Duplicate or missing assessment ids are reported separately and block release
+readiness so one assessment cannot be counted twice. Excluded label rows and
+scale-specific label gaps are reported separately with reason counts so a failed
+readiness gate can be audited without treating rehearsal data as clinical
+evidence.
 
 ## Review Process
 
@@ -199,6 +206,9 @@ If multiple reviewers label the same assessment:
   should be recollected from a current blinded sheet. Both raw reviewer
   sheets and the final adjudicated row must preserve the current qualifying
   estimate provenance before labels can count.
+- Treat duplicate or missing assessment ids in either reviewer sheet as sheet
+  integrity blockers. Recollect or correct the sheet rather than letting the last
+  duplicate row overwrite an earlier reviewer label.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
   incomplete, or out-of-range reviewer rows as adjudication blockers. They should
   be recollected from a blinded current-version sheet rather than resolved by

@@ -634,11 +634,18 @@ function reviewerRowsByAssessmentId(csvText = "") {
   if (!rows.length) return out;
   const headers = rows[0];
   const indexByHeader = Object.fromEntries(headers.map((header, index) => [header, index]));
+  const assessmentIdCounts = new Map();
+  let missingAssessmentIdRowCount = 0;
   for (const row of rows.slice(1)) {
     const rowType = valueFromRow(row, indexByHeader, "rowType").trim();
     const assessmentId = valueFromRow(row, indexByHeader, "assessmentId").trim();
     if (rowType && rowType !== "assessmentClinicalScale") continue;
-    if (!assessmentId) continue;
+    if (!assessmentId) {
+      missingAssessmentIdRowCount += 1;
+      continue;
+    }
+    assessmentIdCounts.set(assessmentId, (assessmentIdCounts.get(assessmentId) ?? 0) + 1);
+    if (out.has(assessmentId)) continue;
     const next = {};
     for (const column of LABEL_COLUMNS) next[column] = valueFromRow(row, indexByHeader, column);
     next.__estimateUsedMovementExerciseIdsColumnPresent = indexByHeader.estimateUsedMovementExerciseIds != null;
@@ -660,6 +667,14 @@ function reviewerRowsByAssessmentId(csvText = "") {
     next.__estimateCalculationUsesCompleteRestingMetricsColumnPresent = indexByHeader.estimateCalculationUsesCompleteRestingMetrics != null;
     out.set(assessmentId, next);
   }
+  const duplicateAssessmentIds = [...assessmentIdCounts.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([assessmentId]) => assessmentId)
+    .sort();
+  out.duplicateAssessmentIds = duplicateAssessmentIds;
+  out.duplicateAssessmentIdCount = duplicateAssessmentIds.length;
+  out.duplicateAssessmentRowCount = duplicateAssessmentIds.reduce((sum, assessmentId) => sum + (assessmentIdCounts.get(assessmentId) ?? 0), 0);
+  out.missingAssessmentIdRowCount = missingAssessmentIdRowCount;
   return out;
 }
 
@@ -962,6 +977,12 @@ function needsAdjudication(reviewerA, reviewerB) {
 function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = "", options = {}) {
   const reviewerAById = reviewerRowsByAssessmentId(reviewerACsv);
   const reviewerBById = reviewerRowsByAssessmentId(reviewerBCsv);
+  const reviewerADuplicateAssessmentIds = reviewerAById.duplicateAssessmentIds ?? [];
+  const reviewerBDuplicateAssessmentIds = reviewerBById.duplicateAssessmentIds ?? [];
+  const reviewerADuplicateAssessmentRowCount = reviewerAById.duplicateAssessmentRowCount ?? 0;
+  const reviewerBDuplicateAssessmentRowCount = reviewerBById.duplicateAssessmentRowCount ?? 0;
+  const reviewerAMissingAssessmentIdRowCount = reviewerAById.missingAssessmentIdRowCount ?? 0;
+  const reviewerBMissingAssessmentIdRowCount = reviewerBById.missingAssessmentIdRowCount ?? 0;
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION;
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementRate;
   const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementWilsonLowerBound;
@@ -1039,6 +1060,18 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const reviewerBInsufficientEstimateEvidenceCount = estimateEvidenceIssueCount(reviewerBById, estimateEvidenceOptions);
   const blockingReasons = [];
   if (!assessmentIds.length) blockingReasons.push("no shared clinical-scale assessment labels found");
+  if (reviewerADuplicateAssessmentIds.length) {
+    blockingReasons.push(`reviewerA: ${reviewerADuplicateAssessmentIds.length} duplicate assessment id${reviewerADuplicateAssessmentIds.length === 1 ? "" : "s"} in reviewer sheet`);
+  }
+  if (reviewerBDuplicateAssessmentIds.length) {
+    blockingReasons.push(`reviewerB: ${reviewerBDuplicateAssessmentIds.length} duplicate assessment id${reviewerBDuplicateAssessmentIds.length === 1 ? "" : "s"} in reviewer sheet`);
+  }
+  if (reviewerAMissingAssessmentIdRowCount > 0) {
+    blockingReasons.push(`reviewerA: ${reviewerAMissingAssessmentIdRowCount} rows are missing assessment ids`);
+  }
+  if (reviewerBMissingAssessmentIdRowCount > 0) {
+    blockingReasons.push(`reviewerB: ${reviewerBMissingAssessmentIdRowCount} rows are missing assessment ids`);
+  }
   if (reviewerAEligibility.ineligibleAssessmentCount > 0) {
     blockingReasons.push(`reviewerA: ${reviewerAEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata/evidence gates`);
   }
@@ -1106,6 +1139,14 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerBPrimaryScaleLabelIssueReasons: reviewerBEligibility.primaryScaleLabelIssueReasons,
       reviewerAEstimateVersionCounts,
       reviewerBEstimateVersionCounts,
+      reviewerADuplicateAssessmentIdCount: reviewerADuplicateAssessmentIds.length,
+      reviewerBDuplicateAssessmentIdCount: reviewerBDuplicateAssessmentIds.length,
+      reviewerADuplicateAssessmentRowCount,
+      reviewerBDuplicateAssessmentRowCount,
+      reviewerAMissingAssessmentIdRowCount,
+      reviewerBMissingAssessmentIdRowCount,
+      reviewerADuplicateAssessmentIds: reviewerADuplicateAssessmentIds.slice(0, 20),
+      reviewerBDuplicateAssessmentIds: reviewerBDuplicateAssessmentIds.slice(0, 20),
       reviewerAStaleOrMissingEstimateVersionCount,
       reviewerBStaleOrMissingEstimateVersionCount,
       reviewerAInsufficientEstimateEvidenceCount,
@@ -1119,6 +1160,26 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     estimateEvidenceMismatches,
     excludedReviewerPairs: excludedReviewerPairs.slice(0, 40),
     reviewerSheetIssues: [
+      ...reviewerADuplicateAssessmentIds.map((assessmentId) => ({
+        reviewer: "reviewerA",
+        assessmentId,
+        reasons: ["duplicate assessment id in reviewer sheet"],
+      })),
+      ...reviewerBDuplicateAssessmentIds.map((assessmentId) => ({
+        reviewer: "reviewerB",
+        assessmentId,
+        reasons: ["duplicate assessment id in reviewer sheet"],
+      })),
+      ...(reviewerAMissingAssessmentIdRowCount > 0 ? [{
+        reviewer: "reviewerA",
+        assessmentId: "",
+        reasons: [`${reviewerAMissingAssessmentIdRowCount} rows are missing assessment ids`],
+      }] : []),
+      ...(reviewerBMissingAssessmentIdRowCount > 0 ? [{
+        reviewer: "reviewerB",
+        assessmentId: "",
+        reasons: [`${reviewerBMissingAssessmentIdRowCount} rows are missing assessment ids`],
+      }] : []),
       ...reviewerAEligibility.issues,
       ...reviewerBEligibility.issues,
     ].slice(0, 40),

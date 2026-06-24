@@ -416,6 +416,40 @@ test("clinical-scale reviewer agreement blocks insufficient estimate evidence pr
   assert.match(report.adjudicationRows[0].disagreementSummary, /Estimate evidence/);
 });
 
+test("clinical-scale reviewer agreement blocks duplicate assessment ids in reviewer sheets", () => {
+  const duplicateRows = [
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      houseBrackmannGrade: "IV",
+      sunnybrookComposite: 66,
+      efaceTotal: 63,
+    },
+  ];
+  const report = compareClinicalScaleReviewerLabels(
+    reviewerCsv(duplicateRows),
+    reviewerCsv([duplicateRows[0]]),
+    { generatedAt: "2026-06-24T12:00:00.000Z" },
+  );
+
+  assert.equal(report.summary.reviewerADuplicateAssessmentIdCount, 1);
+  assert.equal(report.summary.reviewerADuplicateAssessmentRowCount, 2);
+  assert.deepEqual(report.summary.reviewerADuplicateAssessmentIds, ["assessment-1:clinical-scale"]);
+  assert.equal(report.summary.reviewerBDuplicateAssessmentIdCount, 0);
+  assert.equal(report.summary.eligibleReviewerPairCount, 1);
+  assert.match(report.blockingReasons.join("\n"), /reviewerA: 1 duplicate assessment id/);
+  assert.deepEqual(report.reviewerSheetIssues[0], {
+    reviewer: "reviewerA",
+    assessmentId: "assessment-1:clinical-scale",
+    reasons: ["duplicate assessment id in reviewer sheet"],
+  });
+});
+
 test("clinical-scale reviewer agreement blocks reviewer sheets without movement provenance columns", () => {
   const rows = [{
     assessmentId: "assessment-1:clinical-scale",

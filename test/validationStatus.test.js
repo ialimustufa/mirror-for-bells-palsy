@@ -62,6 +62,10 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 
 ## Dataset Summary
 
+- Assessment clinical-scale records: ${reviewedCount}
+- Unique assessment clinical-scale records: ${reviewedCount}
+- Duplicate assessment IDs: 0
+- Rows missing assessment IDs: 0
 - Reviewed clinical-scale assessments: ${reviewedCount}
 - Ready primary scales: ${readyPrimaryScales}/3
 
@@ -99,6 +103,7 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 
 - Eligible blinded independent clinical labels: ${reviewedCount}
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
+- Unique assessment control: counted labels require one stable assessment id per reviewed clinical-scale row; duplicate or missing assessment ids are excluded and block release readiness.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
 - Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
@@ -186,6 +191,14 @@ function passingClinicalReviewerAgreementReport({
       reviewerBIneligibleReasons: {},
       reviewerAEstimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: comparedCount },
       reviewerBEstimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: comparedCount },
+      reviewerADuplicateAssessmentIdCount: 0,
+      reviewerBDuplicateAssessmentIdCount: 0,
+      reviewerADuplicateAssessmentRowCount: 0,
+      reviewerBDuplicateAssessmentRowCount: 0,
+      reviewerAMissingAssessmentIdRowCount: 0,
+      reviewerBMissingAssessmentIdRowCount: 0,
+      reviewerADuplicateAssessmentIds: [],
+      reviewerBDuplicateAssessmentIds: [],
       reviewerAStaleOrMissingEstimateVersionCount: 0,
       reviewerBStaleOrMissingEstimateVersionCount: 0,
       reviewerAInsufficientEstimateEvidenceCount: 0,
@@ -468,6 +481,39 @@ test("validation status artifacts reject reviewer agreement reports with insuffi
   );
 });
 
+test("validation status artifacts reject reviewer agreement reports with duplicate assessment ids", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.summary.reviewerADuplicateAssessmentIdCount = 1;
+  reviewerReport.summary.reviewerADuplicateAssessmentRowCount = 2;
+  reviewerReport.summary.reviewerADuplicateAssessmentIds = ["assessment-1:clinical-scale"];
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
 test("validation status artifacts reject reviewer agreement reports with incomplete enabled-scale inputs", async () => {
   const status = {
     ...BASE_STATUS,
@@ -560,6 +606,34 @@ test("validation status artifacts reject reviewer agreement reports with low Wil
       }),
     }),
     /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports with duplicate assessment ids", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("Duplicate assessment IDs: 0", "Duplicate assessment IDs: 1"),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale agreement report artifacts/,
   );
 });
 

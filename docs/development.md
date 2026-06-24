@@ -62,8 +62,8 @@ checks for:
   from the current clinical-scale estimator version. Valid primary HB,
   Sunnybrook, and eFACE total targets count scale by scale; stale-version,
   missing-version, unblinded, copied, rehearsal, non-clinician, uncertain,
-  incomplete, or no-valid-primary-target rows are excluded and reported
-  separately.
+  incomplete, duplicate-assessment-id, missing-assessment-id, or
+  no-valid-primary-target rows are excluded and reported separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
@@ -72,15 +72,17 @@ checks for:
   scale-specific movement input for counted Sunnybrook/eFACE primary
   comparisons, plus complete resting-metric provenance, plus an eligible blinded
   independent label count meeting the minimum reviewed-assessment floor, plus an
-  agreement sample plan for the primary scale Wilson gates.
+  agreement sample plan for the primary scale Wilson gates, plus unique
+  assessment-id controls.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version and estimate-evidence provenance for each reviewer sheet; stale,
   missing, mismatched, below-80%-coverage, missing movement provenance, or
-  missing/incomplete scale-input or resting-metric provenance is a release
-  blocker until recollected from qualifying current-version evidence.
+  missing/incomplete scale-input or resting-metric provenance, plus duplicate or
+  missing assessment ids, are release blockers until recollected from qualifying
+  current-version evidence.
 - Reviewer-agreement reports must also block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
   reviewer rows, plus rows paired with insufficient estimate status, evidence
