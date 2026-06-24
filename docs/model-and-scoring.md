@@ -1304,11 +1304,12 @@ artifact validator also rejects referenced clinical agreement,
 reviewer-agreement, or package-verification reports when the artifact's own
 `sourceDatasetSha256` is not listed in the corresponding status hash array, and
 the status schema rejects source-hash arrays that are not paired with their
-report path arrays.
+report path arrays. Each source-hash array must exactly match the source hashes
+of its referenced artifacts, without stale extra hashes.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` schema-v1 artifacts with
 `sourceDatasetSha256` and ready-exercise coverage that matches the status claim.
-The status file must list those hashes in
+The status file must list exactly those hashes in
 `thresholdCalibrationSourceDatasetSha256s`.
 
 The neutral baseline image is captured at the end of session calibration. During the

@@ -117,10 +117,12 @@ checks for:
   validator also rejects any referenced agreement, reviewer-agreement, or
   package-verification report whose own `sourceDatasetSha256` is missing from
   its matching status hash array, and the status schema rejects orphan clinical
-  source-hash arrays that do not have the corresponding report path array.
+  source-hash arrays that do not have the corresponding report path array. The
+  hash arrays must exactly match the referenced artifact source hashes, so stale
+  extra source-hash claims are also release blockers.
   Threshold calibration reports must use `mirror-threshold-calibration-report`
   schema v1, include `sourceDatasetSha256`, and calibrated status must list
-  matching hashes in
+  exactly the matching hashes in
   `thresholdCalibrationSourceDatasetSha256s`.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` and review-package verification JSON

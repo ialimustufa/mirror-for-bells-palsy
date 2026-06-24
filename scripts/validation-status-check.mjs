@@ -112,10 +112,17 @@ function assertArtifactsNotNewerThanStatus(status, artifactGroups) {
 }
 
 function assertReportSourceDatasetSha256sListed(reports, listedHashes, field, label) {
+  const reportHashes = [...new Set(reports.map((report) => report.sourceDatasetSha256?.toLowerCase()).filter(Boolean))];
+  const listedHashSet = new Set(listedHashes.map((hash) => hash.toLowerCase()));
   const unlistedReports = reports.filter((report) => !sha256ArrayIncludes(listedHashes, report.sourceDatasetSha256));
   assertCondition(
     unlistedReports.length === 0,
     `${label} sourceDatasetSha256 values must be listed in ${field}`,
+  );
+  const staleHashes = [...listedHashSet].filter((hash) => !reportHashes.includes(hash));
+  assertCondition(
+    staleHashes.length === 0,
+    `${field} must not list source dataset hashes without matching ${label} artifacts`,
   );
 }
 
@@ -1350,13 +1357,13 @@ async function validateStatusArtifacts(status, options = {}) {
     );
   }
   if (status.productionThresholdConstantsCalibrated) {
-    const traceableThresholdCalibrationReports = thresholdCalibrationReports.filter((report) => (
-      status.thresholdCalibrationSourceDatasetSha256s.includes(report.sourceDatasetSha256)
-    ));
-    assertCondition(
-      traceableThresholdCalibrationReports.length === thresholdCalibrationReports.length,
-      "threshold calibration report sourceDatasetSha256 values must be listed in thresholdCalibrationSourceDatasetSha256s",
+    assertReportSourceDatasetSha256sListed(
+      thresholdCalibrationReports,
+      status.thresholdCalibrationSourceDatasetSha256s,
+      "thresholdCalibrationSourceDatasetSha256s",
+      "threshold calibration report",
     );
+    const traceableThresholdCalibrationReports = thresholdCalibrationReports;
     const readyExerciseCount = traceableThresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);
     assertCondition(
       readyExerciseCount >= status.readyExerciseCount,

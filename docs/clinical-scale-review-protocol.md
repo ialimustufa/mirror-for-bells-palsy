@@ -350,7 +350,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   package-verification artifact has its own `sourceDatasetSha256` listed in the
   corresponding status hash array, not only repeated in enabled per-scale
   availability entries. These hash arrays must be paired with their report path
-  arrays so stale source-hash claims cannot appear without evidence artifacts.
+  arrays and exactly match the referenced artifact hashes, so stale source-hash
+  claims cannot appear without evidence artifacts.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
