@@ -179,6 +179,15 @@ function clinicalRecord(id, estimate, label) {
       estimate: {
         status: "estimated",
         version: estimate.version ?? CLINICAL_SCALE_ESTIMATE_VERSION,
+        evidence: {
+          tier: estimate.evidenceTier ?? "complete-standard-assessment",
+          label: estimate.evidenceLabel ?? "Complete standard-assessment evidence",
+        },
+        coverage: {
+          usableMovementCount: estimate.usableMovementCount ?? 5,
+          requiredMovementCount: estimate.requiredMovementCount ?? 5,
+          ratio: estimate.usableMovementCoverageRatio ?? 1,
+        },
         scales: {
           houseBrackmann: { numericGrade: estimate.hb, grade: ["I", "II", "III", "IV", "V", "VI"][estimate.hb - 1] },
           sunnybrook: { compositeScore: estimate.sunnybrook },
@@ -379,6 +388,43 @@ test("clinical scale evaluation excludes stale or missing estimator-version labe
   assert.equal(report.summary.currentClinicalScaleEstimateVersionAssessmentCount, 1);
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+});
+
+test("clinical scale evaluation excludes labels paired with insufficient estimate evidence", () => {
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const records = [
+    clinicalRecord("assessment-current:clinical-scale", { hb: 3, sunnybrook: 72, eface: 70 }, validLabel),
+    clinicalRecord("assessment-insufficient-status:clinical-scale", {
+      hb: 3,
+      sunnybrook: 72,
+      eface: 70,
+      evidenceTier: "insufficient-standard-evidence",
+      usableMovementCoverageRatio: 0.6,
+    }, validLabel),
+    clinicalRecord("assessment-out-of-range-estimate:clinical-scale", {
+      hb: 3,
+      sunnybrook: 72,
+      eface: 130,
+    }, validLabel),
+  ];
+  records[1].record.estimate.status = "insufficient-data";
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate status is not estimated"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate evidence tier is missing or insufficient"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate movement coverage is below the minimum standard"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid efaceTotal estimate"], 1);
+  assert.equal(report.byScale.efaceTotal.labeledCount, 1);
+  assert.equal(report.byScale.efaceTotal.agreementRate, 1);
 });
 
 test("clinical scale evaluation rejects filled labels that lack clinical reviewer roles", () => {

@@ -131,6 +131,10 @@ Clinical-scale readiness uses the machine-readable standard in
   with the current clinical-scale estimator version and valid primary labels
   count toward the reviewed-assessment floor and per-scale agreement
   denominators.
+- The paired Mirror estimate must also be a current-version `status: estimated`
+  row with a complete or minimum evidence tier, at least 80% usable movement
+  coverage, and valid in-range primary estimate values before the reviewed label
+  can count.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson lower-bound gate is used because a raw observed percentage can hide

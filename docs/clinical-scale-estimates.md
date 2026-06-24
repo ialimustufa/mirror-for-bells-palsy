@@ -127,6 +127,10 @@ default minimum standard is:
   has the current clinical-scale estimator `version`, has a recognized clinician
   or adjudicated reviewer role, is not marked uncertain, and contains valid
   primary HB, Sunnybrook, and eFACE total labels.
+  The paired Mirror estimate must also have `status: estimated`, a v2
+  `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
+  at least 80% usable movement coverage, and valid in-range primary estimate
+  values before the reviewed row can enter an agreement denominator.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,
   stale-version, missing-version, unblinded, incomplete, and out-of-range rows
   are excluded from the readiness denominators and reported as excluded label

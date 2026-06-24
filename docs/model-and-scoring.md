@@ -1039,6 +1039,10 @@ to cover HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete,
 with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
 version; stale or missing estimator-version rows are excluded and reported. This
+same counted-row gate requires the paired Mirror estimate to be `status:
+"estimated"` with a complete/minimum v2 evidence tier, at least 80% usable
+movement coverage, and valid in-range primary estimate values, so insufficient
+or malformed estimate rows cannot inflate the reviewed-label denominator. This
 report does not make Mirror estimates clinician-assigned grades; it only
 documents agreement against reviewed target labels for the local validation set.
 

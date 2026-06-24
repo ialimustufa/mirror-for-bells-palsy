@@ -14,6 +14,7 @@ const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
   VI: 6,
 });
 const PRIMARY_CLINICAL_SCALE_LABELS = Object.freeze(["houseBrackmann", "sunnybrookComposite", "efaceTotal"]);
+const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
 const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
   mild: { label: "HB I-II mild/normal", min: 1, max: 2 },
   moderate: { label: "HB III-IV moderate", min: 3, max: 4 },
@@ -40,6 +41,7 @@ const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minReviewedAssessments: 30,
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
+  minUsableMovementCoverageRatio: 0.8,
   confidenceLevel: 0.95,
   clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
 });
@@ -225,6 +227,16 @@ function clinicalScaleEstimateVersion(record = {}) {
   return Number.isInteger(version) ? version : null;
 }
 
+function clinicalScaleEstimateMetadata(record = {}) {
+  const estimate = record.estimate ?? record.clinicalScales ?? {};
+  const sourceSummary = record.sourceSummary ?? {};
+  return {
+    status: estimate.status ?? null,
+    evidenceTier: estimate.evidence?.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? null,
+    usableMovementCoverageRatio: estimate.coverage?.ratio ?? sourceSummary.usableMovementCoverageRatio ?? null,
+  };
+}
+
 function estimateVersionCountKey(version) {
   return version == null ? "missing" : `v${version}`;
 }
@@ -234,7 +246,7 @@ function incrementEstimateVersionCount(counts, version) {
   counts[key] = (counts[key] ?? 0) + 1;
 }
 
-function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record), options = {}) {
+function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record), estimate = clinicalScaleEstimate(record), options = {}) {
   const label = record.label ?? {};
   const reviewerRole = String(label.reviewerRole ?? "").trim();
   const confidence = String(label.clinicianConfidence ?? "").trim();
@@ -244,9 +256,28 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
     ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
   const estimateVersion = clinicalScaleEstimateVersion(record);
+  const estimateMetadata = clinicalScaleEstimateMetadata(record);
+  const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio
+    ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minUsableMovementCoverageRatio;
   const reasons = [];
   if (estimateVersion !== requiredClinicalScaleEstimateVersion) {
     reasons.push("clinical scale estimate version is missing or stale");
+  }
+  if (estimateMetadata.status !== "estimated") {
+    reasons.push("clinical scale estimate status is not estimated");
+  }
+  if (!VALID_CLINICAL_SCALE_EVIDENCE_TIERS.has(estimateMetadata.evidenceTier)) {
+    reasons.push("clinical scale estimate evidence tier is missing or insufficient");
+  }
+  if (!Number.isFinite(estimateMetadata.usableMovementCoverageRatio) || estimateMetadata.usableMovementCoverageRatio < minUsableMovementCoverageRatio) {
+    reasons.push("clinical scale estimate movement coverage is below the minimum standard");
+  }
+  if (estimate.houseBrackmann == null) reasons.push("missing valid houseBrackmann estimate");
+  if (!Number.isFinite(estimate.sunnybrookComposite) || estimate.sunnybrookComposite < 0 || estimate.sunnybrookComposite > 100) {
+    reasons.push("missing valid sunnybrookComposite estimate");
+  }
+  if (!Number.isFinite(estimate.efaceTotal) || estimate.efaceTotal < 0 || estimate.efaceTotal > 100) {
+    reasons.push("missing valid efaceTotal estimate");
   }
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
@@ -423,6 +454,9 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const sunnybrookTolerance = Number.isFinite(options.sunnybrookTolerance) ? options.sunnybrookTolerance : 10;
   const efaceTolerance = Number.isFinite(options.efaceTolerance) ? options.efaceTolerance : 10;
+  const minUsableMovementCoverageRatio = Number.isFinite(options.minUsableMovementCoverageRatio)
+    ? options.minUsableMovementCoverageRatio
+    : DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minUsableMovementCoverageRatio;
   const minHouseBrackmannSeverityBands = Math.min(
     Object.keys(HOUSE_BRACKMANN_SEVERITY_BANDS).length,
     Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
@@ -455,7 +489,10 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       incrementEstimateVersionCount(estimateVersionCounts, estimateVersion);
     }
     if (!hasAnyClinicalLabel(labels) && !hasAnyRawClinicalLabel(record)) continue;
-    const eligibility = clinicalLabelEligibility(record, labels, { clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion });
+    const eligibility = clinicalLabelEligibility(record, labels, estimate, {
+      clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
+      minUsableMovementCoverageRatio,
+    });
     if (!eligibility.eligible) {
       excludedClinicalLabelCount += 1;
       for (const reason of eligibility.reasons) {
@@ -503,6 +540,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       houseBrackmannAgreement: "estimate must be within one House-Brackmann grade of the reviewed label",
       sunnybrookTolerance,
       efaceTolerance,
+      minUsableMovementCoverageRatio,
       caseMix: {
         houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
         minHouseBrackmannSeverityBands,
