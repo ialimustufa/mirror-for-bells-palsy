@@ -63,11 +63,11 @@ const SCORE_DROP_REASONS = Object.freeze({
 
 const SCORING_NOISE_CONFIG = {
   normal: {
-    pairwiseNoiseWeight: 1,
-    pairwiseGate: 0.02,
-    directionalNoiseWeight: 1,
-    directionalGateMultiplier: 1.5,
-    directionalGateCap: Infinity,
+    pairwiseNoiseWeight: 0.7,
+    pairwiseGate: 0.014,
+    directionalNoiseWeight: 0.6,
+    directionalGateMultiplier: 1,
+    directionalGateCap: 0.012,
     nostrilNoiseWeight: 0.35,
     nostrilGateMultiplier: 0.35,
     nostrilGateCap: 0.0012,
@@ -396,6 +396,30 @@ const DIRECTIONAL_EXERCISE_SIGNALS = {
     vectors: { left: { x: 1, y: 0 }, right: { x: -1, y: 0 } },
   },
 };
+
+// Blendshape fusion for the subtle directional exercises, keyed by the directional
+// signal key. MediaPipe blendshapes (eyeBlink/mouthSmile/cheekSquint) capture these
+// movements far better than the tiny landmark deltas, which often vanish under the
+// noise floor. The assist is added PER SIDE and only when that side already shows a
+// little geometric movement in the correct direction (`minRaw`), so the model's
+// tendency to report symmetric blendshapes on asymmetric faces can't fabricate a
+// score on a side that isn't moving. `weight` maps a 1.0 activation to a mesh-scale
+// magnitude. These are initial values; tune empirically against the replay harness.
+const DIRECTIONAL_BS_FUSION = {
+  eyeClosure: { left: "eyeBlinkLeft", right: "eyeBlinkRight", weight: 0.012, minRaw: 0.0015 },
+  smilePull: { left: "mouthSmileLeft", right: "mouthSmileRight", weight: 0.02, minRaw: 0.002 },
+  cheekSuckInward: { left: "cheekSquintLeft", right: "cheekSquintRight", weight: 0.02, minRaw: 0.002 },
+};
+
+// Raw image-left is the user's anatomical right, so fuse the opposite-named blendshape
+// (matching the convention used by computeNostrilFlareSymmetry). The calibration-time
+// neutral activation is subtracted so a face that rests with a slight squint does not
+// earn free signal.
+function directionalBsActivation(bsMap, neutralBs, fusion, rawSide) {
+  if (!bsMap || !fusion) return 0;
+  const name = rawSide === "left" ? fusion.right : fusion.left;
+  return Math.max(0, (bsMap[name] ?? 0) - (neutralBs?.[name] ?? 0));
+}
 
 function facialTransformInfo(matrix) {
   if (!matrix) return null;
@@ -883,7 +907,7 @@ function directionalExerciseGate(config, leftNoise, rightNoise, options) {
   );
 }
 
-function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
+function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix = null, neutralFacialTransformationMatrix = null, scoringOptions = {}) {
   const options = scoringOptionsFrom(scoringOptions);
   const lmN = faceFrameNormalize(lm, facialTransformationMatrix), neuN = faceFrameNormalize(neutral, neutralFacialTransformationMatrix);
   if (!lmN || !neuN) {
@@ -898,8 +922,15 @@ function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor,
   const rightNoise = directionalSideNoiseWithFallback(noiseFloor, config.key, "right", mapping?.right, config);
   const left = adjustedSignal(signals.left, leftNoise, options.directionalNoiseWeight);
   const right = adjustedSignal(signals.right, rightNoise, options.directionalNoiseWeight);
-  const lAdjusted = left.adjusted;
-  const rAdjusted = right.adjusted;
+  // Blendshape assist: only credit a side that already shows a little geometric
+  // movement in the right direction, so a side that isn't moving stays low.
+  const fusion = DIRECTIONAL_BS_FUSION[config.key];
+  const lHasDirection = fusion != null && signals.left != null && signals.left >= fusion.minRaw;
+  const rHasDirection = fusion != null && signals.right != null && signals.right >= fusion.minRaw;
+  const lBsAssist = lHasDirection ? fusion.weight * directionalBsActivation(bsMap, neutralBs, fusion, "left") : 0;
+  const rBsAssist = rHasDirection ? fusion.weight * directionalBsActivation(bsMap, neutralBs, fusion, "right") : 0;
+  const lAdjusted = left.adjusted + lBsAssist;
+  const rAdjusted = right.adjusted + rBsAssist;
   const peak = Math.max(lAdjusted, rAdjusted);
   const gate = directionalExerciseGate(config, left.noise, right.noise, options);
   const debugPayload = {
@@ -908,12 +939,14 @@ function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor,
     rawImageLeft: {
       signal: debugMetric(left.raw),
       noisePenalty: debugMetric(left.noisePenalty),
+      blendshapeAssist: debugMetric(lBsAssist),
       adjusted: debugMetric(lAdjusted),
       final: debugMetric(lAdjusted),
     },
     rawImageRight: {
       signal: debugMetric(right.raw),
       noisePenalty: debugMetric(right.noisePenalty),
+      blendshapeAssist: debugMetric(rBsAssist),
       adjusted: debugMetric(rAdjusted),
       final: debugMetric(rAdjusted),
     },
@@ -1709,7 +1742,7 @@ function computeExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neu
     return toUserSideSymmetryResult(computeWaterHoldSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
   }
   if (DIRECTIONAL_EXERCISE_SIGNALS[exerciseId]) {
-    return toUserSideSymmetryResult(computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
+    return toUserSideSymmetryResult(computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor, bsMap, neutralBs, facialTransformationMatrix, neutralFacialTransformationMatrix, options));
   }
   const rawResult = computePairwiseSymmetry(lm, neutral, mapping, noiseFloor, facialTransformationMatrix, neutralFacialTransformationMatrix, options)
     ?? computeSymmetry(lm, neutral, facialTransformationMatrix, neutralFacialTransformationMatrix);
@@ -1957,6 +1990,18 @@ function effectiveProfileThreshold(exerciseId, threshold) {
   if (threshold == null) return null;
   if (NOSE_EXERCISES.has(exerciseId)) return Math.min(threshold, NOSE_PROFILE_THRESHOLD_MAX);
   return threshold;
+}
+
+// Threshold a live rep must clear to count toward the score. We gate on the lower
+// `minimumVisible` band rather than `reliableMovement` (the coaching target): the
+// baseline is a fixed reference, so any visible movement should register as progress
+// instead of being dropped. Falls back to the stored activation threshold for older
+// profiles captured before threshold bands existed.
+function profileLiveScoringThreshold(exerciseId, profileExercise) {
+  if (!profileExercise) return null;
+  const minimumVisible = profileExercise.thresholdBands?.minimumVisible;
+  if (Number.isFinite(minimumVisible)) return effectiveProfileThreshold(exerciseId, minimumVisible);
+  return effectiveProfileThreshold(exerciseId, profileExercise.activationThreshold);
 }
 
 function buildMovementProfile({ neutral, noise, neutralFacialTransformationMatrix, exerciseStats, affectedSide, comfortLevel, scoringNoiseMode = DEFAULT_SCORING_NOISE_MODE, setupQuality = null }) {
@@ -2794,6 +2839,7 @@ export {
   compactFacialTransformationMatrix,
   drawOverlay,
   effectiveProfileThreshold,
+  profileLiveScoringThreshold,
   exerciseBaselineQuality,
   faceAlignmentFeedback,
   faceFrameNormalize,

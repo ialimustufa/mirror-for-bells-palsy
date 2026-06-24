@@ -236,9 +236,49 @@ function averageProfileSymmetry(exercises) {
   return valid.length ? roundMetric(valid.reduce((sum, value) => sum + value, 0) / valid.length) : null;
 }
 
+// Fields that define the original baseline reference. A retake refreshes live-scoring
+// calibration (noise floor, neutral, activation/visible threshold bands) but must NOT
+// move these — the baseline is the fixed point progress is measured against. If they
+// moved, improving and then retaking would re-anchor the baseline to the improved state
+// and collapse measured improvement toward zero.
+const PROFILE_FROZEN_REFERENCE_FIELDS = [
+  "leftBaselineMovement",
+  "rightBaselineMovement",
+  "initialSymmetry",
+  "leftMeanMovement",
+  "rightMeanMovement",
+  "meanSymmetry",
+  "leftPeakMovement",
+  "rightPeakMovement",
+];
+
+function preserveExerciseReference(oldExercise, newExercise) {
+  // First time we have this exercise: the retake IS the reference.
+  if (!oldExercise) return newExercise;
+  if (!newExercise) return oldExercise;
+  const merged = { ...newExercise };
+  for (const field of PROFILE_FROZEN_REFERENCE_FIELDS) {
+    if (oldExercise[field] != null) merged[field] = oldExercise[field];
+  }
+  // Keep the original recovery target in the (otherwise refreshed) threshold bands so the
+  // coaching goal stays anchored, while minimumVisible/reliableMovement track the new calibration.
+  if (newExercise.thresholdBands || oldExercise.thresholdBands) {
+    merged.thresholdBands = {
+      ...(newExercise.thresholdBands ?? {}),
+      ...(oldExercise.thresholdBands?.baselineTarget != null
+        ? { baselineTarget: oldExercise.thresholdBands.baselineTarget }
+        : {}),
+    };
+  }
+  return merged;
+}
+
 export function mergeMovementProfileRetake(currentProfile, partialProfile) {
   if (!currentProfile || !partialProfile?.exercises) return partialProfile;
-  const exercises = { ...(currentProfile.exercises ?? {}), ...partialProfile.exercises };
+  const exercises = { ...(currentProfile.exercises ?? {}) };
+  for (const [exerciseId, retaken] of Object.entries(partialProfile.exercises)) {
+    exercises[exerciseId] = preserveExerciseReference(currentProfile.exercises?.[exerciseId], retaken);
+  }
   const retakenExerciseIds = Object.keys(partialProfile.exercises);
   return {
     ...currentProfile,

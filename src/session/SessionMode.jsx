@@ -3,12 +3,12 @@ import { Play, Pause, X, ChevronRight, Volume2, VolumeX, Camera, CameraOff } fro
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, INTERSTITIAL_SEC } from "../domain/config";
 import { summarizeCaptureQualityFromFeatures, summarizeSessionCaptureQuality } from "../domain/captureQuality";
 import { SETUP_SAMPLE_TARGET, summarizeCaptureSetupQuality } from "../domain/captureSetupQuality";
-import { canPromptRetakeAfterRep, exerciseHoldSec, exercisePlannedSec, exerciseRestSec, todayISO } from "../domain/session";
+import { exerciseHoldSec, exercisePlannedSec, exerciseRestSec, todayISO } from "../domain/session";
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
-import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, SCORE_DROP_REASONS, SCORING_MODEL_VERSION, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetryDiagnostic, computeMovementProgressFromDisplacements, computeNoiseFloor, computeQuietRegionCoactivation, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeRestingAsymmetry, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
+import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, SCORE_DROP_REASONS, SCORING_MODEL_VERSION, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetryDiagnostic, computeMovementProgressFromDisplacements, computeNoiseFloor, computeQuietRegionCoactivation, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, profileLiveScoringThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeRestingAsymmetry, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
   faceMissing: "Find your face in the camera.",
@@ -28,7 +28,7 @@ function createHoldTracking(exerciseId = null, threshold = null) {
 }
 
 function profileActivationThreshold(profile, exerciseId) {
-  return effectiveProfileThreshold(exerciseId, getProfileExercise(profile, exerciseId)?.activationThreshold) ?? null;
+  return profileLiveScoringThreshold(exerciseId, getProfileExercise(profile, exerciseId)) ?? null;
 }
 
 function profileThresholdBands(profile, exerciseId) {
@@ -46,7 +46,7 @@ function hasRetakeGate(tracking, exerciseId) {
 }
 
 function lowSignalIssue(exercise) {
-  return `${exercise?.name ?? "This exercise"} is below your saved baseline.`;
+  return `Keep going — move as much as you can for ${exercise?.name ?? "this exercise"}.`;
 }
 
 const SCORING_SESSION_DEBUG_LOG_INTERVAL_MS = 700;
@@ -804,24 +804,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       // Each branch sets BOTH the new phase and the new timer in one batch — otherwise the advance
       // effect would re-fire with stale secondsLeft = 0 and skip past the just-entered phase.
       if (phase === "hold") {
-        const holdTracking = holdTrackingRef.current;
-        const shouldRetakeBaseline =
-          canPromptRetakeAfterRep(repIdx, currentReps) &&
-          hasRetakeGate(holdTracking, current.id) &&
-          holdTracking.alignedFrames > 0 &&
-          holdTracking.activatedFrames === 0;
-
-        if (shouldRetakeBaseline) {
-          setPaused(true);
-          setTrackingIssue(lowSignalIssue(current));
-          setRetakePrompt({
-            exerciseId: current.id,
-            name: current.name,
-            reason: "low-baseline-signal",
-            stats: { ...holdTracking },
-          });
-          return;
-        }
+        // The baseline is a fixed reference — you can't move better than your own
+        // face — so a low-signal hold is recorded as low progress, not treated as a
+        // calibration error. We no longer interrupt the session to force a re-baseline;
+        // the rep simply scores low and we continue. (Manual recalibration stays
+        // available from settings.)
         setPhase("rest");
         setSecondsLeft(currentRestSec);
       } else if (phase === "rest") {
@@ -1002,7 +989,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               symResult = scoringDiagnostic.result;
               if (symResult != null) {
                 const profileExercise = getProfileExercise(movementProfile, current.id);
-                const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                const profileThreshold = profileLiveScoringThreshold(current.id, profileExercise);
                 const thresholdBands = profileThresholdBands(movementProfile, current.id);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
                 const coactivation = computeQuietRegionCoactivation(current.id, lm, neutralRef.current, noiseRef.current, facialTransformationMatrix, neutralMatrixRef.current, symResult.peak, scoringOptions);
@@ -1084,7 +1071,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                 }
               } else {
                 const profileExercise = getProfileExercise(movementProfile, current.id);
-                const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                const profileThreshold = profileLiveScoringThreshold(current.id, profileExercise);
                 const thresholdBands = profileThresholdBands(movementProfile, current.id);
                 captureScoring = {
                   scoringModelVersion: SCORING_MODEL_VERSION,

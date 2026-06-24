@@ -8,6 +8,7 @@ import {
   summarizeMovementProgress,
   summarizeSessionMovementProgress,
 } from "../src/ml/faceMetrics.js";
+import { mergeMovementProfileRetake } from "../src/domain/appData.js";
 
 const EXERCISE_ID = "closed-smile";
 
@@ -50,6 +51,32 @@ test("computes left affected-side progress against first baseline and proper sid
   assert.equal(progress.baselineAffectedToProperRatio, 0.2);
   assert.equal(progress.balanceProgressRatio, 1.25);
   assert.equal(progress.deltaPct, 50);
+});
+
+test("retaking after improvement keeps progress measured against the original baseline", () => {
+  const original = {
+    affectedSide: "left",
+    exercises: {
+      [EXERCISE_ID]: { exerciseId: EXERCISE_ID, limitedSide: "left", leftBaselineMovement: 0.2, rightBaselineMovement: 1, initialSymmetry: 0.2 },
+    },
+  };
+  // Affected side now moves 0.4 — twice the original baseline of 0.2.
+  const before = computeMovementProgressFromDisplacements(EXERCISE_ID, 0.4, 1, original);
+  assert.equal(before.affectedProgressRatio, 2);
+
+  // User retakes calibration at the improved level; naively the baseline would jump to 0.4.
+  const retake = {
+    affectedSide: "left",
+    exercises: {
+      [EXERCISE_ID]: { exerciseId: EXERCISE_ID, limitedSide: "left", leftBaselineMovement: 0.4, rightBaselineMovement: 1, initialSymmetry: 0.4 },
+    },
+  };
+  const merged = mergeMovementProfileRetake(original, retake);
+
+  // The frozen baseline stays at 0.2, so improvement is NOT erased to 1.0.
+  assert.equal(merged.exercises[EXERCISE_ID].leftBaselineMovement, 0.2);
+  const after = computeMovementProgressFromDisplacements(EXERCISE_ID, 0.4, 1, merged);
+  assert.equal(after.affectedProgressRatio, 2);
 });
 
 test("computes right affected-side progress", () => {

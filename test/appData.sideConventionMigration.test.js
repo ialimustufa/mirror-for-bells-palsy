@@ -144,6 +144,67 @@ test("partial retakes record setup quality without replacing the profile setup s
   assert.equal(merged.initialAvgSymmetry, 0.7);
 });
 
+test("partial retake freezes the baseline reference but refreshes live-scoring fields", () => {
+  const original = {
+    exercises: {
+      "closed-smile": {
+        exerciseId: "closed-smile",
+        initialSymmetry: 0.6,
+        leftBaselineMovement: 0.02,
+        rightBaselineMovement: 0.01,
+        activationThreshold: 0.007,
+        thresholdBands: { minimumVisible: 0.004, reliableMovement: 0.007, baselineTarget: 0.02 },
+      },
+    },
+  };
+  // The user has improved; the retake measures larger movement and a higher threshold.
+  const retake = {
+    exercises: {
+      "closed-smile": {
+        exerciseId: "closed-smile",
+        initialSymmetry: 0.95,
+        leftBaselineMovement: 0.05,
+        rightBaselineMovement: 0.045,
+        activationThreshold: 0.018,
+        thresholdBands: { minimumVisible: 0.01, reliableMovement: 0.018, baselineTarget: 0.05 },
+      },
+    },
+  };
+
+  const merged = mergeMovementProfileRetake(original, retake);
+  const ex = merged.exercises["closed-smile"];
+
+  // Frozen reference — must stay at the first calibration so progress isn't erased.
+  assert.equal(ex.leftBaselineMovement, 0.02);
+  assert.equal(ex.rightBaselineMovement, 0.01);
+  assert.equal(ex.initialSymmetry, 0.6);
+  assert.equal(ex.thresholdBands.baselineTarget, 0.02);
+  assert.equal(merged.initialAvgSymmetry, 0.6);
+
+  // Refreshed live-scoring calibration — tracks the new retake.
+  assert.equal(ex.activationThreshold, 0.018);
+  assert.equal(ex.thresholdBands.minimumVisible, 0.01);
+  assert.equal(ex.thresholdBands.reliableMovement, 0.018);
+});
+
+test("first-time retake of a new exercise adopts it as the baseline reference", () => {
+  const original = {
+    exercises: {
+      "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.6, leftBaselineMovement: 0.02 },
+    },
+  };
+  const retake = {
+    exercises: {
+      "open-smile": { exerciseId: "open-smile", initialSymmetry: 0.8, leftBaselineMovement: 0.03 },
+    },
+  };
+
+  const merged = mergeMovementProfileRetake(original, retake);
+
+  assert.equal(merged.exercises["open-smile"].leftBaselineMovement, 0.03);
+  assert.equal(merged.exercises["closed-smile"].leftBaselineMovement, 0.02);
+});
+
 test("movement profile comparison uses strict core calibration noise when available", () => {
   const comparison = compareMovementProfiles(
     {
