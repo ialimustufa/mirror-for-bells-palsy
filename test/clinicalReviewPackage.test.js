@@ -250,6 +250,84 @@ test("clinical review package verification rejects unblinded estimate values", (
   assert.equal(report.controls.estimateValuesHidden, false);
 });
 
+test("clinical review package verification rejects a loosened release standard in the manifest", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const tamperedManifest = JSON.parse(JSON.stringify(reviewPackage.manifest));
+  tamperedManifest.releaseReadinessStandard.minReviewedAssessments = 1;
+  tamperedManifest.controls.requiresPseudonymousReviewerId = false;
+
+  const report = verifyClinicalReviewPackage(sampleRecords(), tamperedManifest, reviewedPackageCsv(reviewPackage), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+
+  assert.equal(report.status, "failed");
+  assert.match(report.errors.join("\n"), /releaseReadinessStandard\.minReviewedAssessments must match/);
+  assert.match(report.errors.join("\n"), /controls\.requiresPseudonymousReviewerId must match/);
+});
+
+test("clinical review package verification rejects an extra fabricated manifest field", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const tamperedManifest = JSON.parse(JSON.stringify(reviewPackage.manifest));
+  tamperedManifest.controls.clinicalFacingScoresAllowedByThisPackage = true;
+
+  const report = verifyClinicalReviewPackage(sampleRecords(), tamperedManifest, reviewedPackageCsv(reviewPackage), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+
+  assert.equal(report.status, "failed");
+  assert.match(report.errors.join("\n"), /controls\.clinicalFacingScoresAllowedByThisPackage must match/);
+});
+
+test("clinical review package verification accepts an uppercase source hash", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const report = verifyClinicalReviewPackage(sampleRecords(), reviewPackage.manifest, reviewedPackageCsv(reviewPackage), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256.toUpperCase(),
+  });
+
+  assert.equal(report.status, "passed");
+  assert.equal(report.controls.sourceHashMatches, true);
+  assert.equal(report.sourceDatasetSha256, SAMPLE_DATASET_SHA256);
+});
+
+test("clinical review package verification rejects a truncated label row", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const rows = parseCsv(reviewPackage.labelSheetCsv);
+  const clinicalRow = rows.find((row) => row[0] === "assessmentClinicalScale");
+  clinicalRow.pop();
+
+  const report = verifyClinicalReviewPackage(sampleRecords(), reviewPackage.manifest, writeCsvRows(rows), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+
+  assert.equal(report.status, "failed");
+  assert.match(report.errors.join("\n"), /label sheet row must have/);
+  assert.equal(report.controls.rowIdentityMatches, false);
+});
+
 test("clinical review package verification rejects changed read-only provenance", () => {
   const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
     createdAt: "2026-06-24T10:00:00.000Z",

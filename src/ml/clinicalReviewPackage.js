@@ -137,8 +137,54 @@ function addError(errors, condition, message) {
   if (!condition) errors.push(message);
 }
 
+function addCategorizedError(errors, controls, controlKey, condition, message) {
+  if (!condition) {
+    errors.push(message);
+    if (controlKey) controls[controlKey] = false;
+  }
+}
+
 function compactValue(value) {
   return value == null ? "" : String(value);
+}
+
+function normalizeSha256(value) {
+  return compactValue(value).trim().toLowerCase();
+}
+
+// Walk the manifest the package SHOULD have (rebuilt from the dataset) against the
+// one that was shipped and report every leaf that differs, including fields absent on
+// either side. This replaces the previous cherry-picked field checks so a hand-edited
+// manifest cannot loosen any release-standard or control value and still verify.
+function collectManifestMismatches(expected, actual, skip, path = "", mismatches = []) {
+  if (skip.has(path)) return mismatches;
+  if (Array.isArray(expected)) {
+    if (!Array.isArray(actual) || actual.length !== expected.length) {
+      mismatches.push(path);
+      return mismatches;
+    }
+    expected.forEach((item, index) => collectManifestMismatches(item, actual[index], skip, `${path}[${index}]`, mismatches));
+    return mismatches;
+  }
+  if (expected && typeof expected === "object") {
+    if (!actual || typeof actual !== "object" || Array.isArray(actual)) {
+      mismatches.push(path);
+      return mismatches;
+    }
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    for (const key of keys) {
+      const childPath = path ? `${path}.${key}` : key;
+      if (skip.has(childPath)) continue;
+      if (!(key in expected) || !(key in actual)) {
+        mismatches.push(childPath);
+        continue;
+      }
+      collectManifestMismatches(expected[key], actual[key], skip, childPath, mismatches);
+    }
+    return mismatches;
+  }
+  if (expected !== actual) mismatches.push(path);
+  return mismatches;
 }
 
 function rowKey(row = {}) {
@@ -166,7 +212,10 @@ function csvObjects(csvText = "", errors = []) {
     addError(errors, header[index] === LABEL_COLUMNS[index], `label sheet column ${index + 1} must be ${LABEL_COLUMNS[index]}`);
   }
   const indexByHeader = Object.fromEntries(header.map((column, index) => [column, index]));
-  return rows.slice(1).map((row) => Object.fromEntries(LABEL_COLUMNS.map((column) => [column, row[indexByHeader[column]] ?? ""])));
+  return rows.slice(1).map((row) => {
+    addError(errors, row.length === LABEL_COLUMNS.length, `label sheet row must have ${LABEL_COLUMNS.length} columns`);
+    return Object.fromEntries(LABEL_COLUMNS.map((column) => [column, row[indexByHeader[column]] ?? ""]));
+  });
 }
 
 function rowsByKey(rows = [], errors = [], label = "rows") {
@@ -317,50 +366,44 @@ function buildClinicalReviewPackage(records = [], options = {}) {
 
 function verifyClinicalReviewPackage(records = [], manifest = {}, labelSheetCsv = "", options = {}) {
   const errors = [];
-  const sourceDatasetSha256 = compactValue(options.sourceDatasetSha256).trim();
+  const controls = { estimateValuesHidden: true, readOnlyColumnsMatch: true };
+  const sourceDatasetSha256 = normalizeSha256(options.sourceDatasetSha256);
+  const manifestSourceSha256 = normalizeSha256(manifest?.sourceDataset?.sha256);
+  const sourceHashIsHex = /^[a-f0-9]{64}$/.test(sourceDatasetSha256);
+  const sourceHashMatches = sourceHashIsHex && manifestSourceSha256 === sourceDatasetSha256;
+
+  addError(errors, manifest?.kind === CLINICAL_REVIEW_PACKAGE_KIND, `manifest kind must be ${CLINICAL_REVIEW_PACKAGE_KIND}`);
+  addError(errors, manifest?.schemaVersion === CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION, `manifest schemaVersion must be ${CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION}`);
+  addError(errors, sourceHashIsHex, "sourceDatasetSha256 must be a SHA-256 hex string");
+  addError(errors, sourceHashMatches, "manifest sourceDataset.sha256 must match the validation dataset SHA-256");
+
+  // Rebuild the manifest the dataset implies and compare every field, so no shipped
+  // field (release-standard floors, control flags, counts) can be loosened undetected.
+  // Build with the manifest's own hash placeholder so a malformed source hash does not
+  // block the structural comparison — the hash itself is verified separately above.
   let expectedManifest = null;
-  if (/^[a-f0-9]{64}$/i.test(sourceDatasetSha256)) {
-    try {
-      expectedManifest = buildClinicalReviewManifest(records, {
-        createdAt: manifest?.createdAt ?? options.generatedAt ?? new Date().toISOString(),
-        packageId: manifest?.packageId ?? "clinical-review-package",
-        sourceDatasetPath: manifest?.sourceDataset?.path ?? null,
-        sourceDatasetSha256,
-      });
-    } catch (error) {
-      errors.push(error.message);
+  try {
+    expectedManifest = buildClinicalReviewManifest(records, {
+      createdAt: manifest?.createdAt ?? options.generatedAt ?? new Date().toISOString(),
+      packageId: manifest?.packageId ?? "clinical-review-package",
+      sourceDatasetPath: manifest?.sourceDataset?.path ?? null,
+      sourceDatasetSha256: sourceHashIsHex ? sourceDatasetSha256 : "0".repeat(64),
+    });
+  } catch (error) {
+    errors.push(error.message);
+  }
+  if (expectedManifest) {
+    const skip = new Set(["kind", "schemaVersion", "createdAt", "packageId", "sourceDataset.path", "sourceDataset.sha256"]);
+    for (const path of collectManifestMismatches(expectedManifest, manifest, skip)) {
+      errors.push(`manifest field ${path || "(root)"} must match the package derived from the dataset`);
     }
   }
+
+  const identityErrorStart = errors.length;
   const expectedRows = validationLabelRows(records, { includeEstimateColumns: false });
   const actualRows = csvObjects(labelSheetCsv, errors);
   const expectedByKey = rowsByKey(expectedRows, errors, "expected label sheet rows");
   const actualByKey = rowsByKey(actualRows, errors, "actual label sheet rows");
-
-  addError(errors, manifest?.kind === CLINICAL_REVIEW_PACKAGE_KIND, `manifest kind must be ${CLINICAL_REVIEW_PACKAGE_KIND}`);
-  addError(errors, manifest?.schemaVersion === CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION, `manifest schemaVersion must be ${CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION}`);
-  addError(errors, /^[a-f0-9]{64}$/i.test(sourceDatasetSha256), "sourceDatasetSha256 must be a SHA-256 hex string");
-  addError(errors, manifest?.sourceDataset?.sha256 === sourceDatasetSha256, "manifest sourceDataset.sha256 must match the validation dataset SHA-256");
-  addError(errors, manifest?.labelSheet?.blinded === true, "manifest labelSheet.blinded must be true");
-  addError(errors, manifest?.labelSheet?.includeEstimateValueColumns === false, "manifest labelSheet.includeEstimateValueColumns must be false");
-  addError(errors, manifest?.labelSheet?.sourceLabelSheetMode === "blinded", "manifest labelSheet.sourceLabelSheetMode must be blinded");
-  addError(errors, manifest?.controls?.reviewerMustNotSeeMirrorEstimateValuesBeforePrimaryTargetAssignment === true, "manifest must require blinded primary target assignment");
-  addError(errors, manifest?.controls?.sourceDatasetHashRequiredForReleaseAudit === true, "manifest must require source dataset hash audit");
-
-  if (expectedManifest) {
-    addError(errors, manifest?.sourceDataset?.kind === expectedManifest.sourceDataset.kind, "manifest sourceDataset.kind must match the dataset");
-    addError(errors, manifest?.sourceDataset?.appId === expectedManifest.sourceDataset.appId, "manifest sourceDataset.appId must match the dataset");
-    addError(errors, manifest?.sourceDataset?.version === expectedManifest.sourceDataset.version, "manifest sourceDataset.version must match the dataset");
-    addError(errors, manifest?.sourceDataset?.exportedAt === expectedManifest.sourceDataset.exportedAt, "manifest sourceDataset.exportedAt must match the dataset");
-    addError(errors, manifest?.labelSheet?.labelSchemaVersion === expectedManifest.labelSheet.labelSchemaVersion, "manifest label schema version must match the dataset");
-    addError(errors, manifest?.labelSheet?.rowCount === expectedManifest.labelSheet.rowCount, "manifest label row count must match the blinded sheet");
-    addError(errors, manifest?.labelSheet?.frameSampleRows === expectedManifest.labelSheet.frameSampleRows, "manifest frame sample row count must match the dataset");
-    addError(errors, manifest?.labelSheet?.assessmentClinicalScaleRows === expectedManifest.labelSheet.assessmentClinicalScaleRows, "manifest clinical-scale row count must match the dataset");
-    addError(errors, manifest?.labelSheet?.columnCount === expectedManifest.labelSheet.columnCount, "manifest label column count must match the current schema");
-    addError(errors, manifest?.clinicalScaleEstimator?.version === expectedManifest.clinicalScaleEstimator.version, "manifest estimator version must match the current clinical-scale estimator");
-    addError(errors, manifest?.clinicalScaleEstimator?.currentVersionComparableRows === expectedManifest.clinicalScaleEstimator.currentVersionComparableRows, "manifest current-version comparable row count must match the dataset");
-    addError(errors, manifest?.releaseReadinessStandard?.minAgreementRate === expectedManifest.releaseReadinessStandard.minAgreementRate, "manifest release standard must preserve the 80% observed agreement floor");
-    addError(errors, manifest?.releaseReadinessStandard?.minAgreementWilsonLowerBound === expectedManifest.releaseReadinessStandard.minAgreementWilsonLowerBound, "manifest release standard must preserve the 80% Wilson lower-bound floor");
-  }
 
   addError(errors, actualRows.length === expectedRows.length, "label sheet row count must match the package manifest");
   addError(errors, countRowsByType(actualRows, "frameSample") === frameSampleRecords(records).length, "label sheet frame sample row count must match the dataset");
@@ -368,6 +411,7 @@ function verifyClinicalReviewPackage(records = [], manifest = {}, labelSheetCsv 
 
   for (const key of expectedByKey.keys()) addError(errors, actualByKey.has(key), `label sheet is missing ${key}`);
   for (const key of actualByKey.keys()) addError(errors, expectedByKey.has(key), `label sheet has unexpected ${key}`);
+  const rowIdentityMatches = errors.length === identityErrorStart;
 
   for (const [key, expectedRow] of expectedByKey.entries()) {
     const actualRow = actualByKey.get(key);
@@ -375,8 +419,10 @@ function verifyClinicalReviewPackage(records = [], manifest = {}, labelSheetCsv 
     const mutableColumns = mutableColumnsForRowType(expectedRow.rowType);
     for (const column of LABEL_COLUMNS) {
       if (mutableColumns.has(column)) continue;
-      addError(
+      addCategorizedError(
         errors,
+        controls,
+        "readOnlyColumnsMatch",
         compactValue(actualRow[column]) === compactValue(expectedRow[column]),
         `${key} read-only column ${column} must match the blinded package`,
       );
@@ -384,7 +430,7 @@ function verifyClinicalReviewPackage(records = [], manifest = {}, labelSheetCsv 
     if (expectedRow.rowType === "assessmentClinicalScale") {
       addError(errors, actualRow.sourceLabelSheetMode === "blinded", `${key} sourceLabelSheetMode must remain blinded`);
       for (const column of ESTIMATE_VALUE_COLUMNS) {
-        addError(errors, compactValue(actualRow[column]) === "", `${key} ${column} must remain hidden in blinded review`);
+        addCategorizedError(errors, controls, "estimateValuesHidden", compactValue(actualRow[column]) === "", `${key} ${column} must remain hidden in blinded review`);
       }
     }
   }
@@ -406,11 +452,11 @@ function verifyClinicalReviewPackage(records = [], manifest = {}, labelSheetCsv 
       expectedAssessmentClinicalScaleRows: assessmentClinicalScaleRecords(records).length,
     },
     controls: {
-      sourceHashMatches: manifest?.sourceDataset?.sha256 === sourceDatasetSha256,
+      sourceHashMatches,
       blindedManifest: manifest?.labelSheet?.blinded === true && manifest?.labelSheet?.includeEstimateValueColumns === false,
-      rowIdentityMatches: errors.every((error) => !/missing|unexpected|duplicate|row count/.test(error)),
-      estimateValuesHidden: errors.every((error) => !ESTIMATE_VALUE_COLUMNS.some((column) => error.includes(column))),
-      readOnlyColumnsMatch: errors.every((error) => !error.includes("read-only column")),
+      rowIdentityMatches,
+      estimateValuesHidden: controls.estimateValuesHidden,
+      readOnlyColumnsMatch: controls.readOnlyColumnsMatch,
     },
     errors,
   };
