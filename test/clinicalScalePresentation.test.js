@@ -95,6 +95,7 @@ function reviewedClinicalScaleStatus(clinicalScaleAvailabilityConfig = clinicalS
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: clinicalScaleAvailabilityConfig,
@@ -147,6 +148,7 @@ test("clinical scale presentation policy switches copy only with complete releas
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: clinicalScaleAvailability(),
@@ -215,6 +217,7 @@ test("clinical scale presentation policy fails closed when release evidence is i
     { clinicalScaleReviewerAgreementReports: [], blocker: /clinicalScaleReviewerAgreementReports/ },
     { clinicalScaleReviewPackageVerificationReports: [], blocker: /clinicalScaleReviewPackageVerificationReports/ },
     { thresholdCalibrationReports: [], blocker: /thresholdCalibrationReports/ },
+    { thresholdCalibrationSourceDatasetSha256s: [], blocker: /thresholdCalibrationSourceDatasetSha256s/ },
   ];
 
   for (const weakStatusFields of weakEvidence) {
@@ -306,6 +309,7 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
   };
@@ -334,6 +338,7 @@ test("clinical scale presentation policy can keep individual scales as estimates
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -529,6 +534,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: clinicalScaleAvailability(),
@@ -548,6 +554,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {

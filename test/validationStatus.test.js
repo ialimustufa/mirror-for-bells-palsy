@@ -84,6 +84,7 @@ const BASE_STATUS = {
   clinicalScaleReviewerAgreementReports: [],
   clinicalScaleReviewPackageVerificationReports: [],
   thresholdCalibrationReports: [],
+  thresholdCalibrationSourceDatasetSha256s: [],
   productionThresholdConstantsCalibrated: false,
   clinicalFacingScoresAllowed: false,
   clinicalScaleAvailability: DISABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -282,10 +283,11 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
   });
 }
 
-function passingThresholdReport({ readyExercises = 5 } = {}) {
+function passingThresholdReport({ readyExercises = 5, sourceDatasetSha256 = SOURCE_DATASET_SHA256 } = {}) {
   return JSON.stringify({
     kind: "mirror-threshold-calibration-report",
     generatedAt: "2026-06-24T00:00:00.000Z",
+    sourceDatasetSha256,
     summary: {
       exercises: readyExercises,
       readyExercises,
@@ -553,6 +555,7 @@ test("validation status accepts documented reviewed calibration state", () => {
     reviewedFrameCount: 1200,
     readyExerciseCount: 5,
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
   });
   assert.equal(status.productionThresholdConstantsCalibrated, true);
@@ -570,6 +573,7 @@ test("validation status accepts documented clinical agreement state", () => {
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -589,6 +593,7 @@ test("validation status rejects enabled per-scale availability without evidence 
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
@@ -656,6 +661,7 @@ test("validation status rejects clinical artifacts under non-clinical status", (
       readyExerciseCount: 5,
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
     }),
     /clinical scale agreement reports require status clinical-scale-agreement-reviewed/,
@@ -671,6 +677,7 @@ test("validation status rejects clinical artifacts under non-clinical status", (
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
       clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
     }),
     /clinical scale reviewer agreement reports require status clinical-scale-agreement-reviewed/,
@@ -690,6 +697,7 @@ test("validation status rejects clinical-facing support under non-clinical statu
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
       clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -736,6 +744,7 @@ test("validation status artifacts accept documented clinical and calibration rep
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -789,6 +798,7 @@ test("validation status artifacts accept scale-specific clinical availability fo
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
@@ -821,6 +831,7 @@ test("validation status artifacts accept structured clinical agreement reports",
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -855,6 +866,7 @@ test("validation status artifacts reject unversioned structured clinical agreeme
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -888,6 +900,7 @@ test("validation status artifacts reject unversioned clinical reviewer agreement
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1010,6 +1023,16 @@ test("validation status rejects reviewer and threshold artifacts without ISO gen
   );
 });
 
+test("validation status rejects threshold calibration reports without source hash controls", () => {
+  const thresholdReport = JSON.parse(passingThresholdReport());
+  delete thresholdReport.sourceDatasetSha256;
+
+  assert.throws(
+    () => validateThresholdCalibrationReportText(JSON.stringify(thresholdReport), THRESHOLD_CALIBRATION_REPORT_PATH),
+    /sourceDatasetSha256/,
+  );
+});
+
 test("validation status artifacts reject reports generated after the status decision date", async () => {
   const status = {
     ...BASE_STATUS,
@@ -1023,6 +1046,7 @@ test("validation status artifacts reject reports generated after the status deci
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1052,6 +1076,7 @@ test("validation status artifacts reject review package verification without rev
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1082,6 +1107,7 @@ test("validation status artifacts reject structured clinical agreement reports w
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -1117,6 +1143,7 @@ test("validation status artifacts reject structured clinical agreement reports w
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -1166,6 +1193,7 @@ test("validation status artifacts reject structured clinical agreement reports w
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -1215,6 +1243,7 @@ test("validation status artifacts reject clinical agreement reports without sour
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
@@ -1264,6 +1293,7 @@ test("validation status artifacts reject clinical agreement reports without a ma
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1294,6 +1324,7 @@ test("validation status artifacts reject reviewer agreement reports with a misma
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1395,6 +1426,7 @@ test("validation status artifacts reject per-scale evidence summaries that do no
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
@@ -1444,6 +1476,7 @@ test("validation status artifacts reject reviewer agreement reports with too few
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1473,6 +1506,7 @@ test("validation status artifacts reject reviewer agreement reports with metadat
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1502,6 +1536,7 @@ test("validation status artifacts reject reviewer agreement reports with insuffi
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1535,6 +1570,7 @@ test("validation status artifacts reject reviewer agreement reports with duplica
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1569,6 +1605,7 @@ test("validation status artifacts reject reviewer agreement reports with too few
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1602,6 +1639,7 @@ test("validation status artifacts reject reviewer agreement reports with overlap
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1636,6 +1674,7 @@ test("validation status artifacts reject reviewer agreement reports with incompl
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1668,6 +1707,7 @@ test("validation status artifacts reject reviewer agreement reports with exclude
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1702,6 +1742,7 @@ test("validation status artifacts reject reviewer agreement reports with low Wil
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1733,6 +1774,7 @@ test("validation status artifacts reject reviewer agreement reports with narrow 
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1778,6 +1820,7 @@ test("validation status artifacts reject clinical agreement reports with duplica
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1807,6 +1850,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2010,6 +2054,7 @@ test("validation status artifacts reject clinical agreement reports for stale es
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2054,6 +2099,7 @@ test("validation status rejects clinical-facing scores without reviewed coverage
       clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
       clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
@@ -2108,6 +2154,7 @@ test("validation status rejects global clinical-facing availability with no enab
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
       clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: {
@@ -2130,6 +2177,7 @@ test("validation status rejects clinical-facing scores without clinical agreemen
       reviewedClinicalScaleAssessmentCount: 30,
       readyExerciseCount: 5,
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2149,6 +2197,7 @@ test("validation status rejects clinical-facing scores without reviewer agreemen
       readyExerciseCount: 5,
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2169,6 +2218,7 @@ test("validation status rejects clinical-facing scores without review package ve
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2202,6 +2252,7 @@ test("validation status artifacts reject clinical agreement reports that do not 
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2231,6 +2282,7 @@ test("validation status artifacts reject clinical agreement reports without blin
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2260,6 +2312,7 @@ test("validation status artifacts reject clinical agreement reports without esti
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2292,6 +2345,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2321,6 +2375,7 @@ test("validation status artifacts reject clinical agreement reports with low Wil
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2350,6 +2405,7 @@ test("validation status artifacts reject clinical agreement reports with incompl
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2379,6 +2435,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -2404,6 +2461,7 @@ test("validation status artifacts reject missing calibration artifact coverage",
     reviewedFrameCount: 1200,
     readyExerciseCount: 5,
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
   };
 
@@ -2414,5 +2472,27 @@ test("validation status artifacts reject missing calibration artifact coverage",
       }),
     }),
     /ready exercise coverage/,
+  );
+});
+
+test("validation status artifacts reject unlisted threshold calibration source hashes", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "production-thresholds-calibrated",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    readyExerciseCount: 5,
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: ["b".repeat(64)],
+    productionThresholdConstantsCalibrated: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /threshold calibration report sourceDatasetSha256 values must be listed/,
   );
 });

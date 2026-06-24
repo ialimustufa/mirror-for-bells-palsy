@@ -1184,9 +1184,18 @@ function countAtThreshold(peaks, threshold) {
   return peaks.filter((peak) => peak >= threshold).length;
 }
 
+function sourceDatasetSha256FromOptions(options = {}) {
+  const value = String(options.sourceDatasetSha256 ?? "").trim();
+  if (!SHA256_HEX_PATTERN.test(value)) {
+    throw new Error("threshold calibration report requires sourceDatasetSha256");
+  }
+  return value.toLowerCase();
+}
+
 function calibrateThresholdsFromValidationSamples(samples = [], options = {}) {
   const minPositive = Math.max(1, Math.round(options.minPositive ?? 3));
   const minNegative = Math.max(1, Math.round(options.minNegative ?? 3));
+  const sourceDatasetSha256 = sourceDatasetSha256FromOptions(options);
   const replay = replayFrameSamples(samples, options);
   const labels = new Map();
   for (const sample of samples) {
@@ -1253,6 +1262,7 @@ function calibrateThresholdsFromValidationSamples(samples = [], options = {}) {
   return {
     kind: "mirror-threshold-calibration-report",
     generatedAt: options.generatedAt ?? new Date().toISOString(),
+    sourceDatasetSha256,
     minPositive,
     minNegative,
     summary: {

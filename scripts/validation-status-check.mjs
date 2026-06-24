@@ -66,6 +66,13 @@ function assertStringArray(value, field) {
   }
 }
 
+function assertSha256Array(value, field) {
+  assertCondition(Array.isArray(value), `${field} must be an array`);
+  for (const [index, item] of value.entries()) {
+    assertSha256(item, `${field}[${index}]`);
+  }
+}
+
 function assertIsoTimestamp(value, field) {
   assertCondition(typeof value === "string" && ISO_TIMESTAMP_RE.test(value), `${field} must be a UTC ISO timestamp`);
   assertCondition(!Number.isNaN(Date.parse(value)), `${field} must be a valid UTC ISO timestamp`);
@@ -631,6 +638,7 @@ function validateThresholdCalibrationReportText(text, artifactPath) {
   }
   assertCondition(report?.kind === "mirror-threshold-calibration-report", `${artifactPath} must be a mirror-threshold-calibration-report`);
   assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
+  assertSha256(report.sourceDatasetSha256, `${artifactPath}.sourceDatasetSha256`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
   assertNonNegativeInteger(report.summary.readyExercises, `${artifactPath}.summary.readyExercises`);
   assertCondition(Array.isArray(report.exercises), `${artifactPath} must include an exercises array`);
@@ -638,6 +646,7 @@ function validateThresholdCalibrationReportText(text, artifactPath) {
   return {
     path: artifactPath,
     generatedAt: report.generatedAt,
+    sourceDatasetSha256: report.sourceDatasetSha256.toLowerCase(),
     readyExerciseCount: report.summary.readyExercises,
   };
 }
@@ -1147,6 +1156,7 @@ function validateStatus(status) {
   assertStringArray(status.clinicalScaleReviewerAgreementReports, "clinicalScaleReviewerAgreementReports");
   assertStringArray(status.clinicalScaleReviewPackageVerificationReports, "clinicalScaleReviewPackageVerificationReports");
   assertStringArray(status.thresholdCalibrationReports, "thresholdCalibrationReports");
+  assertSha256Array(status.thresholdCalibrationSourceDatasetSha256s, "thresholdCalibrationSourceDatasetSha256s");
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
   assertCondition(typeof status.productionThresholdConstantsCalibrated === "boolean", "productionThresholdConstantsCalibrated must be boolean");
   assertCondition(typeof status.clinicalFacingScoresAllowed === "boolean", "clinicalFacingScoresAllowed must be boolean");
@@ -1157,6 +1167,7 @@ function validateStatus(status) {
     assertCondition(status.reviewedFrameCount > 0, "threshold constants cannot be marked calibrated without reviewed frame coverage");
     assertCondition(status.readyExerciseCount > 0, "threshold constants cannot be marked calibrated without ready exercise coverage");
     assertCondition(status.thresholdCalibrationReports.length > 0, "threshold constants cannot be marked calibrated without calibration reports");
+    assertCondition(status.thresholdCalibrationSourceDatasetSha256s.length > 0, "threshold constants cannot be marked calibrated without threshold calibration source dataset hashes");
   }
   if (status.clinicalScaleAgreementReports.length > 0) {
     assertCondition(status.status === CLINICAL_SCALE_RELEASE_STATUS, `clinical scale agreement reports require status ${CLINICAL_SCALE_RELEASE_STATUS}`);
@@ -1193,6 +1204,7 @@ function validateStatus(status) {
     assertCondition(status.clinicalScaleAgreementReports.length > 0, "clinical-facing scores require clinical scale agreement reports");
     assertCondition(status.clinicalScaleReviewerAgreementReports.length > 0, "clinical-facing scores require clinical scale reviewer agreement reports");
     assertCondition(status.clinicalScaleReviewPackageVerificationReports.length > 0, "clinical-facing scores require clinical review package verification reports");
+    assertCondition(status.thresholdCalibrationSourceDatasetSha256s.length > 0, "clinical-facing scores require threshold calibration source dataset hashes");
   }
   return status;
 }
@@ -1250,7 +1262,14 @@ async function validateStatusArtifacts(status, options = {}) {
     );
   }
   if (status.productionThresholdConstantsCalibrated) {
-    const readyExerciseCount = thresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);
+    const traceableThresholdCalibrationReports = thresholdCalibrationReports.filter((report) => (
+      status.thresholdCalibrationSourceDatasetSha256s.includes(report.sourceDatasetSha256)
+    ));
+    assertCondition(
+      traceableThresholdCalibrationReports.length === thresholdCalibrationReports.length,
+      "threshold calibration report sourceDatasetSha256 values must be listed in thresholdCalibrationSourceDatasetSha256s",
+    );
+    const readyExerciseCount = traceableThresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);
     assertCondition(
       readyExerciseCount >= status.readyExerciseCount,
       "threshold calibration report artifacts must document ready exercise coverage matching validation status",

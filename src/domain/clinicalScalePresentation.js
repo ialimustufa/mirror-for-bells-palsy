@@ -23,6 +23,10 @@ function nonEmptyStringArray(value) {
   return Array.isArray(value) && value.some((item) => typeof item === "string" && item.length > 0);
 }
 
+function nonEmptySha256Array(value) {
+  return Array.isArray(value) && value.some((item) => SHA256_HEX_RE.test(String(item ?? "")));
+}
+
 function nonEmptyString(value) {
   return typeof value === "string" && value.length > 0;
 }
@@ -113,6 +117,7 @@ function clinicalScaleReleaseEvidenceBlockers(status = DEFAULT_VALIDATION_STATUS
   if (!nonEmptyStringArray(status?.clinicalScaleReviewerAgreementReports)) blockers.push("clinicalScaleReviewerAgreementReports must list at least one report");
   if (!nonEmptyStringArray(status?.clinicalScaleReviewPackageVerificationReports)) blockers.push("clinicalScaleReviewPackageVerificationReports must list at least one report");
   if (!nonEmptyStringArray(status?.thresholdCalibrationReports)) blockers.push("thresholdCalibrationReports must list at least one report");
+  if (!nonEmptySha256Array(status?.thresholdCalibrationSourceDatasetSha256s)) blockers.push("thresholdCalibrationSourceDatasetSha256s must list at least one source dataset hash");
   return blockers;
 }
 

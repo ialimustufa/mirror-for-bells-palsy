@@ -1119,9 +1119,12 @@ because projected labels are not evidence.
 The threshold calibration command groups reviewed labels by exercise and writes a
 recommendation report. It includes current reliable thresholds, positive/negative
 peak summaries, recommended minimum-visible/reliable/baseline-target bands, and
-projected false-positive/false-negative rates at the recommended reliable threshold.
-The report does not change production constants; a human review step is still
-required before changing scoring behavior.
+projected false-positive/false-negative rates at the recommended reliable
+threshold. The report carries the reviewed dataset `sourceDatasetSha256`, and
+calibrated status must list that hash in `thresholdCalibrationSourceDatasetSha256s`
+before ready-exercise coverage can count. The report does not change production
+constants; a human review step is still required before changing scoring
+behavior.
 
 The model-readiness command reads either a reviewed dataset JSONL file or a
 validation report JSON file and writes a conservative decision report. It fails
@@ -1285,8 +1288,9 @@ enabled scales must carry `sourceDatasetSha256`, and those values must match one
 of the listed passed review package verification reports so release evidence
 traces back to the blinded source dataset package.
 Threshold calibration report paths must point to JSON
-`mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
-matches the status claim.
+`mirror-threshold-calibration-report` artifacts with `sourceDatasetSha256` and
+ready-exercise coverage that matches the status claim. The status file must list
+those hashes in `thresholdCalibrationSourceDatasetSha256s`.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

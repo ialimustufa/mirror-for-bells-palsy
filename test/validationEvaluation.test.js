@@ -14,6 +14,7 @@ const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
 const STANDARD_SCALE_MOVEMENT_IDS = STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId);
 const REQUIRED_RESTING_METRIC_KEYS = ["palpebralFissure", "nasolabialMidface", "oralCommissure"];
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
@@ -156,9 +157,13 @@ test("threshold calibration recommends bands from reviewed positive and negative
     { id: "pos-3", phase: "hold", exerciseId: "closed-smile", ts: 6, scoring: { peak: 0.016, thresholdBands: { reliableMovement: 0.006 } }, label: { quality: "strong", visibleMovementLevel: "strong" } },
   ];
 
-  const report = calibrateThresholdsFromValidationSamples(samples, { generatedAt: "2026-06-23T00:00:00.000Z" });
+  const report = calibrateThresholdsFromValidationSamples(samples, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
+  });
   const exercise = report.exercises[0];
 
+  assert.equal(report.sourceDatasetSha256, SOURCE_DATASET_SHA256);
   assert.equal(report.summary.readyExercises, 1);
   assert.equal(exercise.status, "ready");
   assert.deepEqual(exercise.recommendedThresholdBands, {
@@ -169,6 +174,13 @@ test("threshold calibration recommends bands from reviewed positive and negative
   assert.equal(exercise.currentReliableThreshold, 0.006);
   assert.equal(exercise.projectedAtRecommended.falsePositiveRate, 0);
   assert.equal(exercise.projectedAtRecommended.falseNegativeRate, 0);
+});
+
+test("threshold calibration requires source dataset hash traceability", () => {
+  assert.throws(
+    () => calibrateThresholdsFromValidationSamples([], { generatedAt: "2026-06-23T00:00:00.000Z" }),
+    /sourceDatasetSha256/,
+  );
 });
 
 function clinicalRecord(id, estimate, label) {

@@ -63,8 +63,10 @@ checks for:
   unless the status is explicitly `clinical-scale-agreement-reviewed`; it also
   fails closed without schema-v1 dated status metadata, reviewed dataset/frame
   coverage, ready exercise coverage, clinical and reviewer agreement report
-  paths, threshold report paths, per-scale clinical/reviewer agreement evidence
-  summaries for each enabled House-Brackmann/Sunnybrook/eFACE support value, or
+  paths, threshold report paths and matching
+  `thresholdCalibrationSourceDatasetSha256s`, per-scale clinical/reviewer
+  agreement evidence summaries for each enabled House-Brackmann/Sunnybrook/eFACE
+  support value, or
   if the status file weakens the documented 30-assessment, 10-case, 80%
   observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
   Wilson-confidence-interval, current-estimator-version, review-protocol,
@@ -104,6 +106,9 @@ checks for:
   must not precede any referenced artifact generation date. Agreement artifacts
   must also include `sourceDatasetSha256` so status validation can tie the
   reviewed labels back to a listed passed review-package verification report.
+  Threshold calibration reports must also include `sourceDatasetSha256`, and
+  calibrated status must list matching hashes in
+  `thresholdCalibrationSourceDatasetSha256s`.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` and review-package verification JSON
   artifacts in `clinicalScaleReviewPackageVerificationReports` before
