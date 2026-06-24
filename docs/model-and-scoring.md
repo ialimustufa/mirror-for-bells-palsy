@@ -866,6 +866,9 @@ landmarks are not stored as part of the assessment summary.
 
 Clinical-scale estimates are stored with explicit status and caveats:
 
+- `version: 2` for the current estimator. Reviewed v1 clinical-scale labels are
+  stale after the v2 evidence-tier and 0-100 score-range change and cannot support
+  the clinical-facing release gate.
 - `status: "estimated"` only when the 80% evidence standard is met.
 - `status: "insufficient-data"` when movement coverage or resting metrics are missing.
 - `evidence.tier: "complete-standard-assessment"` when all five standard
@@ -888,6 +891,12 @@ clinical-scale estimates from the assessment summary, assessment history, and
 printable report output. The preference is display-only: validation datasets and
 clinician bundles still preserve the underlying assessment evidence for explicit
 review/export workflows.
+
+Validation JSONL exports include the clinical-scale evidence tier and movement
+coverage in the assessment source summary. Normal label sheets expose those
+read-only audit fields; blinded sheets blank the estimate-derived fields while
+keeping `clinicalScaleEstimateVersion` so reviewer outputs remain tied to the
+current estimator.
 
 Assessments are also saved as `kind: "assessment"` session records for local image
 hydration and PDF generation, but they do not count toward daily practice goals or

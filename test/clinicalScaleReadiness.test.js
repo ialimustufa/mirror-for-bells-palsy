@@ -3,6 +3,8 @@ import test from "node:test";
 import { assessClinicalScaleReadiness, clinicalValidationReportFrom } from "../src/ml/clinicalScaleReadiness.js";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
+const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+
 function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, lower = 0.82, upper = 1 }) {
   return {
     labeledCount,
@@ -38,7 +40,7 @@ function clinicalValidationReport(overrides = {}) {
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
-      estimateVersionCounts: { v1: 30 },
+      estimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: 30 },
       currentClinicalScaleEstimateVersionAssessmentCount: 30,
       meetsMinimumStandard: true,
     },
@@ -126,7 +128,7 @@ test("clinical scale readiness fails closed without current estimator-version ev
   }), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
   assert.equal(report.status, "needs-reviewed-clinical-scale-data");
-  assert.match(report.blockingReasons.join("\n"), /validation report for estimator v1/);
+  assert.match(report.blockingReasons.join("\n"), new RegExp(`validation report for estimator v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
 });
 
 test("clinical scale readiness reports confidence standard without enabling clinical-facing scores by itself", () => {

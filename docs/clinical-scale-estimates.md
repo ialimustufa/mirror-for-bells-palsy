@@ -45,6 +45,10 @@ The tier appears in assessment panels and printable reports so a 4/5 movement
 estimate is not presented with the same evidence strength as a complete 5/5
 assessment.
 
+The current clinical-scale estimator is v2. v2 records evidence tiers and clamps
+eFACE-style proxy scores to the 0-100 range, so validation labels generated from
+older v1 estimates are stale and do not count toward the release agreement gate.
+
 ## Implemented Estimates
 
 `clinicalScales.scales.houseBrackmann` maps the standard assessment into a conservative global HB estimate using:
@@ -98,6 +102,12 @@ Mirror's current estimates in read-only reference columns for audit, but the
   `clinicianConfidence`, and `reviewedAt` metadata used to prove that a target
   label came from a blinded sheet and was independently clinician-assigned or
   adjudicated before it is counted by readiness tooling
+
+Normal, non-blinded label sheets also include read-only estimate audit columns
+for `estimateEvidenceTier`, `estimateUsableMovementCoverageRatio`,
+`estimateUsableMovementCount`, and `estimateRequiredMovementCount`. Blinded
+label sheets leave those estimate-derived fields blank, while preserving
+`clinicalScaleEstimateVersion` for provenance.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:

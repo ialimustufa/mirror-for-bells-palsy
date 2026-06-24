@@ -3,6 +3,8 @@ import test from "node:test";
 import { validateStatus, validateStatusArtifacts } from "../scripts/validation-status-check.mjs";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
+const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+
 const BASE_STATUS = {
   schemaVersion: 1,
   updatedAt: "2026-06-23",
@@ -131,8 +133,8 @@ function passingClinicalReviewerAgreementReport({
       reviewerBIneligibleAssessmentCount: 0,
       reviewerAIneligibleReasons: {},
       reviewerBIneligibleReasons: {},
-      reviewerAEstimateVersionCounts: { v1: comparedCount },
-      reviewerBEstimateVersionCounts: { v1: comparedCount },
+      reviewerAEstimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: comparedCount },
+      reviewerBEstimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: comparedCount },
       reviewerAStaleOrMissingEstimateVersionCount: 0,
       reviewerBStaleOrMissingEstimateVersionCount: 0,
       estimateVersionMismatchCount: 0,

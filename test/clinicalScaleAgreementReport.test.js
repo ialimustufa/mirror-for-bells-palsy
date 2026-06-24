@@ -3,6 +3,8 @@ import test from "node:test";
 import { buildClinicalScaleAgreementMarkdown } from "../src/ml/clinicalScaleAgreementReport.js";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
+const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+
 function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, lower = 0.887, upper = 1, mismatches = [] }) {
   return {
     labeledCount,
@@ -43,7 +45,7 @@ function validationReport(overrides = {}) {
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
-      estimateVersionCounts: { v1: 30 },
+      estimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: 30 },
       meetsMinimumStandard: true,
     },
     byScale: {
@@ -77,14 +79,14 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /# Mirror Clinical Scale Agreement Report/);
   assert.match(markdown, /Status: meets-clinical-scale-confidence-standard/);
   assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
-  assert.match(markdown, /Clinical-scale estimator version: v1/);
+  assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
   assert.match(markdown, /eFACE total \| within 10 points/);
   assert.match(markdown, /eFACE static/);
   assert.match(markdown, /95% Wilson score interval/);
   assert.match(markdown, /Excluded clinical-label rows: 0/);
-  assert.match(markdown, /Estimate version counts: v1: 30/);
+  assert.match(markdown, new RegExp(`Estimate version counts: ${CURRENT_ESTIMATOR_VERSION_KEY}: 30`));
   assert.match(markdown, /House-Brackmann Case Mix/);
   assert.match(markdown, /Required severity bands: 3/);
   assert.match(markdown, /HB I-II mild\/normal \| 10 \| yes/);
@@ -93,7 +95,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Reference Standard Controls/);
   assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
   assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);
-  assert.match(markdown, /Estimator version control: counted labels require clinical-scale estimator version v1/);
+  assert.match(markdown, new RegExp(`Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
   assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role/);
   assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, `labelSource`, clinical `reviewerRole`/);

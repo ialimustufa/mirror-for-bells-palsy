@@ -10,6 +10,9 @@ import {
 } from "../src/ml/validationEvaluation.js";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
+const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
+
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
 
@@ -247,7 +250,7 @@ test("clinical scale evaluation passes only when Wilson lower-bound agreement cl
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.standard.minReviewedAssessments, 30);
   assert.equal(report.standard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
-  assert.equal(report.summary.estimateVersionCounts.v1, 30);
+  assert.equal(report.summary.estimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 30);
   assert.equal(report.summary.currentClinicalScaleEstimateVersionAssessmentCount, 30);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
@@ -370,8 +373,8 @@ test("clinical scale evaluation excludes stale or missing estimator-version labe
   assert.equal(report.summary.reviewedAssessmentCount, 1);
   assert.equal(report.summary.excludedClinicalLabelCount, 2);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate version is missing or stale"], 2);
-  assert.equal(report.summary.estimateVersionCounts.v1, 1);
-  assert.equal(report.summary.estimateVersionCounts.v0, 1);
+  assert.equal(report.summary.estimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 1);
+  assert.equal(report.summary.estimateVersionCounts[PREVIOUS_ESTIMATOR_VERSION_KEY], 1);
   assert.equal(report.summary.estimateVersionCounts.missing, 1);
   assert.equal(report.summary.currentClinicalScaleEstimateVersionAssessmentCount, 1);
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);

@@ -183,6 +183,8 @@ function compactAssessmentClinicalScale(session = {}) {
       coactivationRisk: assessment.coactivationRisk ?? null,
       captureQuality: assessment.captureQuality ?? null,
       clinicalScaleEstimateVersion: clinicalScales?.version ?? null,
+      clinicalScaleEvidenceTier: clinicalScales?.evidence?.tier ?? null,
+      clinicalScaleEvidenceLabel: clinicalScales?.evidence?.label ?? null,
       restingAverageAsymmetryRatio: assessment.resting?.averageAsymmetryRatio ?? null,
       usableMovementCoverageRatio: clinicalScales?.coverage?.ratio ?? null,
       usableMovementCount: clinicalScales?.coverage?.usableMovementCount ?? null,

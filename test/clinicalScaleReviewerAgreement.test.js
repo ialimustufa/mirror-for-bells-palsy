@@ -7,6 +7,9 @@ import {
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 import { mergeValidationLabels, parseCsv } from "../src/ml/validationLabels.js";
 
+const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
+
 function reviewerCsv(rows) {
   return [
     "rowType,sampleId,assessmentId,sessionId,sessionTs,date,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
@@ -66,8 +69,8 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 0);
   assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 0);
-  assert.equal(report.summary.reviewerAEstimateVersionCounts.v1, 3);
-  assert.equal(report.summary.reviewerBEstimateVersionCounts.v1, 3);
+  assert.equal(report.summary.reviewerAEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 3);
+  assert.equal(report.summary.reviewerBEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 3);
   assert.equal(report.summary.estimateVersionMismatchCount, 0);
   assert.deepEqual(report.estimateVersionMismatches, []);
   assert.deepEqual(report.reviewerSheetIssues, []);
@@ -122,9 +125,9 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
 
   assert.equal(row[index.assessmentId], "assessment-1:clinical-scale");
   assert.equal(row[index.houseBrackmannGrade], "");
-  assert.equal(row[index.clinicalScaleEstimateVersion], "1");
-  assert.equal(row[index.reviewerAClinicalScaleEstimateVersion], "1");
-  assert.equal(row[index.reviewerBClinicalScaleEstimateVersion], "1");
+  assert.equal(row[index.clinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
+  assert.equal(row[index.reviewerAClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
+  assert.equal(row[index.reviewerBClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(row[index.reviewerAHouseBrackmannGrade], "III");
   assert.equal(row[index.reviewerBHouseBrackmannGrade], "IV");
   assert.equal(row[index.reviewerANotes], "A note");
@@ -176,16 +179,16 @@ test("clinical-scale reviewer agreement blocks stale or mismatched estimator pro
     generatedAt: "2026-06-24T12:00:00.000Z",
   });
 
-  assert.equal(report.summary.reviewerAEstimateVersionCounts.v1, 1);
+  assert.equal(report.summary.reviewerAEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 1);
   assert.equal(report.summary.reviewerAEstimateVersionCounts.missing, 1);
-  assert.equal(report.summary.reviewerBEstimateVersionCounts.v0, 1);
-  assert.equal(report.summary.reviewerBEstimateVersionCounts.v1, 1);
+  assert.equal(report.summary.reviewerBEstimateVersionCounts[PREVIOUS_ESTIMATOR_VERSION_KEY], 1);
+  assert.equal(report.summary.reviewerBEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 1);
   assert.equal(report.summary.reviewerAStaleOrMissingEstimateVersionCount, 1);
   assert.equal(report.summary.reviewerBStaleOrMissingEstimateVersionCount, 1);
   assert.equal(report.summary.estimateVersionMismatchCount, 2);
   assert.equal(report.estimateVersionMismatches.length, 2);
-  assert.match(report.blockingReasons.join("\n"), /reviewerA: 1 labels are missing or not estimator v1/);
-  assert.match(report.blockingReasons.join("\n"), /reviewerB: 1 labels are missing or not estimator v1/);
+  assert.match(report.blockingReasons.join("\n"), new RegExp(`reviewerA: 1 labels are missing or not estimator v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+  assert.match(report.blockingReasons.join("\n"), new RegExp(`reviewerB: 1 labels are missing or not estimator v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(report.blockingReasons.join("\n"), /reviewer sheets disagree for 2 assessment labels/);
   assert.match(report.adjudicationRows[0].disagreementSummary, /Estimator version/);
   assert.equal(report.adjudicationRows.find((row) => row.assessmentId === "assessment-1:clinical-scale").clinicalScaleEstimateVersion, "");

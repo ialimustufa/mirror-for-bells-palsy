@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { buildValidationDatasetRecords, createValidationDatasetExportBlob, VALIDATION_DATASET_KIND } from "../src/domain/validationDataset.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 function recordsBySection(records, section) {
   return records.filter((line) => line.section === section).map((line) => line.record);
@@ -84,8 +85,9 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.deepEqual(sessions.map((session) => session.id), ["session-a"]);
   assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["session-a:clinical-scale"]);
   assert.equal(clinicalScaleAssessments[0].estimate.status, "insufficient-data");
-  assert.equal(clinicalScaleAssessments[0].estimate.version, 1);
-  assert.equal(clinicalScaleAssessments[0].sourceSummary.clinicalScaleEstimateVersion, 1);
+  assert.equal(clinicalScaleAssessments[0].estimate.version, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.clinicalScaleEvidenceTier, "insufficient-standard-evidence");
   assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
   assert.deepEqual(samples.map((sample) => sample.id), ["sample-calibrate", "sample-hold"]);
   assert.equal(samples[1].label.intendedMovement, "eye-close");
@@ -153,8 +155,9 @@ test("validation dataset exports clinical-scale assessment rows without frame sa
   assert.deepEqual(sessions.map((session) => session.id), ["assessment-only"]);
   assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["assessment-only:clinical-scale"]);
   assert.equal(clinicalScaleAssessments[0].estimate.status, "estimated");
-  assert.equal(clinicalScaleAssessments[0].estimate.version, 1);
-  assert.equal(clinicalScaleAssessments[0].sourceSummary.clinicalScaleEstimateVersion, 1);
+  assert.equal(clinicalScaleAssessments[0].estimate.version, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.clinicalScaleEvidenceTier, "complete-standard-assessment");
   assert.equal(clinicalScaleAssessments[0].sourceSummary.usableMovementCount, 5);
   assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
   assert.equal(samples.length, 0);

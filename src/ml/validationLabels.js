@@ -16,6 +16,10 @@ const LABEL_COLUMNS = [
   "visibleMovementLevel",
   "coactivationNotes",
   "estimateStatus",
+  "estimateEvidenceTier",
+  "estimateUsableMovementCoverageRatio",
+  "estimateUsableMovementCount",
+  "estimateRequiredMovementCount",
   "clinicalScaleEstimateVersion",
   "estimatedHouseBrackmannGrade",
   "estimatedHouseBrackmannNumericGrade",
@@ -148,6 +152,10 @@ function frameLabelRowFromRecord(line) {
     coactivationNotes: label.coactivationNotes ?? "",
     sourceLabelSheetMode: "",
     estimateStatus: "",
+    estimateEvidenceTier: "",
+    estimateUsableMovementCoverageRatio: "",
+    estimateUsableMovementCount: "",
+    estimateRequiredMovementCount: "",
     clinicalScaleEstimateVersion: "",
     estimatedHouseBrackmannGrade: "",
     estimatedHouseBrackmannNumericGrade: "",
@@ -176,6 +184,9 @@ function assessmentClinicalLabelRowFromRecord(line, options = {}) {
   const record = line.record;
   const label = record.label ?? {};
   const estimate = record.estimate ?? {};
+  const sourceSummary = record.sourceSummary ?? {};
+  const evidence = estimate.evidence ?? {};
+  const coverage = estimate.coverage ?? {};
   const scales = includeEstimateColumns && estimate.status === "estimated" ? estimate.scales ?? {} : {};
   const houseBrackmann = scales.houseBrackmann ?? {};
   const sunnybrook = scales.sunnybrook ?? {};
@@ -199,6 +210,10 @@ function assessmentClinicalLabelRowFromRecord(line, options = {}) {
     coactivationNotes: "",
     sourceLabelSheetMode: label.sourceLabelSheetMode ?? (includeEstimateColumns ? "unblinded" : "blinded"),
     estimateStatus: includeEstimateColumns ? estimate.status ?? "" : "",
+    estimateEvidenceTier: includeEstimateColumns ? evidence.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? "" : "",
+    estimateUsableMovementCoverageRatio: includeEstimateColumns ? formatNumber(coverage.ratio ?? sourceSummary.usableMovementCoverageRatio, 4) : "",
+    estimateUsableMovementCount: includeEstimateColumns ? coverage.usableMovementCount ?? sourceSummary.usableMovementCount ?? "" : "",
+    estimateRequiredMovementCount: includeEstimateColumns ? coverage.requiredMovementCount ?? sourceSummary.requiredMovementCount ?? "" : "",
     clinicalScaleEstimateVersion: estimate.version ?? "",
     estimatedHouseBrackmannGrade: houseBrackmann.grade ?? "",
     estimatedHouseBrackmannNumericGrade: houseBrackmann.numericGrade ?? "",
