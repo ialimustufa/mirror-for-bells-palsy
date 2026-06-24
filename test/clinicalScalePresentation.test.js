@@ -251,9 +251,33 @@ test("clinical scale report rows and printable reports use the validation-aware 
       availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
       missingRestingMetricKeys: [],
       completeRestingMetrics: true,
+      scaleInputCompleteness: {
+        houseBrackmann: {
+          requiredExerciseIds: ["eye-close"],
+          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+          missingRequiredExerciseIds: [],
+          complete: true,
+        },
+        sunnybrook: {
+          usedMovementCount: 4,
+          requiredMovementCount: 5,
+          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+          omittedExerciseIds: ["pucker"],
+          complete: false,
+        },
+        eface: {
+          usedMovementCount: 4,
+          requiredMovementCount: 5,
+          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+          omittedExerciseIds: ["pucker"],
+          complete: false,
+        },
+      },
     },
   });
   assert.match(minimumRows.join(" "), /Omitted from scale formulas: Lip pucker/);
+  assert.match(minimumRows.join(" "), /Sunnybrook input: 4\/5 standard movements used; omitted Lip pucker/);
+  assert.match(minimumRows.join(" "), /eFACE-style input: 4\/5 standard movements used; omitted Lip pucker/);
 
   const houseBrackmannGapRows = clinicalScaleEstimateRows({
     ...clinicalScales,
@@ -278,6 +302,20 @@ test("clinical scale report rows and printable reports use the validation-aware 
           missingRequiredExerciseIds: ["eye-close"],
           complete: false,
         },
+        sunnybrook: {
+          usedMovementCount: 4,
+          requiredMovementCount: 5,
+          usedExerciseIds: ["eyebrow-raise", "open-smile", "nose-wrinkle", "pucker"],
+          omittedExerciseIds: ["eye-close"],
+          complete: false,
+        },
+        eface: {
+          usedMovementCount: 4,
+          requiredMovementCount: 5,
+          usedExerciseIds: ["eyebrow-raise", "open-smile", "nose-wrinkle", "pucker"],
+          omittedExerciseIds: ["eye-close"],
+          complete: false,
+        },
       },
     },
     scales: {
@@ -289,6 +327,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(houseBrackmannGapRows.join(" "), /House-Brackmann estimate unavailable: requires Gentle eye closure/);
   assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook estimate/);
   assert.match(houseBrackmannGapRows.join(" "), /eFACE-style estimate/);
+  assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook input: 4\/5 standard movements used; omitted Gentle eye closure/);
 
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
     reviewedDatasetCount: 2,
@@ -369,6 +408,8 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(missingEyeClosureHtml, /House-Brackmann estimate unavailable: requires Gentle eye closure/);
   assert.match(missingEyeClosureHtml, /Sunnybrook estimate/);
   assert.match(missingEyeClosureHtml, /eFACE-style estimate/);
+  assert.match(missingEyeClosureHtml, /Sunnybrook input: 4\/5 standard movements used; omitted Gentle eye closure/);
+  assert.match(missingEyeClosureHtml, /eFACE-style input: 4\/5 standard movements used; omitted Gentle eye closure/);
 
   const hiddenHtml = buildSessionReportHtml({
     kind: "assessment",

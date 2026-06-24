@@ -1182,16 +1182,16 @@ House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
 observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
 coverage, current estimator-version evidence, the 80% usable-movement coverage
 floor, complete/minimum estimate evidence-tier controls, explicit
-movement and resting-metric provenance controls, explicit reference-standard
-controls, and release-control text. When all three primary
+movement, scale-input, and resting-metric provenance controls, explicit
+reference-standard controls, and release-control text. When all three primary
 scales are enabled, the report status must also be the passing
 confidence-standard status. Clinical reviewer-agreement report paths must point
 to JSON
 `mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
 eligible reviewer sheets, complete/minimum estimate evidence and 80%
-usable-movement coverage provenance, complete resting-metric provenance, no
-excluded reviewer-pair, metadata, or estimate-evidence blockers, at least 30
-eligible paired labels on every enabled
+usable-movement coverage provenance, scale-specific input provenance, complete
+resting-metric provenance, no excluded reviewer-pair, metadata, or
+estimate-evidence blockers, at least 30 eligible paired labels on every enabled
 primary scale, at least 80% observed reviewer agreement, and Wilson lower-bound
 reviewer agreement meeting the configured 80% standard before clinical-facing
 support can be enabled for that scale.

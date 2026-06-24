@@ -77,13 +77,14 @@ checks for:
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version and estimate-evidence provenance for each reviewer sheet; stale,
   missing, mismatched, below-80%-coverage, missing movement provenance, or
-  missing/incomplete resting-metric provenance is a release blocker until
-  recollected from qualifying current-version evidence.
+  missing/incomplete scale-input or resting-metric provenance is a release
+  blocker until recollected from qualifying current-version evidence.
 - Reviewer-agreement reports must also block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
   reviewer rows, plus rows paired with insufficient estimate status, evidence
   tier, usable-movement coverage, used/omitted movement provenance, or
-  resting-metric provenance, before adjudication output can support readiness.
+  scale-input/resting-metric provenance, before adjudication output can support
+  readiness.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, at least 80% observed

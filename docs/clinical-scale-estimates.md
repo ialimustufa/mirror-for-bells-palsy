@@ -148,7 +148,9 @@ House-Brackmann agreement treats an estimate as missing unless these provenance
 fields or the overall used-movement provenance show that gentle eye closure was
 used. Sunnybrook and eFACE rows preserve their own used/omitted movement lists
 so a 4/5 normalized estimate is auditable without inferring scale inputs from
-unrelated columns.
+unrelated columns. Assessment panels and printable reports show scale-specific
+input notes for available Sunnybrook/eFACE estimates when a minimum-standard
+assessment omits one movement.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:

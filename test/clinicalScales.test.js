@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clinicalScaleInputGapSummaries, estimateClinicalScaleGrades } from "../src/domain/clinicalScales.js";
+import { clinicalScaleInputCompletenessSummaries, clinicalScaleInputGapSummaries, estimateClinicalScaleGrades } from "../src/domain/clinicalScales.js";
 
 const RESTING_METRICS = {
   version: 1,
@@ -73,6 +73,7 @@ test("clinical scale estimates map complete assessment evidence into HB, Sunnybr
   assert.equal(result.evidence.scaleInputCompleteness.eface.complete, true);
   assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
   assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, []);
+  assert.deepEqual(clinicalScaleInputCompletenessSummaries(result), []);
   assert.match(result.caveats.join(" "), /not assigned by a clinician/);
 });
 
@@ -107,6 +108,11 @@ test("clinical scale estimates distinguish minimum from complete standard eviden
   assert.deepEqual(result.evidence.scaleInputCompleteness.eface.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
   assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, ["pucker"]);
   assert.equal(result.evidence.scaleInputCompleteness.eface.calculationUsesOnlyUsableMovements, true);
+
+  const inputSummaries = clinicalScaleInputCompletenessSummaries(result);
+  assert.deepEqual(inputSummaries.map((summary) => summary.scaleKey), ["sunnybrook", "eface"]);
+  assert.equal(inputSummaries[0].shortLabel, "4/5 standard movements; omitted Lip pucker");
+  assert.equal(inputSummaries[1].message, "eFACE-style input: 4/5 standard movements used; omitted Lip pucker.");
 });
 
 test("clinical scale estimates omit House-Brackmann when eye closure is missing", () => {

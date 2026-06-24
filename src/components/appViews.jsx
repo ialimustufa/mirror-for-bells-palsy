@@ -3,7 +3,7 @@ import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRigh
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC, summarizeAssessmentSession } from "../domain/assessment";
-import { clinicalScaleInputGapSummaries, clinicalScaleMovementLabels, clinicalScaleRestingEvidenceSummary } from "../domain/clinicalScales";
+import { clinicalScaleInputCompletenessSummaries, clinicalScaleInputGapSummaries, clinicalScaleMovementLabels, clinicalScaleRestingEvidenceSummary } from "../domain/clinicalScales";
 import { clinicalScalePresentationPolicy, compactClinicalScaleValueLabel, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
@@ -103,7 +103,7 @@ function progressSideLabel(progress) {
   return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
 }
 
-function clinicalScaleEstimateCards(scales, presentation) {
+function clinicalScaleEstimateCards(scales, presentation, inputNotesByScale = {}) {
   if (!scales) return [];
   return [
     scales.houseBrackmann ? {
@@ -117,14 +117,14 @@ function clinicalScaleEstimateCards(scales, presentation) {
       key: "sunnybrook",
       label: "Sunnybrook",
       value: `${Math.round(scales.sunnybrook.compositeScore)}/100`,
-      sublabel: `${scales.sunnybrook.voluntaryMovementScore} vol - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synk`,
+      sublabel: `${scales.sunnybrook.voluntaryMovementScore} vol - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synk${inputNotesByScale.sunnybrook ? ` · ${inputNotesByScale.sunnybrook}` : ""}`,
       statusLabel: scaleNounForClinicalScale(presentation, "sunnybrook"),
     } : null,
     scales.eface ? {
       key: "eface",
       label: "eFACE-style",
       value: `${Math.round(scales.eface.totalScore)}/100`,
-      sublabel: `${Math.round(scales.eface.staticScore)} static · ${Math.round(scales.eface.dynamicScore)} dynamic · ${Math.round(scales.eface.synkinesisScore)} synk`,
+      sublabel: `${Math.round(scales.eface.staticScore)} static · ${Math.round(scales.eface.dynamicScore)} dynamic · ${Math.round(scales.eface.synkinesisScore)} synk${inputNotesByScale.eface ? ` · ${inputNotesByScale.eface}` : ""}`,
       statusLabel: scaleNounForClinicalScale(presentation, "eface"),
     } : null,
   ].filter(Boolean);
@@ -1651,7 +1651,9 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
   if (!clinicalScales) return null;
   const presentation = clinicalScalePresentationPolicy();
   const estimated = clinicalScales.status === "estimated";
-  const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales, presentation) : [];
+  const inputCompletenessSummaries = estimated ? clinicalScaleInputCompletenessSummaries(clinicalScales) : [];
+  const inputNotesByScale = Object.fromEntries(inputCompletenessSummaries.map((summary) => [summary.scaleKey, summary.shortLabel]));
+  const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales, presentation, inputNotesByScale) : [];
   const coverage = clinicalScales.coverage;
   const omittedMovements = omittedClinicalScaleMovementLabels(clinicalScales);
   const inputGaps = clinicalScaleInputGapSummaries(clinicalScales);
@@ -1694,6 +1696,7 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
         {restingEvidence ? `${restingEvidence.availableCount}/${restingEvidence.requiredCount} required resting metrics available. ` : ""}
         {restingEvidence && !restingEvidence.complete ? `Missing resting metrics: ${restingEvidence.missingMetricLabels.join(", ")}. ` : ""}
         {inputGaps.length ? `${inputGaps.map((gap) => gap.message).join(" ")} ` : ""}
+        {inputCompletenessSummaries.length ? `${inputCompletenessSummaries.map((summary) => summary.message).join(" ")} ` : ""}
         {omittedMovements.length ? `Omitted from scale formulas: ${omittedMovements.join(", ")}. ` : ""}
         {clinicalScales.evidence?.label ? `${clinicalScales.evidence.label}. ` : ""}
         {presentation.shortNotice}

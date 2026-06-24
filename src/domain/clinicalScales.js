@@ -257,6 +257,48 @@ function clinicalScaleInputGapSummaries(clinicalScales) {
     .filter(Boolean);
 }
 
+function clinicalScaleInputCompletenessSummaries(clinicalScales) {
+  if (!clinicalScales || clinicalScales.status !== "estimated") return [];
+  const scales = clinicalScales.scales ?? {};
+  const completenessByScale = clinicalScales.evidence?.scaleInputCompleteness ?? {};
+  return Object.entries(completenessByScale)
+    .map(([scaleKey, completeness]) => {
+      if (!scales[scaleKey] || completeness?.complete !== false) return null;
+      const omittedExerciseIds = Array.isArray(completeness.omittedExerciseIds)
+        ? completeness.omittedExerciseIds
+        : Array.isArray(completeness.missingRequiredExerciseIds)
+          ? completeness.missingRequiredExerciseIds
+          : [];
+      if (!omittedExerciseIds.length) return null;
+      const usedMovementCount = Number.isFinite(completeness.usedMovementCount)
+        ? completeness.usedMovementCount
+        : Array.isArray(completeness.usedExerciseIds)
+          ? completeness.usedExerciseIds.length
+          : null;
+      const requiredMovementCount = Number.isFinite(completeness.requiredMovementCount)
+        ? completeness.requiredMovementCount
+        : Number.isFinite(clinicalScales.coverage?.requiredMovementCount)
+          ? clinicalScales.coverage.requiredMovementCount
+          : null;
+      const omittedMovementLabels = clinicalScaleMovementLabels(omittedExerciseIds);
+      const countLabel = Number.isFinite(usedMovementCount) && Number.isFinite(requiredMovementCount)
+        ? `${usedMovementCount}/${requiredMovementCount} standard movements`
+        : "partial standard movements";
+      const label = CLINICAL_SCALE_LABELS[scaleKey] ?? scaleKey;
+      return {
+        scaleKey,
+        label,
+        usedMovementCount,
+        requiredMovementCount,
+        omittedExerciseIds,
+        omittedMovementLabels,
+        shortLabel: `${countLabel}; omitted ${omittedMovementLabels.join(", ")}`,
+        message: `${label} input: ${countLabel} used; omitted ${omittedMovementLabels.join(", ")}.`,
+      };
+    })
+    .filter(Boolean);
+}
+
 function restingLevel(metric, mildThreshold, severeThreshold, severeScore = 1) {
   const asymmetry = metricAsymmetry(metric);
   if (!Number.isFinite(asymmetry)) return { value: null, asymmetry: null, label: "unavailable" };
@@ -512,6 +554,7 @@ export {
   REQUIRED_RESTING_METRIC_KEYS,
   STANDARD_SCALE_MOVEMENTS,
   clinicalScaleInputGapSummaries,
+  clinicalScaleInputCompletenessSummaries,
   clinicalScaleMovementLabels,
   clinicalScaleRestingEvidenceSummary,
   estimateClinicalScaleGrades,

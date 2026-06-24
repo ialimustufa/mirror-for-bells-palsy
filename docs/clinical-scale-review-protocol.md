@@ -142,10 +142,11 @@ Clinical-scale readiness uses the machine-readable standard in
 - The paired Mirror estimate must also be a current-version `status: estimated`
   row with a complete or minimum evidence tier, at least 80% usable movement
   coverage, used/omitted movement exercise IDs, and the usable-movements-only
-  calculation flag. House-Brackmann estimates must also preserve provenance
-  showing that the required gentle eye-closure input was used. A missing or
-  invalid estimate is reported in that scale's denominator as a missing estimate
-  rather than excluding other valid scale labels on the row.
+  calculation flag. Sunnybrook and eFACE estimates must preserve scale-specific
+  input-completeness provenance, and House-Brackmann estimates must preserve
+  provenance showing that the required gentle eye-closure input was used. A
+  missing or invalid estimate is reported in that scale's denominator as a
+  missing estimate rather than excluding other valid scale labels on the row.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson lower-bound gate is used because a raw observed percentage can hide
@@ -242,10 +243,11 @@ explicit reference-standard controls, an eligible blinded independent label coun
 meeting the minimum reviewed-assessment floor, a House-Brackmann case-mix section
 meeting the severity-band minimum, current estimator-version evidence, the 80%
 usable-movement coverage floor, complete/minimum estimate evidence-tier
-controls, a reviewer-agreement artifact meeting the paired-label floor plus the
-observed-agreement and Wilson lower-bound reviewer-agreement gates for every
-enabled scale, and release-control text. A status update that only changes counts
-or report paths without matching artifacts must fail the release check.
+controls, scale-specific input provenance, a reviewer-agreement artifact meeting
+the paired-label floor plus the observed-agreement and Wilson lower-bound
+reviewer-agreement gates for every enabled scale, and release-control text. A
+status update that only changes counts or report paths without matching
+artifacts must fail the release check.
 
 ## References
 
