@@ -226,6 +226,12 @@ estimate-evidence issues before any adjudicated row can be merged. Sunnybrook
 and eFACE reviewer-agreement rows with incomplete scale-specific estimate input
 are skipped by scale and reported with `incompleteEstimateInputCount`; enabled
 primary scales require that count to stay zero in release artifacts. The
+reviewer-agreement report also carries a House-Brackmann case-mix summary. A
+release artifact must show HB I-II, HB III-IV, and HB V-VI each represented by
+at least three eligible paired reviewer labels where both reviewers place the
+case in the same local severity band; cross-band HB disagreements are listed but
+do not satisfy that severity-band floor.
+The
 adjudication sheet keeps raw reviewer values, raw estimator versions, and raw
 estimate-evidence provenance in audit columns and leaves the mergeable target
 columns blank until a consensus label is entered.
@@ -242,8 +248,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   `npm run validation:reviewer-agreement` showing current-version, blinded,
   independent clinician sheets with at least 30 paired labels on every enabled
   primary scale and at least 80% observed and Wilson lower-bound reviewer
-  agreement on every enabled primary scale, with no reviewer-sheet metadata
-  blockers.
+  agreement on every enabled primary scale, House-Brackmann reviewer case mix
+  across all three severity bands, with no reviewer-sheet metadata blockers.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
@@ -271,7 +277,8 @@ meeting the severity-band minimum, current estimator-version evidence, the 80%
 usable-movement coverage floor, complete/minimum estimate evidence-tier
 controls, scale-specific input provenance, a reviewer-agreement artifact meeting
 the paired-label floor plus the observed-agreement and Wilson lower-bound
-reviewer-agreement gates for every enabled scale, and release-control text. A
+reviewer-agreement gates for every enabled scale plus the same House-Brackmann
+severity-band spread, and release-control text. A
 status update that only changes counts or report paths without matching
 artifacts must fail the release check.
 

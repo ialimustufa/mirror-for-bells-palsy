@@ -243,7 +243,9 @@ independent clinician sheets with qualifying complete/minimum estimate evidence,
 at least 80% usable movement coverage, paired labels for every enabled primary
 scale meeting the same reviewed-assessment floor, at least 80% observed reviewer
 agreement, Wilson lower-bound reviewer agreement meeting the configured 80%
-standard, and no excluded reviewer-pair, reviewer-sheet metadata, or
+standard, House-Brackmann reviewer case mix with HB I-II, HB III-IV, and HB V-VI
+each represented by enough same-band eligible reviewer pairs, and no excluded
+reviewer-pair, reviewer-sheet metadata, or
 estimate-evidence blockers. The estimate-evidence blockers include missing or
 inconsistent movement provenance and missing or incomplete resting-metric
 provenance. A disabled primary scale can remain an estimate

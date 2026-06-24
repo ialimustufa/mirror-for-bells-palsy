@@ -31,6 +31,8 @@ const DEFAULT_REVIEWER_AGREEMENT_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
   minAgreementWilsonLowerBound: 0.8,
   minPairedLabels: 30,
+  minHouseBrackmannSeverityBands: 3,
+  minAssessmentsPerSeverityBand: 3,
   minUsableMovementCoverageRatio: 0.8,
   confidenceLevel: 0.95,
 });
@@ -147,6 +149,11 @@ const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
   V: 5,
   VI: 6,
 });
+const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
+  mild: { label: "HB I-II mild/normal", min: 1, max: 2 },
+  moderate: { label: "HB III-IV moderate", min: 3, max: 4 },
+  severe: { label: "HB V-VI severe/complete", min: 5, max: 6 },
+});
 
 function csvEscape(value) {
   const text = value == null ? "" : String(value);
@@ -169,6 +176,13 @@ function parseHouseBrackmannGrade(value) {
   if (HOUSE_BRACKMANN_GRADE_NUMBERS[text]) return HOUSE_BRACKMANN_GRADE_NUMBERS[text];
   const number = Number(text);
   return Number.isFinite(number) && number >= 1 && number <= 6 ? Math.round(number) : null;
+}
+
+function houseBrackmannSeverityBand(grade) {
+  for (const [key, band] of Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS)) {
+    if (Number.isFinite(grade) && grade >= band.min && grade <= band.max) return key;
+  }
+  return null;
 }
 
 function numericLabel(value) {
@@ -974,6 +988,85 @@ function needsAdjudication(reviewerA, reviewerB) {
   });
 }
 
+function createHouseBrackmannCaseMixAccumulator() {
+  return {
+    pairedHouseBrackmannCount: 0,
+    crossSeverityBandDisagreementCount: 0,
+    crossSeverityBandDisagreements: [],
+    severityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [
+      key,
+      {
+        label: band.label,
+        reviewerAPairedCount: 0,
+        reviewerBPairedCount: 0,
+        sameBandPairedCount: 0,
+      },
+    ])),
+  };
+}
+
+function recordHouseBrackmannCaseMix(accumulator, assessmentId, reviewerA = {}, reviewerB = {}) {
+  const reviewerAGrade = scaleValue("houseBrackmannGrade", reviewerA?.houseBrackmannGrade);
+  const reviewerBGrade = scaleValue("houseBrackmannGrade", reviewerB?.houseBrackmannGrade);
+  const reviewerABand = houseBrackmannSeverityBand(reviewerAGrade);
+  const reviewerBBand = houseBrackmannSeverityBand(reviewerBGrade);
+  if (!reviewerABand || !reviewerBBand) return;
+  accumulator.pairedHouseBrackmannCount += 1;
+  accumulator.severityBands[reviewerABand].reviewerAPairedCount += 1;
+  accumulator.severityBands[reviewerBBand].reviewerBPairedCount += 1;
+  if (reviewerABand === reviewerBBand) {
+    accumulator.severityBands[reviewerABand].sameBandPairedCount += 1;
+    return;
+  }
+  accumulator.crossSeverityBandDisagreementCount += 1;
+  accumulator.crossSeverityBandDisagreements.push({
+    assessmentId,
+    reviewerA: formatHouseBrackmann(reviewerAGrade),
+    reviewerB: formatHouseBrackmann(reviewerBGrade),
+    reviewerASeverityBand: HOUSE_BRACKMANN_SEVERITY_BANDS[reviewerABand].label,
+    reviewerBSeverityBand: HOUSE_BRACKMANN_SEVERITY_BANDS[reviewerBBand].label,
+  });
+}
+
+function summarizeHouseBrackmannCaseMix(accumulator, options = {}) {
+  const minHouseBrackmannSeverityBands = Math.max(
+    1,
+    Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minHouseBrackmannSeverityBands),
+  );
+  const minAssessmentsPerSeverityBand = Math.max(
+    1,
+    Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAssessmentsPerSeverityBand),
+  );
+  const severityBands = Object.fromEntries(Object.entries(accumulator.severityBands).map(([key, band]) => [
+    key,
+    {
+      ...band,
+      meetsMinimum: band.sameBandPairedCount >= minAssessmentsPerSeverityBand,
+    },
+  ]));
+  const representedSeverityBandCount = Object.values(severityBands)
+    .filter((band) => band.meetsMinimum)
+    .length;
+  const minimumSameBandPairedLabelCount = Math.min(
+    ...Object.values(severityBands).map((band) => band.sameBandPairedCount),
+  );
+  const blockingReasons = [];
+  if (representedSeverityBandCount < minHouseBrackmannSeverityBands) {
+    blockingReasons.push(`needs ${minHouseBrackmannSeverityBands} House-Brackmann severity bands with at least ${minAssessmentsPerSeverityBand} same-band paired reviewer labels`);
+  }
+  return {
+    minHouseBrackmannSeverityBands,
+    minAssessmentsPerSeverityBand,
+    pairedHouseBrackmannCount: accumulator.pairedHouseBrackmannCount,
+    representedSeverityBandCount,
+    minimumSameBandPairedLabelCount: Number.isFinite(minimumSameBandPairedLabelCount) ? minimumSameBandPairedLabelCount : 0,
+    crossSeverityBandDisagreementCount: accumulator.crossSeverityBandDisagreementCount,
+    severityBands,
+    crossSeverityBandDisagreements: accumulator.crossSeverityBandDisagreements.slice(0, 20),
+    blockingReasons,
+  };
+}
+
 function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = "", options = {}) {
   const reviewerAById = reviewerRowsByAssessmentId(reviewerACsv);
   const reviewerBById = reviewerRowsByAssessmentId(reviewerBCsv);
@@ -987,12 +1080,22 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementRate;
   const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementWilsonLowerBound;
   const minPairedLabels = Math.max(1, Math.round(options.minPairedLabels ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minPairedLabels));
+  const minHouseBrackmannSeverityBands = Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minHouseBrackmannSeverityBands));
+  const minAssessmentsPerSeverityBand = Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAssessmentsPerSeverityBand));
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel;
-  const agreementOptions = { minAgreementRate, minAgreementWilsonLowerBound, minPairedLabels, confidenceLevel };
+  const agreementOptions = {
+    minAgreementRate,
+    minAgreementWilsonLowerBound,
+    minPairedLabels,
+    minHouseBrackmannSeverityBands,
+    minAssessmentsPerSeverityBand,
+    confidenceLevel,
+  };
   const estimateEvidenceOptions = { minUsableMovementCoverageRatio };
   const assessmentIds = [...new Set([...reviewerAById.keys(), ...reviewerBById.keys()])].sort();
   const accumulators = Object.fromEntries(REVIEW_SCALE_KEYS.map((scaleKey) => [scaleKey, createScaleAccumulator(scaleKey)]));
+  const houseBrackmannCaseMixAccumulator = createHouseBrackmannCaseMixAccumulator();
   const adjudicationRows = [];
   const estimateVersionMismatches = [];
   const estimateEvidenceMismatches = [];
@@ -1022,6 +1125,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       });
     }
     if (pairEligibility.eligible) {
+      recordHouseBrackmannCaseMix(houseBrackmannCaseMixAccumulator, assessmentId, reviewerA, reviewerB);
       for (const scaleKey of REVIEW_SCALE_KEYS) {
         const reviewerAInputComplete = scaleEstimateInputComplete(reviewerA, scaleKey);
         const reviewerBInputComplete = scaleEstimateInputComplete(reviewerB, scaleKey);
@@ -1049,6 +1153,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     if (needsAdjudication(reviewerA, reviewerB)) adjudicationRows.push(adjudicationRow(assessmentId, reviewerA, reviewerB));
   }
   const byScale = Object.fromEntries(Object.entries(accumulators).map(([scaleKey, accumulator]) => [scaleKey, summarizeScale(accumulator, agreementOptions)]));
+  const houseBrackmannCaseMix = summarizeHouseBrackmannCaseMix(houseBrackmannCaseMixAccumulator, agreementOptions);
   const primaryScaleSummaries = PRIMARY_REVIEW_SCALE_KEYS.map((scaleKey) => byScale[scaleKey]);
   const reviewerAEstimateVersionCounts = estimateVersionCounts(reviewerAById);
   const reviewerBEstimateVersionCounts = estimateVersionCounts(reviewerBById);
@@ -1096,6 +1201,9 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   if (estimateEvidenceMismatches.length) {
     blockingReasons.push(`estimateEvidence: reviewer sheets disagree for ${estimateEvidenceMismatches.length} assessment labels`);
   }
+  if (houseBrackmannCaseMix.blockingReasons.length) {
+    blockingReasons.push(`houseBrackmannCaseMix: ${houseBrackmannCaseMix.blockingReasons.join("; ")}`);
+  }
   for (const scale of primaryScaleSummaries) {
     if (!scale.meetsMinimumStandard) blockingReasons.push(`${scale.scale}: ${scale.blockingReasons.join("; ")}`);
   }
@@ -1108,6 +1216,8 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       minAgreementRate,
       minAgreementWilsonLowerBound,
       minPairedLabels,
+      minHouseBrackmannSeverityBands,
+      minAssessmentsPerSeverityBand,
       minUsableMovementCoverageRatio,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
@@ -1153,9 +1263,13 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerBInsufficientEstimateEvidenceCount,
       estimateVersionMismatchCount: estimateVersionMismatches.length,
       estimateEvidenceMismatchCount: estimateEvidenceMismatches.length,
+      houseBrackmannRepresentedSeverityBandCount: houseBrackmannCaseMix.representedSeverityBandCount,
+      houseBrackmannMinimumSameBandPairedLabelCount: houseBrackmannCaseMix.minimumSameBandPairedLabelCount,
+      houseBrackmannCrossSeverityBandDisagreementCount: houseBrackmannCaseMix.crossSeverityBandDisagreementCount,
       readyPrimaryScaleCount: primaryScaleSummaries.filter((scale) => scale.meetsMinimumStandard).length,
     },
     byScale,
+    houseBrackmannCaseMix,
     estimateVersionMismatches,
     estimateEvidenceMismatches,
     excludedReviewerPairs: excludedReviewerPairs.slice(0, 40),

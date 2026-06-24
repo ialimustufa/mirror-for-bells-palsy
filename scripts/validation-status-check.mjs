@@ -287,6 +287,14 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     `${artifactPath}.standard.minPairedLabels must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
   );
   assertCondition(
+    report.standard.minHouseBrackmannSeverityBands === DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS,
+    `${artifactPath}.standard.minHouseBrackmannSeverityBands must be ${DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS}`,
+  );
+  assertCondition(
+    Number.isInteger(report.standard.minAssessmentsPerSeverityBand) && report.standard.minAssessmentsPerSeverityBand >= DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND,
+    `${artifactPath}.standard.minAssessmentsPerSeverityBand must be at least ${DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND}`,
+  );
+  assertCondition(
     report.standard.minUsableMovementCoverageRatio === DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO,
     `${artifactPath}.standard.minUsableMovementCoverageRatio must be ${DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO}`,
   );
@@ -316,6 +324,9 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertNonNegativeInteger(report.summary.reviewerBInsufficientEstimateEvidenceCount, `${artifactPath}.summary.reviewerBInsufficientEstimateEvidenceCount`);
   assertNonNegativeInteger(report.summary.estimateVersionMismatchCount, `${artifactPath}.summary.estimateVersionMismatchCount`);
   assertNonNegativeInteger(report.summary.estimateEvidenceMismatchCount, `${artifactPath}.summary.estimateEvidenceMismatchCount`);
+  assertNonNegativeInteger(report.summary.houseBrackmannRepresentedSeverityBandCount, `${artifactPath}.summary.houseBrackmannRepresentedSeverityBandCount`);
+  assertNonNegativeInteger(report.summary.houseBrackmannMinimumSameBandPairedLabelCount, `${artifactPath}.summary.houseBrackmannMinimumSameBandPairedLabelCount`);
+  assertNonNegativeInteger(report.summary.houseBrackmannCrossSeverityBandDisagreementCount, `${artifactPath}.summary.houseBrackmannCrossSeverityBandDisagreementCount`);
   assertCondition(
     report.summary.requiredClinicalScaleEstimateVersion === CLINICAL_SCALE_ESTIMATE_VERSION,
     `${artifactPath}.summary.requiredClinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
@@ -338,6 +349,26 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   });
   const primaryAgreementRates = PRIMARY_CLINICAL_REVIEW_SCALE_KEYS.map((scaleKey) => report.byScale?.[scaleKey]?.withinToleranceRate ?? 0);
   const primaryAgreementWilsonLowerBounds = PRIMARY_CLINICAL_REVIEW_SCALE_KEYS.map((scaleKey) => report.byScale?.[scaleKey]?.withinToleranceConfidenceInterval?.lower ?? 0);
+  const caseMix = report.houseBrackmannCaseMix;
+  assertCondition(caseMix && typeof caseMix === "object", `${artifactPath} must include houseBrackmannCaseMix`);
+  assertCondition(caseMix.minHouseBrackmannSeverityBands === DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS, `${artifactPath}.houseBrackmannCaseMix.minHouseBrackmannSeverityBands must be ${DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS}`);
+  assertCondition(
+    Number.isInteger(caseMix.minAssessmentsPerSeverityBand) && caseMix.minAssessmentsPerSeverityBand >= DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND,
+    `${artifactPath}.houseBrackmannCaseMix.minAssessmentsPerSeverityBand must be at least ${DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND}`,
+  );
+  assertNonNegativeInteger(caseMix.pairedHouseBrackmannCount, `${artifactPath}.houseBrackmannCaseMix.pairedHouseBrackmannCount`);
+  assertNonNegativeInteger(caseMix.representedSeverityBandCount, `${artifactPath}.houseBrackmannCaseMix.representedSeverityBandCount`);
+  assertNonNegativeInteger(caseMix.minimumSameBandPairedLabelCount, `${artifactPath}.houseBrackmannCaseMix.minimumSameBandPairedLabelCount`);
+  assertNonNegativeInteger(caseMix.crossSeverityBandDisagreementCount, `${artifactPath}.houseBrackmannCaseMix.crossSeverityBandDisagreementCount`);
+  assertCondition(caseMix.severityBands && typeof caseMix.severityBands === "object", `${artifactPath}.houseBrackmannCaseMix.severityBands must be an object`);
+  const houseBrackmannSeverityBandCounts = ["mild", "moderate", "severe"].map((bandKey) => {
+    const band = caseMix.severityBands?.[bandKey];
+    assertCondition(band && typeof band === "object", `${artifactPath}.houseBrackmannCaseMix.severityBands.${bandKey} must be present`);
+    assertNonNegativeInteger(band.sameBandPairedCount, `${artifactPath}.houseBrackmannCaseMix.severityBands.${bandKey}.sameBandPairedCount`);
+    assertNonNegativeInteger(band.reviewerAPairedCount, `${artifactPath}.houseBrackmannCaseMix.severityBands.${bandKey}.reviewerAPairedCount`);
+    assertNonNegativeInteger(band.reviewerBPairedCount, `${artifactPath}.houseBrackmannCaseMix.severityBands.${bandKey}.reviewerBPairedCount`);
+    return band.sameBandPairedCount;
+  });
   assertTextMatches(report.note ?? "", /reference-standard quality check/i, artifactPath, "the reference-standard reviewer-agreement note");
   return {
     path: artifactPath,
@@ -360,6 +391,9 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     reviewerBInsufficientEstimateEvidenceCount: report.summary.reviewerBInsufficientEstimateEvidenceCount,
     estimateVersionMismatchCount: report.summary.estimateVersionMismatchCount,
     estimateEvidenceMismatchCount: report.summary.estimateEvidenceMismatchCount,
+    representedHouseBrackmannSeverityBandCount: caseMix.representedSeverityBandCount,
+    minimumHouseBrackmannSeverityBandLabelCount: Math.min(...houseBrackmannSeverityBandCounts),
+    houseBrackmannCrossSeverityBandDisagreementCount: caseMix.crossSeverityBandDisagreementCount,
     requiredClinicalScaleEstimateVersion: report.summary.requiredClinicalScaleEstimateVersion,
     blockingReasons: report.blockingReasons,
     byScale: report.byScale,
@@ -422,6 +456,8 @@ function reviewerAgreementReportHasCommonEvidence(report, status) {
     && (report.reviewerBInsufficientEstimateEvidenceCount ?? 0) === 0
     && (report.estimateVersionMismatchCount ?? 0) === 0
     && (report.estimateEvidenceMismatchCount ?? 0) === 0
+    && (report.representedHouseBrackmannSeverityBandCount ?? 0) >= status.clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands
+    && (report.minimumHouseBrackmannSeverityBandLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
   );
 }
 
@@ -544,7 +580,7 @@ async function validateStatusArtifacts(status, options = {}) {
     const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => reviewerAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no excluded reviewer-pair or metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

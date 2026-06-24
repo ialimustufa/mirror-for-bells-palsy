@@ -174,6 +174,8 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
   assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
+  assert.equal(report.standard.minHouseBrackmannSeverityBands, 3);
+  assert.equal(report.standard.minAssessmentsPerSeverityBand, 3);
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 0);
@@ -220,11 +222,38 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
   assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
+  assert.equal(report.houseBrackmannCaseMix.representedSeverityBandCount, 3);
+  assert.equal(report.houseBrackmannCaseMix.minimumSameBandPairedLabelCount, 10);
+  assert.equal(report.houseBrackmannCaseMix.severityBands.mild.sameBandPairedCount, 10);
+  assert.equal(report.houseBrackmannCaseMix.severityBands.moderate.sameBandPairedCount, 10);
+  assert.equal(report.houseBrackmannCaseMix.severityBands.severe.sameBandPairedCount, 10);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceRate, 1);
   assert.ok(report.byScale.houseBrackmannGrade.withinToleranceConfidenceInterval.lower >= 0.8);
   assert.equal(report.byScale.sunnybrookComposite.meetsMinimumStandard, true);
   assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
   assert.deepEqual(report.blockingReasons, []);
+});
+
+test("clinical-scale reviewer agreement blocks narrow House-Brackmann case mix", () => {
+  const rows = Array.from({ length: 30 }, (_, index) => ({
+    assessmentId: `assessment-${index + 1}:clinical-scale`,
+    houseBrackmannGrade: "II",
+    sunnybrookComposite: 88,
+    efaceTotal: 86,
+  }));
+
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.eligibleReviewerPairCount, 30);
+  assert.equal(report.byScale.houseBrackmannGrade.meetsMinimumStandard, true);
+  assert.equal(report.houseBrackmannCaseMix.representedSeverityBandCount, 1);
+  assert.equal(report.houseBrackmannCaseMix.minimumSameBandPairedLabelCount, 0);
+  assert.equal(report.houseBrackmannCaseMix.severityBands.mild.sameBandPairedCount, 30);
+  assert.equal(report.houseBrackmannCaseMix.severityBands.moderate.sameBandPairedCount, 0);
+  assert.equal(report.houseBrackmannCaseMix.severityBands.severe.sameBandPairedCount, 0);
+  assert.match(report.blockingReasons.join("\n"), /houseBrackmannCaseMix: needs 3 House-Brackmann severity bands/);
 });
 
 test("clinical-scale reviewer agreement lets primary scales meet evidence independently", () => {

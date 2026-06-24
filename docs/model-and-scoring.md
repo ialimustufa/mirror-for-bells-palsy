@@ -1149,14 +1149,18 @@ When two clinicians review the same blinded clinical-scale labels, the
 reviewer-agreement command compares the two CSVs before merge. It reports
 per-scale paired counts, exact agreement, tolerance-based agreement, missing
 labels, Wilson 95% confidence intervals, estimator-version counts,
-stale/missing estimator-version rows, estimate-evidence blockers, and
-disagreement rows. Agreement denominators include only eligible reviewer pairs
+stale/missing estimator-version rows, estimate-evidence blockers,
+House-Brackmann severity-band case mix, and disagreement rows. Agreement
+denominators include only eligible reviewer pairs
 that pass the blinding, independence, current-version, and estimate-evidence
 gates; excluded reviewer pairs are counted separately and cannot support release.
 Each scale enabled in `clinicalScaleAvailability` must have at least 30 eligible
 paired labels, at least 80% observed reviewer agreement, and a Wilson lower
 confidence bound of at least 80% before the reviewer agreement artifact can
-support clinical-facing release for that scale. Disabled primary scales may stay
+support clinical-facing release for that scale. The artifact must also show
+HB I-II, HB III-IV, and HB V-VI represented by at least three same-band eligible
+paired reviewer labels, so a reviewer-agreement report cannot pass on one
+severity range alone. Disabled primary scales may stay
 in estimate mode when their rows are not ready, but metadata, blinding,
 current-version, and estimate-evidence blockers still invalidate the artifact. It
 also rejects reviewer rows that are unblinded, non-independent, non-clinician,
@@ -1210,8 +1214,9 @@ resting-metric provenance, no excluded reviewer-pair, metadata, or
 estimate-evidence blockers, zero incomplete scale-specific estimate-input skips
 for every enabled primary scale, at least 30 eligible paired labels on every
 enabled primary scale, at least 80% observed reviewer agreement, and Wilson
-lower-bound reviewer agreement meeting the configured 80% standard before
-clinical-facing support can be enabled for that scale.
+lower-bound reviewer agreement meeting the configured 80% standard, plus
+House-Brackmann same-band reviewer severity coverage, before clinical-facing
+support can be enabled for that scale.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

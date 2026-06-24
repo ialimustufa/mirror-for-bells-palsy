@@ -94,7 +94,9 @@ checks for:
   enabled primary scale, zero excluded reviewer pairs, zero incomplete
   scale-specific estimate-input skips for enabled scales, at least 80% observed
   reviewer agreement, and a 95% Wilson lower bound meeting the configured 80%
-  agreement floor for that scale.
+  agreement floor for that scale. They must also include a House-Brackmann
+  reviewer case-mix summary where HB I-II, HB III-IV, and HB V-VI are each
+  represented by at least three same-band eligible paired reviewer labels.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced
   clinical-scale agreement reports must have 95% Wilson lower bounds meeting the
   configured 80% agreement floor.

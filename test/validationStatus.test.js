@@ -153,6 +153,8 @@ function passingClinicalReviewerAgreementReport({
   wilsonLower = 0.887,
 } = {}) {
   const withinToleranceCount = Math.round(primaryPairedCount * withinToleranceRate);
+  const sameBandCount = Math.floor(primaryPairedCount / 3);
+  const representedSeverityBandCount = sameBandCount >= 3 ? 3 : 0;
   return JSON.stringify({
     kind: "mirror-clinical-scale-reviewer-agreement-report",
     generatedAt: "2026-06-24T00:00:00.000Z",
@@ -162,6 +164,8 @@ function passingClinicalReviewerAgreementReport({
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
       minPairedLabels: 30,
+      minHouseBrackmannSeverityBands: 3,
+      minAssessmentsPerSeverityBand: 3,
       minUsableMovementCoverageRatio: 0.8,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
@@ -205,6 +209,9 @@ function passingClinicalReviewerAgreementReport({
       reviewerBInsufficientEstimateEvidenceCount: 0,
       estimateVersionMismatchCount: 0,
       estimateEvidenceMismatchCount: 0,
+      houseBrackmannRepresentedSeverityBandCount: representedSeverityBandCount,
+      houseBrackmannMinimumSameBandPairedLabelCount: sameBandCount,
+      houseBrackmannCrossSeverityBandDisagreementCount: 0,
       readyPrimaryScaleCount: 3,
     },
     byScale: {
@@ -238,6 +245,41 @@ function passingClinicalReviewerAgreementReport({
         meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
         blockingReasons: [],
       },
+    },
+    houseBrackmannCaseMix: {
+      minHouseBrackmannSeverityBands: 3,
+      minAssessmentsPerSeverityBand: 3,
+      pairedHouseBrackmannCount: primaryPairedCount,
+      representedSeverityBandCount,
+      minimumSameBandPairedLabelCount: sameBandCount,
+      crossSeverityBandDisagreementCount: 0,
+      severityBands: {
+        mild: {
+          label: "HB I-II mild/normal",
+          reviewerAPairedCount: sameBandCount,
+          reviewerBPairedCount: sameBandCount,
+          sameBandPairedCount: sameBandCount,
+          meetsMinimum: sameBandCount >= 3,
+        },
+        moderate: {
+          label: "HB III-IV moderate",
+          reviewerAPairedCount: sameBandCount,
+          reviewerBPairedCount: sameBandCount,
+          sameBandPairedCount: sameBandCount,
+          meetsMinimum: sameBandCount >= 3,
+        },
+        severe: {
+          label: "HB V-VI severe/complete",
+          reviewerAPairedCount: sameBandCount,
+          reviewerBPairedCount: sameBandCount,
+          sameBandPairedCount: sameBandCount,
+          meetsMinimum: sameBandCount >= 3,
+        },
+      },
+      crossSeverityBandDisagreements: [],
+      blockingReasons: representedSeverityBandCount >= 3 ? [] : [
+        "needs 3 House-Brackmann severity bands with at least 3 same-band paired reviewer labels",
+      ],
     },
     estimateVersionMismatches: [],
     estimateEvidenceMismatches: [],
@@ -359,6 +401,8 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].estimateEvidenceMismatchCount, 0);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumHouseBrackmannSeverityBandLabelCount, 10);
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
 
@@ -606,6 +650,50 @@ test("validation status artifacts reject reviewer agreement reports with low Wil
       }),
     }),
     /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with narrow House-Brackmann case mix", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.summary.houseBrackmannRepresentedSeverityBandCount = 1;
+  reviewerReport.summary.houseBrackmannMinimumSameBandPairedLabelCount = 0;
+  reviewerReport.houseBrackmannCaseMix.representedSeverityBandCount = 1;
+  reviewerReport.houseBrackmannCaseMix.minimumSameBandPairedLabelCount = 0;
+  reviewerReport.houseBrackmannCaseMix.severityBands.mild.sameBandPairedCount = 30;
+  reviewerReport.houseBrackmannCaseMix.severityBands.moderate.sameBandPairedCount = 0;
+  reviewerReport.houseBrackmannCaseMix.severityBands.moderate.meetsMinimum = false;
+  reviewerReport.houseBrackmannCaseMix.severityBands.severe.sameBandPairedCount = 0;
+  reviewerReport.houseBrackmannCaseMix.severityBands.severe.meetsMinimum = false;
+  reviewerReport.houseBrackmannCaseMix.blockingReasons = [
+    "needs 3 House-Brackmann severity bands with at least 3 same-band paired reviewer labels",
+  ];
+  reviewerReport.blockingReasons = [
+    "houseBrackmannCaseMix: needs 3 House-Brackmann severity bands with at least 3 same-band paired reviewer labels",
+  ];
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /House-Brackmann reviewer severity-band case mix/,
   );
 });
 
