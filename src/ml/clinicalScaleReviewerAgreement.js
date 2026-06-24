@@ -1,4 +1,5 @@
 import { LABEL_COLUMNS, parseCsv } from "./validationLabels.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../domain/clinicalScales.js";
 
 const PRIMARY_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 
@@ -38,6 +39,8 @@ const REVIEW_SCALE_CONFIG = Object.freeze({
 const REVIEW_SCALE_KEYS = Object.freeze(Object.keys(REVIEW_SCALE_CONFIG));
 
 const ADJUDICATION_EXTRA_COLUMNS = Object.freeze([
+  "reviewerAClinicalScaleEstimateVersion",
+  "reviewerBClinicalScaleEstimateVersion",
   "reviewerAHouseBrackmannGrade",
   "reviewerBHouseBrackmannGrade",
   "reviewerASunnybrookComposite",
@@ -116,6 +119,28 @@ function compactRate(numerator, denominator) {
 
 function compactNumber(value, digits = 2) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function clinicalScaleEstimateVersion(row = {}) {
+  const rawVersion = row?.clinicalScaleEstimateVersion;
+  if (rawVersion == null || String(rawVersion).trim() === "") return null;
+  const version = Number(rawVersion);
+  return Number.isInteger(version) ? version : null;
+}
+
+function estimateVersionCountKey(version) {
+  return version == null ? "missing" : `v${version}`;
+}
+
+function incrementEstimateVersionCount(counts, version) {
+  const key = estimateVersionCountKey(version);
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function estimateVersionCounts(rowsById) {
+  const counts = {};
+  for (const row of rowsById.values()) incrementEstimateVersionCount(counts, clinicalScaleEstimateVersion(row));
+  return counts;
 }
 
 function reviewerRowsByAssessmentId(csvText = "") {
@@ -212,8 +237,17 @@ function reviewerValue(row, scaleKey) {
   return row[scaleKey] ?? "";
 }
 
+function estimateVersionSummaryPart(reviewerA, reviewerB) {
+  const aVersion = clinicalScaleEstimateVersion(reviewerA);
+  const bVersion = clinicalScaleEstimateVersion(reviewerB);
+  if (aVersion === bVersion) return null;
+  return `Estimator version: reviewer A ${estimateVersionCountKey(aVersion)} vs reviewer B ${estimateVersionCountKey(bVersion)}`;
+}
+
 function disagreementSummaryForAssessment(assessmentId, reviewerA, reviewerB) {
   const parts = [];
+  const versionPart = estimateVersionSummaryPart(reviewerA, reviewerB);
+  if (versionPart) parts.push(versionPart);
   for (const scaleKey of REVIEW_SCALE_KEYS) {
     const config = REVIEW_SCALE_CONFIG[scaleKey];
     const a = scaleValue(scaleKey, reviewerValue(reviewerA, scaleKey));
@@ -237,6 +271,11 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.sessionId = source.sessionId ?? "";
   row.sessionTs = source.sessionTs ?? "";
   row.date = source.date ?? "";
+  const reviewerAVersion = clinicalScaleEstimateVersion(reviewerA);
+  const reviewerBVersion = clinicalScaleEstimateVersion(reviewerB);
+  row.clinicalScaleEstimateVersion = reviewerAVersion === reviewerBVersion && reviewerAVersion != null ? reviewerAVersion : "";
+  row.reviewerAClinicalScaleEstimateVersion = reviewerAVersion ?? "";
+  row.reviewerBClinicalScaleEstimateVersion = reviewerBVersion ?? "";
   row.reviewerAHouseBrackmannGrade = formatHouseBrackmann(reviewerA?.houseBrackmannGrade);
   row.reviewerBHouseBrackmannGrade = formatHouseBrackmann(reviewerB?.houseBrackmannGrade);
   row.reviewerASunnybrookComposite = reviewerA?.sunnybrookComposite ?? "";
@@ -260,6 +299,7 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
 
 function needsAdjudication(reviewerA, reviewerB) {
   if (!reviewerA || !reviewerB) return true;
+  if (clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) return true;
   return REVIEW_SCALE_KEYS.some((scaleKey) => {
     const a = scaleValue(scaleKey, reviewerValue(reviewerA, scaleKey));
     const b = scaleValue(scaleKey, reviewerValue(reviewerB, scaleKey));
@@ -272,12 +312,21 @@ function needsAdjudication(reviewerA, reviewerB) {
 function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = "", options = {}) {
   const reviewerAById = reviewerRowsByAssessmentId(reviewerACsv);
   const reviewerBById = reviewerRowsByAssessmentId(reviewerBCsv);
+  const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION;
   const assessmentIds = [...new Set([...reviewerAById.keys(), ...reviewerBById.keys()])].sort();
   const accumulators = Object.fromEntries(REVIEW_SCALE_KEYS.map((scaleKey) => [scaleKey, createScaleAccumulator(scaleKey)]));
   const adjudicationRows = [];
+  const estimateVersionMismatches = [];
   for (const assessmentId of assessmentIds) {
     const reviewerA = reviewerAById.get(assessmentId) ?? null;
     const reviewerB = reviewerBById.get(assessmentId) ?? null;
+    if (reviewerA && reviewerB && clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) {
+      estimateVersionMismatches.push({
+        assessmentId,
+        reviewerA: estimateVersionCountKey(clinicalScaleEstimateVersion(reviewerA)),
+        reviewerB: estimateVersionCountKey(clinicalScaleEstimateVersion(reviewerB)),
+      });
+    }
     for (const scaleKey of REVIEW_SCALE_KEYS) {
       updateScaleAccumulator(accumulators[scaleKey], assessmentId, reviewerValue(reviewerA, scaleKey), reviewerValue(reviewerB, scaleKey));
     }
@@ -285,8 +334,21 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   }
   const byScale = Object.fromEntries(Object.entries(accumulators).map(([scaleKey, accumulator]) => [scaleKey, summarizeScale(accumulator)]));
   const primaryScaleSummaries = PRIMARY_REVIEW_SCALE_KEYS.map((scaleKey) => byScale[scaleKey]);
+  const reviewerAEstimateVersionCounts = estimateVersionCounts(reviewerAById);
+  const reviewerBEstimateVersionCounts = estimateVersionCounts(reviewerBById);
+  const reviewerAStaleOrMissingEstimateVersionCount = [...reviewerAById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
+  const reviewerBStaleOrMissingEstimateVersionCount = [...reviewerBById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
   const blockingReasons = [];
   if (!assessmentIds.length) blockingReasons.push("no shared clinical-scale assessment labels found");
+  if (reviewerAStaleOrMissingEstimateVersionCount > 0) {
+    blockingReasons.push(`reviewerA: ${reviewerAStaleOrMissingEstimateVersionCount} labels are missing or not estimator v${requiredClinicalScaleEstimateVersion}`);
+  }
+  if (reviewerBStaleOrMissingEstimateVersionCount > 0) {
+    blockingReasons.push(`reviewerB: ${reviewerBStaleOrMissingEstimateVersionCount} labels are missing or not estimator v${requiredClinicalScaleEstimateVersion}`);
+  }
+  if (estimateVersionMismatches.length) {
+    blockingReasons.push(`clinicalScaleEstimateVersion: reviewer sheets disagree for ${estimateVersionMismatches.length} assessment labels`);
+  }
   for (const scale of primaryScaleSummaries) {
     if (scale.pairedCount === 0) blockingReasons.push(`${scale.scale}: no paired reviewer labels`);
   }
@@ -301,8 +363,15 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       comparedAssessmentCount: assessmentIds.length,
       adjudicationRequiredCount: adjudicationRows.length,
       primaryScaleCount: PRIMARY_REVIEW_SCALE_KEYS.length,
+      requiredClinicalScaleEstimateVersion,
+      reviewerAEstimateVersionCounts,
+      reviewerBEstimateVersionCounts,
+      reviewerAStaleOrMissingEstimateVersionCount,
+      reviewerBStaleOrMissingEstimateVersionCount,
+      estimateVersionMismatchCount: estimateVersionMismatches.length,
     },
     byScale,
+    estimateVersionMismatches,
     adjudicationRows,
     blockingReasons,
     note: "Reviewer agreement is a reference-standard quality check. Resolve adjudication rows before merging final clinical-scale labels into a reviewed dataset.",

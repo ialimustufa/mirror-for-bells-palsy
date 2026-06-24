@@ -153,12 +153,15 @@ If multiple reviewers label the same assessment:
 - Document the adjudication rule in the readiness report notes.
 - Do not mix raw reviewer rows and adjudicated rows for the same assessment in a
   single readiness dataset.
+- Treat missing, stale, or mismatched `clinicalScaleEstimateVersion` values as
+  adjudication blockers; both raw reviewer sheets and the final adjudicated row
+  must preserve the current estimator version before labels can count.
 
 The reviewer-agreement report uses the same tolerance targets as the clinical
 validation gate: House-Brackmann within one grade, Sunnybrook composite within
 10 points, and eFACE totals/domains within 10 points. The adjudication sheet keeps
-both raw reviewer values in audit columns and leaves the mergeable target columns
-blank until a consensus label is entered.
+both raw reviewer values and raw estimator versions in audit columns and leaves
+the mergeable target columns blank until a consensus label is entered.
 
 ## Required Artifacts Before Enabling Clinical-Facing Scores
 
@@ -200,6 +203,7 @@ report paths without matching artifacts must fail the release check.
 - TRIPOD+AI reporting guidance: https://pubmed.ncbi.nlm.nih.gov/38626948/
 - FDA Good Machine Learning Practice guiding principles: https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles
 - FDA/Health Canada/MHRA PCCP guiding principles for ML-enabled devices: https://www.fda.gov/medical-devices/software-medical-device-samd/predetermined-change-control-plans-machine-learning-enabled-medical-devices-guiding-principles
+- GRRAS reliability and agreement reporting guidance: https://pubmed.ncbi.nlm.nih.gov/21130355/
 - External validation sample-size guidance: https://www.bmj.com/content/384/bmj-2023-074821
 - STARD 2015 diagnostic-accuracy reporting guidance: https://www.equator-network.org/reporting-guidelines/stard/
 - TRIPOD+AI prediction-model reporting guidance: https://www.equator-network.org/reporting-guidelines/tripod-statement/

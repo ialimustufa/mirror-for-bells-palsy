@@ -4,11 +4,12 @@ import {
   compareClinicalScaleReviewerLabels,
   createClinicalScaleAdjudicationCsv,
 } from "../src/ml/clinicalScaleReviewerAgreement.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 import { mergeValidationLabels, parseCsv } from "../src/ml/validationLabels.js";
 
 function reviewerCsv(rows) {
   return [
-    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -16,6 +17,7 @@ function reviewerCsv(rows) {
       row.sessionId ?? row.assessmentId.replace(":clinical-scale", ""),
       row.sessionTs ?? "",
       row.date ?? "2026-06-24",
+      row.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION,
       row.houseBrackmannGrade ?? "",
       row.sunnybrookComposite ?? "",
       row.efaceTotal ?? "",
@@ -23,6 +25,9 @@ function reviewerCsv(rows) {
       row.efaceDynamic ?? "",
       row.efaceSynkinesis ?? "",
       row.clinicianConfidence ?? "high",
+      row.sourceLabelSheetMode ?? "blinded",
+      row.reviewBlinded ?? "yes",
+      row.labelSource ?? "clinician-assigned",
       "clinician",
       "2026-06-24T10:00:00.000Z",
       row.notes ?? "",
@@ -53,6 +58,11 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.reviewerBAssessmentCount, 3);
   assert.equal(report.summary.comparedAssessmentCount, 4);
   assert.equal(report.summary.adjudicationRequiredCount, 4);
+  assert.equal(report.summary.requiredClinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.summary.reviewerAEstimateVersionCounts.v1, 3);
+  assert.equal(report.summary.reviewerBEstimateVersionCounts.v1, 3);
+  assert.equal(report.summary.estimateVersionMismatchCount, 0);
+  assert.deepEqual(report.estimateVersionMismatches, []);
   assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 2);
   assert.equal(report.byScale.houseBrackmannGrade.exactMatchCount, 1);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceCount, 1);
@@ -79,6 +89,9 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
 
   assert.equal(row[index.assessmentId], "assessment-1:clinical-scale");
   assert.equal(row[index.houseBrackmannGrade], "");
+  assert.equal(row[index.clinicalScaleEstimateVersion], "1");
+  assert.equal(row[index.reviewerAClinicalScaleEstimateVersion], "1");
+  assert.equal(row[index.reviewerBClinicalScaleEstimateVersion], "1");
   assert.equal(row[index.reviewerAHouseBrackmannGrade], "III");
   assert.equal(row[index.reviewerBHouseBrackmannGrade], "IV");
   assert.equal(row[index.reviewerANotes], "A note");
@@ -114,4 +127,33 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(merged.records[1].record.label.reviewBlinded, "yes");
   assert.equal(merged.records[1].record.label.labelSource, "adjudicated-consensus");
   assert.equal(merged.records[1].record.label.notes, "adjudicated consensus");
+});
+
+test("clinical-scale reviewer agreement blocks stale or mismatched estimator provenance", () => {
+  const reviewerA = reviewerCsv([
+    { assessmentId: "assessment-1:clinical-scale", clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION, houseBrackmannGrade: "III", sunnybrookComposite: 76, efaceTotal: 73 },
+    { assessmentId: "assessment-2:clinical-scale", clinicalScaleEstimateVersion: "", houseBrackmannGrade: "II", sunnybrookComposite: 88, efaceTotal: 86 },
+  ]);
+  const reviewerB = reviewerCsv([
+    { assessmentId: "assessment-1:clinical-scale", clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1, houseBrackmannGrade: "III", sunnybrookComposite: 76, efaceTotal: 73 },
+    { assessmentId: "assessment-2:clinical-scale", clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION, houseBrackmannGrade: "II", sunnybrookComposite: 88, efaceTotal: 86 },
+  ]);
+
+  const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.reviewerAEstimateVersionCounts.v1, 1);
+  assert.equal(report.summary.reviewerAEstimateVersionCounts.missing, 1);
+  assert.equal(report.summary.reviewerBEstimateVersionCounts.v0, 1);
+  assert.equal(report.summary.reviewerBEstimateVersionCounts.v1, 1);
+  assert.equal(report.summary.reviewerAStaleOrMissingEstimateVersionCount, 1);
+  assert.equal(report.summary.reviewerBStaleOrMissingEstimateVersionCount, 1);
+  assert.equal(report.summary.estimateVersionMismatchCount, 2);
+  assert.equal(report.estimateVersionMismatches.length, 2);
+  assert.match(report.blockingReasons.join("\n"), /reviewerA: 1 labels are missing or not estimator v1/);
+  assert.match(report.blockingReasons.join("\n"), /reviewerB: 1 labels are missing or not estimator v1/);
+  assert.match(report.blockingReasons.join("\n"), /reviewer sheets disagree for 2 assessment labels/);
+  assert.match(report.adjudicationRows[0].disagreementSummary, /Estimator version/);
+  assert.equal(report.adjudicationRows.find((row) => row.assessmentId === "assessment-1:clinical-scale").clinicalScaleEstimateVersion, "");
 });

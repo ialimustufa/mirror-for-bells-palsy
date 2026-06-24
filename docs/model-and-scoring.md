@@ -1066,9 +1066,13 @@ status update.
 When two clinicians review the same blinded clinical-scale labels, the
 reviewer-agreement command compares the two CSVs before merge. It reports
 per-scale paired counts, exact agreement, tolerance-based agreement, missing
-labels, and disagreement rows. When an adjudication output path is provided, it
-writes a CSV with both raw reviewer values preserved in audit columns and blank
-target columns for the final consensus label.
+labels, estimator-version counts, stale/missing estimator-version rows, and
+disagreement rows. Missing, stale, or mismatched clinical-scale estimator
+versions are blocking report findings because adjudicated labels must remain tied
+to the estimator version that generated the blinded review package. When an
+adjudication output path is provided, it writes a CSV with both raw reviewer
+values and raw estimator versions preserved in audit columns and blank target
+columns for the final consensus label.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset
