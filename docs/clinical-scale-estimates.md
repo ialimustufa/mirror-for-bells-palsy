@@ -77,7 +77,7 @@ older v1 estimates are stale and do not count toward the release agreement gate.
 ## Clinical Safety
 
 These estimates are not diagnosis, prognosis, treatment advice, or validated endpoints. They remain disabled as clinical-facing validated scores while `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
-The app and printable report copy read that status through `src/domain/clinicalScalePresentation.js`, so the current release presents values as Mirror estimates even when the assessment evidence standard is met. The status file also records per-scale `clinicalScaleAvailability` flags for House-Brackmann, Sunnybrook, and eFACE. These flags let future releases keep a weaker scale in estimate mode while a separately reviewed scale is shown as clinical-scale support, but only after the global reviewed-data release gate is enabled.
+The app and printable report copy read that status through `src/domain/clinicalScalePresentation.js`, so the current release presents values as Mirror estimates even when the assessment evidence standard is met. The status file must record per-scale `clinicalScaleAvailability` flags for House-Brackmann, Sunnybrook, and eFACE. These flags let future releases keep a weaker scale in estimate mode while a separately reviewed scale is shown as clinical-scale support, but only after the global reviewed-data release gate is enabled. A global clinical-facing status is invalid unless at least one primary scale is explicitly enabled.
 Users can hide optional clinical-scale estimates in Progress preferences. That
 display setting affects assessment summaries, assessment history, and printable
 reports; it does not erase stored assessment data or validation export fields.

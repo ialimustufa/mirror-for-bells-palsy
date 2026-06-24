@@ -205,7 +205,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - A human-reviewed `clinicalScaleAvailability` decision for each primary scale:
   House-Brackmann, Sunnybrook, and eFACE. A scale-level flag may keep one scale
   presented as an estimate, but it cannot make any scale clinical-facing unless
-  the global `clinicalFacingScoresAllowed` release gate is also true.
+  the global `clinicalFacingScoresAllowed` release gate is also true. If the
+  global gate is true, at least one primary scale must be explicitly enabled.
 
 Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.

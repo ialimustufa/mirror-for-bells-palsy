@@ -38,6 +38,7 @@ function assertClinicalScaleAvailability(value, status) {
   for (const key of Object.keys(value)) {
     assertCondition(CLINICAL_SCALE_AVAILABILITY_KEYS.includes(key), `clinicalScaleAvailability.${key} is not a recognized primary clinical scale`);
   }
+  const enabledScaleKeys = [];
   for (const scaleKey of CLINICAL_SCALE_AVAILABILITY_KEYS) {
     const scale = value[scaleKey];
     assertCondition(scale && typeof scale === "object" && !Array.isArray(scale), `clinicalScaleAvailability.${scaleKey} must be an object`);
@@ -46,11 +47,18 @@ function assertClinicalScaleAvailability(value, status) {
       `clinicalScaleAvailability.${scaleKey}.clinicalFacingScoresAllowed must be boolean`,
     );
     if (scale.clinicalFacingScoresAllowed) {
+      enabledScaleKeys.push(scaleKey);
       assertCondition(
         status.clinicalFacingScoresAllowed === true,
         `clinicalScaleAvailability.${scaleKey}.clinicalFacingScoresAllowed requires clinicalFacingScoresAllowed true`,
       );
     }
+  }
+  if (status.clinicalFacingScoresAllowed) {
+    assertCondition(
+      enabledScaleKeys.length > 0,
+      "clinicalFacingScoresAllowed true requires at least one clinicalScaleAvailability entry to allow clinical-facing scores",
+    );
   }
 }
 
@@ -308,7 +316,7 @@ function validateStatus(status) {
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
   assertCondition(typeof status.productionThresholdConstantsCalibrated === "boolean", "productionThresholdConstantsCalibrated must be boolean");
   assertCondition(typeof status.clinicalFacingScoresAllowed === "boolean", "clinicalFacingScoresAllowed must be boolean");
-  if (status.clinicalScaleAvailability !== undefined) assertClinicalScaleAvailability(status.clinicalScaleAvailability, status);
+  assertClinicalScaleAvailability(status.clinicalScaleAvailability, status);
 
   if (status.productionThresholdConstantsCalibrated) {
     assertCondition(status.reviewedDatasetCount > 0, "threshold constants cannot be marked calibrated without reviewed datasets");

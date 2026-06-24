@@ -1113,11 +1113,13 @@ enabled by changing only a UI component. The runtime policy also requires the
 same high-level status evidence as the release gate: reviewed dataset and frame
 counts, reviewed clinical-scale assessment coverage, calibration reports,
 clinical agreement reports, reviewer-agreement reports, calibrated thresholds,
-and the explicit `clinicalFacingScoresAllowed` flag. The status file also has
-`clinicalScaleAvailability` entries for House-Brackmann, Sunnybrook, and eFACE
-so future releases can keep one primary scale in estimate mode even if another
+and the explicit `clinicalFacingScoresAllowed` flag. The status file must also
+include `clinicalScaleAvailability` entries for House-Brackmann, Sunnybrook, and
+eFACE, so every release records an explicit per-scale presentation decision.
+Future releases can keep one primary scale in estimate mode even if another
 scale is approved for clinical-facing support. A per-scale availability flag is
-only presentational; it cannot bypass the global release gate.
+only presentational; it cannot bypass the global release gate, and a global
+clinical-facing status must name at least one enabled primary scale.
 
 `npm run validation:status` validates both the status JSON and any referenced
 report artifacts. Clinical agreement report paths must point to Markdown reports

@@ -24,7 +24,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/validation-status.json",
-    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i, /clinical-scale-review-protocol\.md/i],
+    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i, /"clinicalScaleAvailability"/i, /clinical-scale-review-protocol\.md/i],
   },
   {
     path: "docs/clinical-scale-review-protocol.md",

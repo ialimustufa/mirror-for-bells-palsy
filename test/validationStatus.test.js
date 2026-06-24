@@ -4,6 +4,16 @@ import { validateStatus, validateStatusArtifacts } from "../scripts/validation-s
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const DISABLED_CLINICAL_SCALE_AVAILABILITY = {
+  houseBrackmann: { clinicalFacingScoresAllowed: false },
+  sunnybrook: { clinicalFacingScoresAllowed: false },
+  eface: { clinicalFacingScoresAllowed: false },
+};
+const ENABLED_CLINICAL_SCALE_AVAILABILITY = {
+  houseBrackmann: { clinicalFacingScoresAllowed: true },
+  sunnybrook: { clinicalFacingScoresAllowed: true },
+  eface: { clinicalFacingScoresAllowed: true },
+};
 
 const BASE_STATUS = {
   schemaVersion: 1,
@@ -29,11 +39,7 @@ const BASE_STATUS = {
   thresholdCalibrationReports: [],
   productionThresholdConstantsCalibrated: false,
   clinicalFacingScoresAllowed: false,
-  clinicalScaleAvailability: {
-    houseBrackmann: { clinicalFacingScoresAllowed: false },
-    sunnybrook: { clinicalFacingScoresAllowed: false },
-    eface: { clinicalFacingScoresAllowed: false },
-  },
+  clinicalScaleAvailability: DISABLED_CLINICAL_SCALE_AVAILABILITY,
 };
 
 function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales = 3, representedSeverityBands = 3 } = {}) {
@@ -232,6 +238,7 @@ test("validation status accepts documented clinical agreement state", () => {
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   });
   assert.equal(status.clinicalFacingScoresAllowed, true);
 });
@@ -249,6 +256,7 @@ test("validation status artifacts accept documented clinical and calibration rep
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   const result = await validateStatusArtifacts(status, {
@@ -290,6 +298,7 @@ test("validation status artifacts reject reviewer agreement reports with too few
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -317,6 +326,7 @@ test("validation status artifacts reject reviewer agreement reports with metadat
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -344,6 +354,7 @@ test("validation status artifacts reject reviewer agreement reports with insuffi
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
@@ -375,6 +386,7 @@ test("validation status artifacts reject reviewer agreement reports with exclude
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
@@ -407,6 +419,7 @@ test("validation status artifacts reject reviewer agreement reports with low Wil
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -563,6 +576,7 @@ test("validation status artifacts reject clinical agreement reports for stale es
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -595,8 +609,29 @@ test("validation status rejects clinical-facing scores without reviewed coverage
     () => validateStatus({
       ...BASE_STATUS,
       clinicalFacingScoresAllowed: true,
+      clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
     /calibrated production thresholds/,
+  );
+});
+
+test("validation status requires explicit per-scale clinical availability decisions", () => {
+  const { clinicalScaleAvailability, ...statusWithoutAvailability } = BASE_STATUS;
+  assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
+
+  assert.throws(
+    () => validateStatus(statusWithoutAvailability),
+    /clinicalScaleAvailability must be an object/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleAvailability: {
+        houseBrackmann: { clinicalFacingScoresAllowed: false },
+        sunnybrook: { clinicalFacingScoresAllowed: false },
+      },
+    }),
+    /clinicalScaleAvailability\.eface must be an object/,
   );
 });
 
@@ -614,6 +649,29 @@ test("validation status rejects per-scale clinical availability without the glob
   );
 });
 
+test("validation status rejects global clinical-facing availability with no enabled primary scale", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      reviewedDatasetCount: 1,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 30,
+      readyExerciseCount: 5,
+      clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+      clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+      productionThresholdConstantsCalibrated: true,
+      clinicalFacingScoresAllowed: true,
+      clinicalScaleAvailability: {
+        houseBrackmann: { clinicalFacingScoresAllowed: false },
+        sunnybrook: { clinicalFacingScoresAllowed: false },
+        eface: { clinicalFacingScoresAllowed: false },
+      },
+    }),
+    /requires at least one clinicalScaleAvailability entry/,
+  );
+});
+
 test("validation status rejects clinical-facing scores without clinical agreement reports", () => {
   assert.throws(
     () => validateStatus({
@@ -625,6 +683,7 @@ test("validation status rejects clinical-facing scores without clinical agreemen
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
+      clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
     /clinical scale agreement reports/,
   );
@@ -642,6 +701,7 @@ test("validation status rejects clinical-facing scores without reviewer agreemen
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
+      clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
     /clinical scale reviewer agreement reports/,
   );
@@ -672,6 +732,7 @@ test("validation status artifacts reject clinical agreement reports that do not 
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -699,6 +760,7 @@ test("validation status artifacts reject clinical agreement reports without blin
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -726,6 +788,7 @@ test("validation status artifacts reject clinical agreement reports without esti
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -755,6 +818,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -782,6 +846,7 @@ test("validation status artifacts reject clinical agreement reports with low Wil
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -809,6 +874,7 @@ test("validation status artifacts reject clinical agreement reports with incompl
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
@@ -836,6 +902,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
   };
 
   await assert.rejects(
