@@ -353,7 +353,8 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
   const latestAssessmentRaw = [...(data.assessments ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))[0] ?? null;
   const latestAssessment = assessmentWithClinicalScaleFallback(latestAssessmentRaw, sourceSessionForAssessment(latestAssessmentRaw, data.sessions));
   const latestAssessmentDate = latestAssessment?.date ? formatSessionDate(latestAssessment) : null;
-  const latestClinicalScales = latestAssessment?.clinicalScales?.status === "estimated" ? latestAssessment.clinicalScales.scales : null;
+  const showClinicalScaleEstimates = data.prefs?.clinicalScaleEstimatesEnabled !== false;
+  const latestClinicalScales = showClinicalScaleEstimates && latestAssessment?.clinicalScales?.status === "estimated" ? latestAssessment.clinicalScales.scales : null;
   const latestClinicalLabel = compactClinicalScaleLabel(latestClinicalScales);
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
@@ -1691,7 +1692,7 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
 
 // Dual-mode: live mode receives `scores` (in-progress array) + `onFinish`; view mode
 // receives a saved `session` record + `onClose`. Both render the same comprehensive report.
-function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, restingMetrics, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
+function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, restingMetrics, kind, startedAt, comfortLevel, prefs = {}, onFinish, session, onClose }) {
   const isView = !!session;
   const scoresArr = isView ? (session.scores || []) : scores;
   const usableProgress = (progress) => progressUsesLegacySideConvention(progress) ? null : progress;
@@ -1725,6 +1726,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
     kind: effectiveKind,
   };
   const assessmentSummary = isAssessment ? summarizeAssessmentSession(reportSession) : null;
+  const showClinicalScaleEstimates = prefs.clinicalScaleEstimatesEnabled !== false;
   const diagnostics = summarizeSessionDiagnostics(reportSession);
   const overallPct = displayPct(overall);
   const [timelapse, setTimelapse] = useState(null); // { exerciseIdx, startIdx }
@@ -1806,7 +1808,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           </div>
         )}
         <SessionDiagnosticsPanel diagnostics={diagnostics} />
-        {isAssessment && <ClinicalScaleEstimatePanel clinicalScales={assessmentSummary?.clinicalScales} />}
+        {isAssessment && showClinicalScaleEstimates && <ClinicalScaleEstimatePanel clinicalScales={assessmentSummary?.clinicalScales} />}
         {nextFocus && (
           <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.2)" }}>
             <div className="text-xs uppercase tracking-wider opacity-55 mb-2">Next focus</div>
@@ -1865,7 +1867,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
         <div className="text-xs opacity-60 leading-relaxed mb-6 px-2 text-center">Symmetry is auto-detected from facial landmarks. Some movement variation is normal even in healthy faces.</div>
         <div className="mt-auto space-y-3">
           <button
-            onClick={() => shareSessionReport(reportSession)}
+            onClick={() => shareSessionReport(reportSession, { includeClinicalScaleEstimates: showClinicalScaleEstimates })}
             className="w-full rounded-full py-3 font-medium flex items-center justify-center gap-2"
             style={{ background: "rgba(244, 239, 230, 0.1)", color: "#F4EFE6", border: "1px solid rgba(244, 239, 230, 0.18)" }}
           >
@@ -1934,13 +1936,13 @@ function PastSessionsList({ sessions, onOpen, onDelete }) {
   );
 }
 
-function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
+function PastAssessmentRow({ assessment, sourceSession, onOpen, showClinicalScaleEstimates = true }) {
   const displayAssessment = assessmentWithClinicalScaleFallback(assessment, sourceSession);
   const zones = displayAssessment.zones ?? [];
   const quality = displayAssessment.captureQuality;
   const coactivation = displayAssessment.coactivationRisk;
   const restingAsymmetry = displayAssessment.resting?.averageAsymmetryRatio;
-  const clinicalScales = displayAssessment.clinicalScales?.status === "estimated" ? displayAssessment.clinicalScales.scales : null;
+  const clinicalScales = showClinicalScaleEstimates && displayAssessment.clinicalScales?.status === "estimated" ? displayAssessment.clinicalScales.scales : null;
   const clinicalLabel = compactClinicalScaleLabel(clinicalScales);
   return (
     <button
@@ -1969,7 +1971,7 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen }) {
   );
 }
 
-function PastAssessmentsList({ assessments, sessions, onOpen }) {
+function PastAssessmentsList({ assessments, sessions, onOpen, showClinicalScaleEstimates = true }) {
   const sorted = [...(assessments ?? [])].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 12);
   if (!sorted.length) return null;
   return (
@@ -1978,7 +1980,7 @@ function PastAssessmentsList({ assessments, sessions, onOpen }) {
       <div className="space-y-1.5">
         {sorted.map((assessment) => {
           const sourceSession = sourceSessionForAssessment(assessment, sessions);
-          return <PastAssessmentRow key={assessment.sourceSessionId ?? assessment.sourceSessionTs ?? assessment.ts} assessment={assessment} sourceSession={sourceSession} onOpen={onOpen} />;
+          return <PastAssessmentRow key={assessment.sourceSessionId ?? assessment.sourceSessionTs ?? assessment.ts} assessment={assessment} sourceSession={sourceSession} onOpen={onOpen} showClinicalScaleEstimates={showClinicalScaleEstimates} />;
         })}
       </div>
     </div>
@@ -2365,6 +2367,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
   const totalSessions = practiceSessions.length;
   const last7DaysSessions = practiceSessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
   const personalModelDisabled = prefs.personalModelEnabled === false;
+  const showClinicalScaleEstimates = prefs.clinicalScaleEstimatesEnabled !== false;
   const personalModel = personalModelDisabled ? null : data.personalRecoveryModel;
   const personalModelEntries = Object.values(personalModel?.exercises ?? {}).filter((entry) => entry.currentRatio != null);
   const trainedEntries = personalModelEntries.filter((entry) => entry.confidence !== "collecting");
@@ -2551,7 +2554,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           <span>Symmetric</span>
         </div>
       </div>
-      <PastAssessmentsList assessments={assessments} sessions={data.sessions} onOpen={onOpenReport} />
+      <PastAssessmentsList assessments={assessments} sessions={data.sessions} onOpen={onOpenReport} showClinicalScaleEstimates={showClinicalScaleEstimates} />
       <PastSessionsList sessions={practiceSessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
       {journalChartData.length > 1 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
@@ -2577,6 +2580,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           <DailyGoalSelector value={prefs.dailyGoal ?? 3} onChange={(v) => onSetPref("dailyGoal", v)} />
           <ToggleRow label="Symmetry tracking" description="Auto-measure symmetry during exercises" value={prefs.symmetryEnabled} onToggle={() => onTogglePref("symmetryEnabled")} />
           <ToggleRow label="Personal recovery model" description="Train local trend estimates from your saved sessions" value={prefs.personalModelEnabled !== false} onToggle={() => onTogglePref("personalModelEnabled")} />
+          <ToggleRow label="Clinical scale estimates" description="Show optional HB, Sunnybrook, and eFACE-style estimates after assessments" value={showClinicalScaleEstimates} onToggle={() => onTogglePref("clinicalScaleEstimatesEnabled")} />
           <ToggleRow label="Local data capture" description="Store sampled landmarks for debugging and future model work" value={prefs.dataCaptureEnabled === true} onToggle={() => onTogglePref("dataCaptureEnabled")} />
           <ScoringNoiseModeSelector value={prefs.scoringNoiseMode ?? "normal"} onChange={(mode) => onSetPref("scoringNoiseMode", mode)} />
           <ToggleRow label="Scoring diagnostics" description="Log scoring signals in the browser console" value={prefs.scoringDiagnosticsEnabled === true} onToggle={() => onSetPref("scoringDiagnosticsEnabled", !(prefs.scoringDiagnosticsEnabled === true))} />

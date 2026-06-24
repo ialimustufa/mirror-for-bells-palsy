@@ -23,6 +23,7 @@ export const DEFAULT_DATA = {
     mirrorEnabled: true,
     symmetryEnabled: true,
     personalModelEnabled: true,
+    clinicalScaleEstimatesEnabled: true,
     dataCaptureEnabled: false,
     scoringNoiseMode: "normal",
     scoringDiagnosticsEnabled: false,

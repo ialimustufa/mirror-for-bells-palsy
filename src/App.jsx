@@ -399,7 +399,7 @@ export default function App() {
       {exerciseDetail && <ExerciseDetail exercise={exerciseDetail} movementProfile={data.movementProfile} onClose={() => setExerciseDetail(null)} onStart={(id) => { setExerciseDetail(null); startSession([id]); }} />}
       {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} voiceEnabled={data.prefs.voiceEnabled} onToggleVoice={() => togglePref("voiceEnabled")} />}
       {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} prefs={data.prefs} onTogglePref={togglePref} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
-      {viewingReport && <SessionSummary session={viewingReport} onClose={() => setViewingReport(null)} />}
+      {viewingReport && <SessionSummary session={viewingReport} prefs={data.prefs} onClose={() => setViewingReport(null)} />}
       {journalPrompt && (
         <JournalPrompt
           session={journalPrompt.session}

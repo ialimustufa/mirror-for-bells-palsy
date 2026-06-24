@@ -877,6 +877,11 @@ These values are not clinical-facing validated grades while
 The runtime presentation policy in `src/domain/clinicalScalePresentation.js`
 imports that same status file so app panels and printable reports keep the
 Mirror-estimate wording until the reviewed validation gate is explicitly opened.
+Users can also turn off `prefs.clinicalScaleEstimatesEnabled` to hide optional
+clinical-scale estimates from the assessment summary, assessment history, and
+printable report output. The preference is display-only: validation datasets and
+clinician bundles still preserve the underlying assessment evidence for explicit
+review/export workflows.
 
 Assessments are also saved as `kind: "assessment"` session records for local image
 hydration and PDF generation, but they do not count toward daily practice goals or

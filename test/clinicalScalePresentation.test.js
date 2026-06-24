@@ -100,4 +100,23 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(html, /Clinical scale estimates/);
   assert.match(html, /House-Brackmann estimate/);
   assert.match(html, /These are Mirror estimates only/);
+
+  const hiddenHtml = buildSessionReportHtml({
+    kind: "assessment",
+    date: "2026-06-24",
+    ts: Date.parse("2026-06-24T09:00:00Z"),
+    duration: 70,
+    sessionAvg: 0.82,
+    restingMetrics: RESTING_METRICS,
+    scores: [
+      movementScore("eyebrow-raise", 0.94),
+      movementScore("eye-close", 0.92),
+      movementScore("open-smile", 0.88),
+      movementScore("nose-wrinkle", 0.84),
+      movementScore("pucker", 0.86),
+    ],
+  }, { includeClinicalScaleEstimates: false });
+
+  assert.doesNotMatch(hiddenHtml, /Clinical scale estimates/);
+  assert.doesNotMatch(hiddenHtml, /House-Brackmann estimate/);
 });

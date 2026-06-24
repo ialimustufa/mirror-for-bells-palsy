@@ -98,6 +98,7 @@ export function normalizeAppData(parsed = {}) {
     prefs: {
       ...prefs,
       personalModelEnabled: prefs.personalModelEnabled !== false,
+      clinicalScaleEstimatesEnabled: prefs.clinicalScaleEstimatesEnabled !== false,
       dataCaptureEnabled: prefs.dataCaptureEnabled === true,
       scoringNoiseMode: normalizeScoringNoiseMode(prefs.scoringNoiseMode),
       scoringDiagnosticsEnabled: prefs.scoringDiagnosticsEnabled === true,

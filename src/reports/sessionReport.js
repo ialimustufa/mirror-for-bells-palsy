@@ -78,7 +78,8 @@ function usableProgress(progress) {
   return progressUsesLegacySideConvention(progress) ? null : progress;
 }
 
-function buildSessionReportHtml(s) {
+function buildSessionReportHtml(s, options = {}) {
+  const includeClinicalScaleEstimates = options.includeClinicalScaleEstimates !== false;
   const ts = s.ts ? new Date(s.ts) : new Date();
   const dateStr = ts.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const timeStr = formatClock(ts);
@@ -97,7 +98,7 @@ function buildSessionReportHtml(s) {
   const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
   const clinicalScalePolicy = clinicalScalePresentationPolicy();
   const restingRows = restingMetricRows(assessment?.resting?.metrics);
-  const clinicalScaleRows = clinicalScaleEstimateRows(assessment?.clinicalScales, clinicalScalePolicy);
+  const clinicalScaleRows = includeClinicalScaleEstimates ? clinicalScaleEstimateRows(assessment?.clinicalScales, clinicalScalePolicy) : [];
   const quality = diagnostics.captureQuality;
   const diagnosticFlags = [
     diagnostics.setupQuality ? `Setup quality: ${diagnostics.setupQuality.label ?? diagnostics.setupQuality.key}${diagnostics.setupQuality.score != null ? ` (${Math.round(diagnostics.setupQuality.score * 100)}%)` : ""}` : null,
@@ -315,8 +316,8 @@ function buildSessionReportHtml(s) {
 </html>`;
 }
 
-function shareSessionReport(sessionLike) {
-  const html = buildSessionReportHtml(sessionLike);
+function shareSessionReport(sessionLike, options = {}) {
+  const html = buildSessionReportHtml(sessionLike, options);
   const win = window.open("", "_blank");
   if (!win) {
     const blob = new Blob([html], { type: "text/html" });

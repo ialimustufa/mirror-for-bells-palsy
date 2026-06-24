@@ -179,14 +179,17 @@ test("normalizes scoring noise prefs with safe defaults", () => {
   const defaults = normalizeAppData({});
   assert.equal(defaults.prefs.scoringNoiseMode, "normal");
   assert.equal(defaults.prefs.scoringDiagnosticsEnabled, false);
+  assert.equal(defaults.prefs.clinicalScaleEstimatesEnabled, true);
 
-  const raw = normalizeAppData({ prefs: { scoringNoiseMode: "raw", scoringDiagnosticsEnabled: true } });
+  const raw = normalizeAppData({ prefs: { scoringNoiseMode: "raw", scoringDiagnosticsEnabled: true, clinicalScaleEstimatesEnabled: false } });
   assert.equal(raw.prefs.scoringNoiseMode, "raw");
   assert.equal(raw.prefs.scoringDiagnosticsEnabled, true);
+  assert.equal(raw.prefs.clinicalScaleEstimatesEnabled, false);
 
-  const invalid = normalizeAppData({ prefs: { scoringNoiseMode: "loud", scoringDiagnosticsEnabled: "true" } });
+  const invalid = normalizeAppData({ prefs: { scoringNoiseMode: "loud", scoringDiagnosticsEnabled: "true", clinicalScaleEstimatesEnabled: "false" } });
   assert.equal(invalid.prefs.scoringNoiseMode, "normal");
   assert.equal(invalid.prefs.scoringDiagnosticsEnabled, false);
+  assert.equal(invalid.prefs.clinicalScaleEstimatesEnabled, true);
 });
 
 test("normalizes assessments as separate dated records", () => {
