@@ -170,13 +170,15 @@ If multiple reviewers label the same assessment:
 The reviewer-agreement report uses the same tolerance targets as the clinical
 validation gate: House-Brackmann within one grade, Sunnybrook composite within
 10 points, and eFACE totals/domains within 10 points. Each primary reviewer
-agreement row must have at least 30 paired labels, at least 80% observed
-tolerance-based agreement, and a Wilson 95% lower confidence bound of at least
-80%. It also reports reviewer sheet metadata and estimate-evidence issues before
-any adjudicated row can be merged. The adjudication sheet keeps raw reviewer
-values, raw estimator versions, and raw estimate-evidence provenance in audit
-columns and leaves the mergeable target columns blank until a consensus label is
-entered.
+agreement row is computed only from eligible paired reviewer rows that pass the
+blinding, independence, current-version, and estimate-evidence gates. It must
+have at least 30 eligible paired labels, at least 80% observed tolerance-based
+agreement, and a Wilson 95% lower confidence bound of at least 80%. The report
+also lists excluded reviewer-pair reasons, reviewer sheet metadata issues, and
+estimate-evidence issues before any adjudicated row can be merged. The
+adjudication sheet keeps raw reviewer values, raw estimator versions, and raw
+estimate-evidence provenance in audit columns and leaves the mergeable target
+columns blank until a consensus label is entered.
 
 ## Required Artifacts Before Enabling Clinical-Facing Scores
 

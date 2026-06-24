@@ -232,6 +232,10 @@ function incrementReasonCount(counts, reason) {
   counts[reason] = (counts[reason] ?? 0) + 1;
 }
 
+function incrementReasonCounts(counts, reasons = []) {
+  for (const reason of reasons) incrementReasonCount(counts, reason);
+}
+
 function reviewerRowEligibility(row = {}, options = {}) {
   const reviewerRole = String(row.reviewerRole ?? "").trim();
   const confidence = String(row.clinicianConfidence ?? "").trim();
@@ -290,6 +294,42 @@ function reviewerSheetEligibility(rowsById, reviewer, options = {}) {
     ineligibleAssessmentCount: issues.length,
     ineligibleReasons: reasonCounts,
     issues: issues.slice(0, 20),
+  };
+}
+
+function reviewerPairEligibility(assessmentId, reviewerA, reviewerB, options = {}) {
+  const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION;
+  const reasons = [];
+  if (!reviewerA) reasons.push("missing reviewer A row");
+  if (!reviewerB) reasons.push("missing reviewer B row");
+  if (!reviewerA || !reviewerB) {
+    return { assessmentId, eligible: false, reasons };
+  }
+
+  const reviewerAEligibility = reviewerRowEligibility(reviewerA, options);
+  const reviewerBEligibility = reviewerRowEligibility(reviewerB, options);
+  reasons.push(...reviewerAEligibility.reasons.map((reason) => `reviewer A: ${reason}`));
+  reasons.push(...reviewerBEligibility.reasons.map((reason) => `reviewer B: ${reason}`));
+
+  const reviewerAVersion = clinicalScaleEstimateVersion(reviewerA);
+  const reviewerBVersion = clinicalScaleEstimateVersion(reviewerB);
+  if (reviewerAVersion !== requiredClinicalScaleEstimateVersion) {
+    reasons.push(`reviewer A estimator version is not v${requiredClinicalScaleEstimateVersion}`);
+  }
+  if (reviewerBVersion !== requiredClinicalScaleEstimateVersion) {
+    reasons.push(`reviewer B estimator version is not v${requiredClinicalScaleEstimateVersion}`);
+  }
+  if (reviewerAVersion !== reviewerBVersion) {
+    reasons.push("reviewer sheets have mismatched estimator versions");
+  }
+  if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) {
+    reasons.push("reviewer sheets have mismatched estimate evidence");
+  }
+
+  return {
+    assessmentId,
+    eligible: reasons.length === 0,
+    reasons,
   };
 }
 
@@ -528,9 +568,16 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const adjudicationRows = [];
   const estimateVersionMismatches = [];
   const estimateEvidenceMismatches = [];
+  const excludedReviewerPairReasons = {};
+  const excludedReviewerPairs = [];
+  let eligibleReviewerPairCount = 0;
   for (const assessmentId of assessmentIds) {
     const reviewerA = reviewerAById.get(assessmentId) ?? null;
     const reviewerB = reviewerBById.get(assessmentId) ?? null;
+    const pairEligibility = reviewerPairEligibility(assessmentId, reviewerA, reviewerB, {
+      ...estimateEvidenceOptions,
+      clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
+    });
     if (reviewerA && reviewerB && clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) {
       estimateVersionMismatches.push({
         assessmentId,
@@ -545,8 +592,14 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
         reviewerB: estimateEvidenceKey(reviewerB),
       });
     }
-    for (const scaleKey of REVIEW_SCALE_KEYS) {
-      updateScaleAccumulator(accumulators[scaleKey], assessmentId, reviewerValue(reviewerA, scaleKey), reviewerValue(reviewerB, scaleKey));
+    if (pairEligibility.eligible) {
+      eligibleReviewerPairCount += 1;
+      for (const scaleKey of REVIEW_SCALE_KEYS) {
+        updateScaleAccumulator(accumulators[scaleKey], assessmentId, reviewerValue(reviewerA, scaleKey), reviewerValue(reviewerB, scaleKey));
+      }
+    } else {
+      incrementReasonCounts(excludedReviewerPairReasons, pairEligibility.reasons);
+      excludedReviewerPairs.push(pairEligibility);
     }
     if (needsAdjudication(reviewerA, reviewerB)) adjudicationRows.push(adjudicationRow(assessmentId, reviewerA, reviewerB));
   }
@@ -609,6 +662,9 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerAAssessmentCount: reviewerAById.size,
       reviewerBAssessmentCount: reviewerBById.size,
       comparedAssessmentCount: assessmentIds.length,
+      eligibleReviewerPairCount,
+      excludedReviewerPairCount: excludedReviewerPairs.length,
+      excludedReviewerPairReasons,
       adjudicationRequiredCount: adjudicationRows.length,
       primaryScaleCount: PRIMARY_REVIEW_SCALE_KEYS.length,
       requiredClinicalScaleEstimateVersion,
@@ -631,6 +687,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     byScale,
     estimateVersionMismatches,
     estimateEvidenceMismatches,
+    excludedReviewerPairs: excludedReviewerPairs.slice(0, 40),
     reviewerSheetIssues: [
       ...reviewerAEligibility.issues,
       ...reviewerBEligibility.issues,

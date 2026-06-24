@@ -128,6 +128,9 @@ function passingClinicalReviewerAgreementReport({
       reviewerAAssessmentCount: comparedCount,
       reviewerBAssessmentCount: comparedCount,
       comparedAssessmentCount: comparedCount,
+      eligibleReviewerPairCount: comparedCount,
+      excludedReviewerPairCount: 0,
+      excludedReviewerPairReasons: {},
       adjudicationRequiredCount: 4,
       primaryScaleCount: 3,
       requiredClinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
@@ -257,6 +260,8 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalAgreementReports[0].minimumUsableMovementCoverageRatio, 0.8);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].comparedAssessmentCount, 30);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].eligibleReviewerPairCount, 30);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].excludedReviewerPairCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryPairedCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementRate, 1);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementWilsonLowerBound, 0.887);
@@ -338,6 +343,38 @@ test("validation status artifacts reject reviewer agreement reports with insuffi
   const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
   reviewerReport.summary.reviewerAInsufficientEstimateEvidenceCount = 1;
   reviewerReport.summary.estimateEvidenceMismatchCount = 1;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with excluded reviewer pairs", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.summary.eligibleReviewerPairCount = 29;
+  reviewerReport.summary.excludedReviewerPairCount = 1;
+  reviewerReport.summary.excludedReviewerPairReasons = { "missing reviewer B row": 1 };
 
   await assert.rejects(
     () => validateStatusArtifacts(status, {

@@ -202,6 +202,8 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertNonNegativeInteger(report.summary.reviewerAAssessmentCount, `${artifactPath}.summary.reviewerAAssessmentCount`);
   assertNonNegativeInteger(report.summary.reviewerBAssessmentCount, `${artifactPath}.summary.reviewerBAssessmentCount`);
   assertNonNegativeInteger(report.summary.comparedAssessmentCount, `${artifactPath}.summary.comparedAssessmentCount`);
+  assertNonNegativeInteger(report.summary.eligibleReviewerPairCount, `${artifactPath}.summary.eligibleReviewerPairCount`);
+  assertNonNegativeInteger(report.summary.excludedReviewerPairCount, `${artifactPath}.summary.excludedReviewerPairCount`);
   assertNonNegativeInteger(report.summary.reviewerAEligibleAssessmentCount, `${artifactPath}.summary.reviewerAEligibleAssessmentCount`);
   assertNonNegativeInteger(report.summary.reviewerBEligibleAssessmentCount, `${artifactPath}.summary.reviewerBEligibleAssessmentCount`);
   assertNonNegativeInteger(report.summary.reviewerAIneligibleAssessmentCount, `${artifactPath}.summary.reviewerAIneligibleAssessmentCount`);
@@ -240,6 +242,8 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     reviewerAAssessmentCount: report.summary.reviewerAAssessmentCount,
     reviewerBAssessmentCount: report.summary.reviewerBAssessmentCount,
     comparedAssessmentCount: report.summary.comparedAssessmentCount,
+    eligibleReviewerPairCount: report.summary.eligibleReviewerPairCount,
+    excludedReviewerPairCount: report.summary.excludedReviewerPairCount,
     reviewerAEligibleAssessmentCount: report.summary.reviewerAEligibleAssessmentCount,
     reviewerBEligibleAssessmentCount: report.summary.reviewerBEligibleAssessmentCount,
     reviewerAIneligibleAssessmentCount: report.summary.reviewerAIneligibleAssessmentCount,
@@ -354,6 +358,8 @@ async function validateStatusArtifacts(status, options = {}) {
     const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => (
       report.requiredClinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
       && (report.comparedAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.eligibleReviewerPairCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.excludedReviewerPairCount ?? 0) === 0
       && (report.reviewerAEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
       && (report.reviewerBEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
       && (report.reviewerAIneligibleAssessmentCount ?? 0) === 0
@@ -370,7 +376,7 @@ async function validateStatusArtifacts(status, options = {}) {
     ));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document current-version estimates with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired primary labels, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no reviewer metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired primary labels, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no excluded reviewer-pair or metadata blockers",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

@@ -168,7 +168,8 @@ independent clinician sheets with qualifying complete/minimum estimate evidence,
 at least 80% usable movement coverage, paired primary-scale labels meeting the
 same reviewed-assessment floor, at least 80% observed reviewer agreement,
 Wilson lower-bound reviewer agreement meeting the configured 80% standard, and
-no reviewer-sheet metadata or estimate-evidence blockers.
+no excluded reviewer-pair, reviewer-sheet metadata, or estimate-evidence
+blockers.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

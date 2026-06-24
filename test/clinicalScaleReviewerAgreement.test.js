@@ -65,6 +65,10 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.reviewerAAssessmentCount, 3);
   assert.equal(report.summary.reviewerBAssessmentCount, 3);
   assert.equal(report.summary.comparedAssessmentCount, 4);
+  assert.equal(report.summary.eligibleReviewerPairCount, 2);
+  assert.equal(report.summary.excludedReviewerPairCount, 2);
+  assert.equal(report.summary.excludedReviewerPairReasons["missing reviewer B row"], 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["missing reviewer A row"], 1);
   assert.equal(report.summary.adjudicationRequiredCount, 4);
   assert.equal(report.summary.requiredClinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(report.standard.minAgreementRate, 0.8);
@@ -91,7 +95,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.byScale.houseBrackmannGrade.meetsMinimumStandard, false);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceConfidenceInterval.method, "wilson-score");
   assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 1);
-  assert.equal(report.byScale.sunnybrookComposite.missingReviewerBCount, 1);
+  assert.equal(report.byScale.sunnybrookComposite.missingReviewerBCount, 0);
   assert.equal(report.byScale.efaceStatic.pairedCount, 1);
   assert.equal(report.summary.readyPrimaryScaleCount, 0);
   assert.match(report.blockingReasons.join("\n"), /Wilson lower bound/);
@@ -111,6 +115,8 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
   });
 
   assert.equal(report.summary.comparedAssessmentCount, 30);
+  assert.equal(report.summary.eligibleReviewerPairCount, 30);
+  assert.equal(report.summary.excludedReviewerPairCount, 0);
   assert.equal(report.summary.readyPrimaryScaleCount, 3);
   assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
@@ -207,6 +213,9 @@ test("clinical-scale reviewer agreement blocks stale or mismatched estimator pro
   assert.equal(report.summary.reviewerBStaleOrMissingEstimateVersionCount, 1);
   assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.summary.excludedReviewerPairCount, 2);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer sheets have mismatched estimator versions"], 2);
   assert.equal(report.summary.estimateVersionMismatchCount, 2);
   assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
   assert.equal(report.estimateVersionMismatches.length, 2);
@@ -245,6 +254,8 @@ test("clinical-scale reviewer agreement blocks insufficient estimate evidence pr
 
   assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 1);
   assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 0);
   assert.equal(report.summary.estimateEvidenceMismatchCount, 1);
   assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate status is not estimated"], 1);
   assert.equal(report.summary.reviewerBIneligibleReasons["clinical scale estimate evidence tier is missing or insufficient"], 1);
@@ -284,6 +295,9 @@ test("clinical-scale reviewer agreement blocks unblinded or non-independent revi
 
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 0);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 0);
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.summary.excludedReviewerPairCount, 1);
+  assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 0);
   assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 1);
   assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 1);
   assert.equal(report.summary.reviewerAIneligibleReasons["reviewer role is marked non-clinical or rehearsal"], 1);

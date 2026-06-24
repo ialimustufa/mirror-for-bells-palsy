@@ -1087,12 +1087,15 @@ reviewer-agreement command compares the two CSVs before merge. It reports
 per-scale paired counts, exact agreement, tolerance-based agreement, missing
 labels, Wilson 95% confidence intervals, estimator-version counts,
 stale/missing estimator-version rows, estimate-evidence blockers, and
-disagreement rows. Each primary scale must have at least 30 paired labels, at
-least 80% observed reviewer agreement, and a Wilson lower confidence bound of at
-least 80% before the reviewer agreement artifact can support clinical-facing
-release. It also rejects reviewer rows that are unblinded, non-independent,
-non-clinician, uncertain, copied, rehearsal, incomplete, out-of-range, or paired
-with an insufficient Mirror estimate. Missing, stale, or mismatched
+disagreement rows. Agreement denominators include only eligible reviewer pairs
+that pass the blinding, independence, current-version, and estimate-evidence
+gates; excluded reviewer pairs are counted separately and cannot support release.
+Each primary scale must have at least 30 eligible paired labels, at least 80%
+observed reviewer agreement, and a Wilson lower confidence bound of at least 80%
+before the reviewer agreement artifact can support clinical-facing release. It
+also rejects reviewer rows that are unblinded, non-independent, non-clinician,
+uncertain, copied, rehearsal, incomplete, out-of-range, or paired with an
+insufficient Mirror estimate. Missing, stale, or mismatched
 clinical-scale estimator versions, estimate status, complete/minimum evidence
 tier, or 80% usable-movement coverage are blocking report findings because
 adjudicated labels must remain tied to the qualifying estimate evidence that
@@ -1118,10 +1121,11 @@ complete/minimum estimate evidence-tier controls, explicit reference-standard
 controls, and release-control text. Clinical reviewer-agreement report paths must point to JSON
 `mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
 eligible reviewer sheets, complete/minimum estimate evidence and 80%
-usable-movement coverage provenance, no metadata or estimate-evidence blockers,
-at least 30 paired labels on each primary scale, at least 80% observed reviewer
-agreement, and Wilson lower-bound reviewer agreement meeting the configured 80%
-standard before clinical-facing clinical-scale support can be enabled.
+usable-movement coverage provenance, no excluded reviewer-pair, metadata, or
+estimate-evidence blockers, at least 30 eligible paired labels on each primary
+scale, at least 80% observed reviewer agreement, and Wilson lower-bound reviewer
+agreement meeting the configured 80% standard before clinical-facing
+clinical-scale support can be enabled.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.
