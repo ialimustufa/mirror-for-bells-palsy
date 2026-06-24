@@ -3,7 +3,7 @@ import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRigh
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC, summarizeAssessmentSession } from "../domain/assessment";
-import { clinicalScalePresentationPolicy } from "../domain/clinicalScalePresentation";
+import { clinicalScalePresentationPolicy, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
 import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
@@ -102,26 +102,29 @@ function progressSideLabel(progress) {
   return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
 }
 
-function clinicalScaleEstimateCards(scales) {
+function clinicalScaleEstimateCards(scales, presentation) {
   if (!scales) return [];
   return [
     scales.houseBrackmann ? {
-      key: "hb",
+      key: "houseBrackmann",
       label: "House-Brackmann",
       value: `Grade ${scales.houseBrackmann.grade}`,
       sublabel: scales.houseBrackmann.label,
+      statusLabel: scaleNounForClinicalScale(presentation, "houseBrackmann"),
     } : null,
     scales.sunnybrook ? {
       key: "sunnybrook",
       label: "Sunnybrook",
       value: `${Math.round(scales.sunnybrook.compositeScore)}/100`,
       sublabel: `${scales.sunnybrook.voluntaryMovementScore} vol - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synk`,
+      statusLabel: scaleNounForClinicalScale(presentation, "sunnybrook"),
     } : null,
     scales.eface ? {
       key: "eface",
       label: "eFACE-style",
       value: `${Math.round(scales.eface.totalScore)}/100`,
       sublabel: `${Math.round(scales.eface.staticScore)} static · ${Math.round(scales.eface.dynamicScore)} dynamic · ${Math.round(scales.eface.synkinesisScore)} synk`,
+      statusLabel: scaleNounForClinicalScale(presentation, "eface"),
     } : null,
   ].filter(Boolean);
 }
@@ -1650,7 +1653,7 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
   if (!clinicalScales) return null;
   const presentation = clinicalScalePresentationPolicy();
   const estimated = clinicalScales.status === "estimated";
-  const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales) : [];
+  const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales, presentation) : [];
   const coverage = clinicalScales.coverage;
   return (
     <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.24)" }}>
@@ -1667,7 +1670,10 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {cards.map((card) => (
             <div key={card.key} className="rounded-xl p-3" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
-              <div className="text-[10px] uppercase tracking-wider opacity-50 mb-1">{card.label}</div>
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="text-[10px] uppercase tracking-wider opacity-50">{card.label}</div>
+                <div className="text-[9px] uppercase tracking-wider opacity-50">{card.statusLabel}</div>
+              </div>
               <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{card.value}</div>
               <div className="text-[11px] opacity-62 mt-1 leading-snug">{card.sublabel}</div>
             </div>

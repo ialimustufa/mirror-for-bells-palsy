@@ -10,6 +10,7 @@ const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
 const DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO = 0.8;
 const PRIMARY_CLINICAL_SCALE_COUNT = 3;
 const PRIMARY_CLINICAL_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+const CLINICAL_SCALE_AVAILABILITY_KEYS = Object.freeze(["houseBrackmann", "sunnybrook", "eface"]);
 const DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
 const DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND = 3;
 
@@ -29,6 +30,27 @@ function assertStringArray(value, field) {
   assertCondition(Array.isArray(value), `${field} must be an array`);
   for (const [index, item] of value.entries()) {
     assertCondition(typeof item === "string" && item.length > 0, `${field}[${index}] must be a non-empty string`);
+  }
+}
+
+function assertClinicalScaleAvailability(value, status) {
+  assertCondition(value && typeof value === "object" && !Array.isArray(value), "clinicalScaleAvailability must be an object");
+  for (const key of Object.keys(value)) {
+    assertCondition(CLINICAL_SCALE_AVAILABILITY_KEYS.includes(key), `clinicalScaleAvailability.${key} is not a recognized primary clinical scale`);
+  }
+  for (const scaleKey of CLINICAL_SCALE_AVAILABILITY_KEYS) {
+    const scale = value[scaleKey];
+    assertCondition(scale && typeof scale === "object" && !Array.isArray(scale), `clinicalScaleAvailability.${scaleKey} must be an object`);
+    assertCondition(
+      typeof scale.clinicalFacingScoresAllowed === "boolean",
+      `clinicalScaleAvailability.${scaleKey}.clinicalFacingScoresAllowed must be boolean`,
+    );
+    if (scale.clinicalFacingScoresAllowed) {
+      assertCondition(
+        status.clinicalFacingScoresAllowed === true,
+        `clinicalScaleAvailability.${scaleKey}.clinicalFacingScoresAllowed requires clinicalFacingScoresAllowed true`,
+      );
+    }
   }
 }
 
@@ -286,6 +308,7 @@ function validateStatus(status) {
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
   assertCondition(typeof status.productionThresholdConstantsCalibrated === "boolean", "productionThresholdConstantsCalibrated must be boolean");
   assertCondition(typeof status.clinicalFacingScoresAllowed === "boolean", "clinicalFacingScoresAllowed must be boolean");
+  if (status.clinicalScaleAvailability !== undefined) assertClinicalScaleAvailability(status.clinicalScaleAvailability, status);
 
   if (status.productionThresholdConstantsCalibrated) {
     assertCondition(status.reviewedDatasetCount > 0, "threshold constants cannot be marked calibrated without reviewed datasets");

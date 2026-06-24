@@ -202,6 +202,10 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - Documentation of whether labels were blinded and whether adjudication was used.
 - A human-reviewed update to `docs/validation-status.json` referencing the
   agreement report artifacts.
+- A human-reviewed `clinicalScaleAvailability` decision for each primary scale:
+  House-Brackmann, Sunnybrook, and eFACE. A scale-level flag may keep one scale
+  presented as an estimate, but it cannot make any scale clinical-facing unless
+  the global `clinicalFacingScoresAllowed` release gate is also true.
 
 Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.

@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import validationStatus from "../docs/validation-status.json" with { type: "json" };
-import { clinicalFacingStatusEligible, clinicalScalePresentationPolicy, DEFAULT_VALIDATION_STATUS } from "../src/domain/clinicalScalePresentation.js";
+import {
+  clinicalFacingScaleStatusEligible,
+  clinicalFacingStatusEligible,
+  clinicalScalePresentationPolicy,
+  DEFAULT_VALIDATION_STATUS,
+  scaleNounForClinicalScale,
+} from "../src/domain/clinicalScalePresentation.js";
 import { buildSessionReportHtml, clinicalScaleEstimateRows } from "../src/reports/sessionReport.js";
 
 const RESTING_METRICS = {
@@ -28,11 +34,14 @@ test("clinical scale presentation policy defaults to the repo validation status"
   assert.equal(DEFAULT_VALIDATION_STATUS.clinicalFacingScoresAllowed, validationStatus.clinicalFacingScoresAllowed);
   assert.equal(validationStatus.clinicalFacingScoresAllowed, false);
   assert.equal(clinicalFacingStatusEligible(), false);
+  assert.equal(clinicalFacingScaleStatusEligible(undefined, "houseBrackmann"), false);
 
   const policy = clinicalScalePresentationPolicy();
 
   assert.equal(policy.mode, "mirror-estimate");
   assert.equal(policy.requestedClinicalFacingScoresAllowed, false);
+  assert.equal(policy.primaryClinicalScaleSupportCount, 0);
+  assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
   assert.equal(policy.badgeLabel, "Estimate");
   assert.match(policy.shortNotice, /not clinician-assigned/);
   assert.match(policy.reportNotice, /not clinician-assigned or validated clinical grades/);
@@ -74,6 +83,38 @@ test("clinical scale presentation policy switches copy only with complete releas
   assert.equal(policy.scaleNoun, "support value");
   assert.match(policy.shortNotice, /validation gate/);
   assert.match(policy.reportNotice, /clinician interpretation/);
+});
+
+test("clinical scale presentation policy can keep individual scales as estimates", () => {
+  const status = {
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleMinimumStandard: {
+      minReviewedAssessments: 30,
+    },
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: { clinicalFacingScoresAllowed: true },
+      sunnybrook: { clinicalFacingScoresAllowed: false },
+      eface: { clinicalFacingScoresAllowed: true },
+    },
+  };
+  const policy = clinicalScalePresentationPolicy(status);
+
+  assert.equal(policy.mode, "mixed-clinical-scale-support");
+  assert.equal(policy.clinicalFacingScoresAllowed, false);
+  assert.equal(policy.anyClinicalScaleSupportAllowed, true);
+  assert.equal(policy.primaryClinicalScaleSupportCount, 2);
+  assert.equal(clinicalFacingScaleStatusEligible(status, "sunnybrook"), false);
+  assert.equal(scaleNounForClinicalScale(policy, "houseBrackmann"), "support value");
+  assert.equal(scaleNounForClinicalScale(policy, "sunnybrook"), "estimate");
+  assert.match(policy.shortNotice, /remaining values are Mirror estimates/);
 });
 
 test("clinical scale report rows and printable reports use the validation-aware estimate wording", () => {
@@ -122,6 +163,26 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalFacingScoresAllowed: true,
   }));
   assert.match(supportedRows[0], /House-Brackmann support value/);
+
+  const mixedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleMinimumStandard: { minReviewedAssessments: 30 },
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: { clinicalFacingScoresAllowed: true },
+      sunnybrook: { clinicalFacingScoresAllowed: false },
+      eface: { clinicalFacingScoresAllowed: true },
+    },
+  }));
+  assert.match(mixedRows[0], /House-Brackmann support value/);
+  assert.match(mixedRows[1], /Sunnybrook estimate/);
+  assert.match(mixedRows[2], /eFACE-style support value/);
 
   const html = buildSessionReportHtml({
     kind: "assessment",

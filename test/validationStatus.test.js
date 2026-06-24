@@ -29,6 +29,11 @@ const BASE_STATUS = {
   thresholdCalibrationReports: [],
   productionThresholdConstantsCalibrated: false,
   clinicalFacingScoresAllowed: false,
+  clinicalScaleAvailability: {
+    houseBrackmann: { clinicalFacingScoresAllowed: false },
+    sunnybrook: { clinicalFacingScoresAllowed: false },
+    eface: { clinicalFacingScoresAllowed: false },
+  },
 };
 
 function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales = 3, representedSeverityBands = 3 } = {}) {
@@ -198,6 +203,7 @@ function artifactReader(artifacts) {
 test("validation status accepts explicit unvalidated tooling-ready state", () => {
   const status = validateStatus(BASE_STATUS);
   assert.equal(status.status, "tooling-ready-needs-reviewed-data");
+  assert.equal(status.clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
 });
 
 test("validation status accepts documented reviewed calibration state", () => {
@@ -591,6 +597,20 @@ test("validation status rejects clinical-facing scores without reviewed coverage
       clinicalFacingScoresAllowed: true,
     }),
     /calibrated production thresholds/,
+  );
+});
+
+test("validation status rejects per-scale clinical availability without the global clinical gate", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleAvailability: {
+        houseBrackmann: { clinicalFacingScoresAllowed: true },
+        sunnybrook: { clinicalFacingScoresAllowed: false },
+        eface: { clinicalFacingScoresAllowed: false },
+      },
+    }),
+    /clinicalScaleAvailability\.houseBrackmann\.clinicalFacingScoresAllowed requires clinicalFacingScoresAllowed true/,
   );
 });
 

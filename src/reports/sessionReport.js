@@ -1,6 +1,6 @@
 import { COMFORT_DOSING } from "../domain/config";
 import { summarizeAssessmentSession } from "../domain/assessment";
-import { clinicalScalePresentationPolicy } from "../domain/clinicalScalePresentation";
+import { clinicalScalePresentationPolicy, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
 import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel, progressUsesLegacySideConvention } from "../ml/faceMetrics";
@@ -65,11 +65,10 @@ function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScaleP
     return [`Clinical scale estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
   }
   const scales = clinicalScales.scales ?? {};
-  const scaleNoun = presentation.scaleNoun;
   return [
-    scales.houseBrackmann ? `House-Brackmann ${scaleNoun}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
-    scales.sunnybrook ? `Sunnybrook ${scaleNoun}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
-    scales.eface ? `eFACE-style ${scaleNoun}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
+    scales.houseBrackmann ? `House-Brackmann ${scaleNounForClinicalScale(presentation, "houseBrackmann")}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
+    scales.sunnybrook ? `Sunnybrook ${scaleNounForClinicalScale(presentation, "sunnybrook")}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
+    scales.eface ? `eFACE-style ${scaleNounForClinicalScale(presentation, "eface")}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
     `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
     clinicalScales.evidence?.label ? `Evidence tier: ${clinicalScales.evidence.label}.` : null,
   ].filter(Boolean);

@@ -22,6 +22,17 @@
   "thresholdCalibrationReports": [],
   "productionThresholdConstantsCalibrated": false,
   "clinicalFacingScoresAllowed": false,
+  "clinicalScaleAvailability": {
+    "houseBrackmann": {
+      "clinicalFacingScoresAllowed": false
+    },
+    "sunnybrook": {
+      "clinicalFacingScoresAllowed": false
+    },
+    "eface": {
+      "clinicalFacingScoresAllowed": false
+    }
+  },
   "notes": [
     "Validation export, label-sheet, merge, frame evaluation, clinical-scale agreement evaluation, threshold calibration, and model-readiness report tooling are implemented.",
     "No clinician-reviewed validation dataset is committed in this repository.",
