@@ -44,6 +44,7 @@ Routes:
 - [Development guide](docs/development.md)
 - [Architecture and project map](docs/architecture.md)
 - [Model and scoring](docs/model-and-scoring.md)
+- [Feature and algorithm upgrade roadmap](docs/algorithm-upgrade-roadmap.md)
 - [Privacy and medical notes](docs/privacy-and-medical.md)
 
 ## License

@@ -1,9 +1,10 @@
 import { EXERCISE_BY_ID } from "./exercises";
 import { MOVEMENT_SIDE_CONVENTION, progressUsesLegacySideConvention, roundMetric } from "../ml/faceMetrics";
 
-const PERSONAL_RECOVERY_MODEL_VERSION = 1;
+const PERSONAL_RECOVERY_MODEL_VERSION = 2;
 const PERSONAL_MODEL_MIN_SAMPLES = 5;
 const PERSONAL_MODEL_MIN_DATES = 3;
+const PERSONAL_MODEL_MAX_SAMPLE_WEIGHT = 1.25;
 const DAY_MS = 1000 * 60 * 60 * 24;
 const RECENT_WINDOW_DAYS = 14;
 
@@ -83,15 +84,25 @@ function scoreOnlyHasLegacyProgress(score) {
 
 function sampleWeight(session, score, progress, profileExercise) {
   let weight = 1;
+  if (session?.kind === "assessment") weight *= 1.2;
+  else if (session?.kind === "practice") weight *= 0.75;
   const features = score?.movementFeatures;
+  const captureQuality = score?.captureQuality ?? session?.captureQuality;
   const validFrames = features?.validScoredFrameCount ?? progress?.reps ?? score?.scores?.length;
   if (Number.isFinite(validFrames) && validFrames < 8) weight *= 0.55;
   if (Number.isFinite(features?.alignedFrameRatio) && features.alignedFrameRatio < 0.7) weight *= 0.6;
+  if (captureQuality?.key === "unscored") weight *= 0.25;
+  else if (captureQuality?.key === "weak") weight *= 0.45;
+  else if (captureQuality?.key === "usable") weight *= 0.85;
+  const coactivationRisk = features?.coactivation?.risk ?? score?.coactivation?.risk;
+  if (coactivationRisk === "high") weight *= 0.75;
+  else if (coactivationRisk === "medium") weight *= 0.9;
+  const reliableThreshold = features?.profileThreshold ?? features?.thresholdBands?.reliableMovement;
   if (
     Number.isFinite(features?.activationPeak)
-    && Number.isFinite(features?.profileThreshold)
-    && features.profileThreshold > 0
-    && features.activationPeak < features.profileThreshold
+    && Number.isFinite(reliableThreshold)
+    && reliableThreshold > 0
+    && features.activationPeak < reliableThreshold
   ) {
     weight *= 0.5;
   }
@@ -100,7 +111,7 @@ function sampleWeight(session, score, progress, profileExercise) {
   else if (scoringMode === "soft") weight *= 0.85;
   if (profileExercise?.quality?.key === "retake") weight *= 0.65;
   if (profileExercise?.quality?.key === "usable") weight *= 0.9;
-  return Math.max(0.05, Math.min(1, weight));
+  return Math.max(0.05, Math.min(PERSONAL_MODEL_MAX_SAMPLE_WEIGHT, weight));
 }
 
 function samplesFromSessions(sessions = [], movementProfile = null) {
@@ -209,6 +220,32 @@ function confidenceForExercise({ sampleCount, dateCount, variability, medianWeig
   return "medium";
 }
 
+function uncertaintyHalfWidth({ sampleCount, dateCount, variability, medianWeight, confidence }) {
+  if (confidence === "collecting") return null;
+  const variabilityBand = Number.isFinite(variability) ? variability * 1.35 : 0.16;
+  const samplePenalty = Math.max(0, PERSONAL_MODEL_MIN_SAMPLES / Math.max(1, sampleCount) - 0.5) * 0.1;
+  const datePenalty = Math.max(0, PERSONAL_MODEL_MIN_DATES / Math.max(1, dateCount) - 0.5) * 0.08;
+  const weightPenalty = Math.max(0, 1 - (medianWeight ?? 0)) * 0.22;
+  const confidencePenalty = confidence === "low" ? 0.08 : confidence === "medium" ? 0.035 : 0.015;
+  return Math.min(0.65, Math.max(0.04, variabilityBand + samplePenalty + datePenalty + weightPenalty + confidencePenalty));
+}
+
+function trendStatusForExercise({ confidence, trendSlopePctPerWeek, medianWeight }) {
+  if (confidence === "collecting") return "collecting";
+  if ((medianWeight ?? 0) < 0.55) return "worse-capture-quality";
+  if (confidence === "low") return "low-confidence";
+  if (Number.isFinite(trendSlopePctPerWeek) && trendSlopePctPerWeek > 2.5) return "improving";
+  return "stable";
+}
+
+function normalizedTrendStatus(entry, confidence) {
+  if (["collecting", "low-confidence", "stable", "improving", "worse-capture-quality"].includes(entry.trendStatus)) return entry.trendStatus;
+  if (confidence === "collecting") return "collecting";
+  if (confidence === "low") return "low-confidence";
+  if (Number.isFinite(entry.trendSlopePctPerWeek) && entry.trendSlopePctPerWeek > 2.5) return "improving";
+  return "stable";
+}
+
 function modelStatusFromEntries(entries) {
   const confidences = Object.values(entries).map((entry) => entry.confidence);
   if (!confidences.length || confidences.every((value) => value === "collecting")) return "collecting";
@@ -243,6 +280,14 @@ function trainExerciseModel(exerciseId, samples, now) {
     variability,
     medianWeight,
   });
+  const uncertainty = uncertaintyHalfWidth({
+    sampleCount: samples.length,
+    dateCount: dateKeys.size,
+    variability,
+    medianWeight,
+    confidence,
+  });
+  const trendStatus = trendStatusForExercise({ confidence, trendSlopePctPerWeek, medianWeight });
   // currentRatio is "stale" when the 14-day window was too sparse to fill (so it
   // fell back to the latest calendar date) and that latest sample is itself older
   // than the window relative to training time — i.e. the figure predates the window.
@@ -262,7 +307,11 @@ function trainExerciseModel(exerciseId, samples, now) {
     currentBalanceRatio: roundMetric(currentBalanceRatio),
     trendSlopePctPerWeek: roundMetric(trendSlopePctPerWeek, 2),
     variability: roundMetric(variability),
+    uncertaintyHalfWidth: roundMetric(uncertainty),
+    currentRatioLow: currentRatio != null && uncertainty != null ? roundMetric(Math.max(0, currentRatio - uncertainty)) : null,
+    currentRatioHigh: currentRatio != null && uncertainty != null ? roundMetric(currentRatio + uncertainty) : null,
     confidence,
+    trendStatus,
     currentRatioAsOf: dateKeyForSample(samples.at(-1)),
     isCurrentStale,
     lastUpdatedAt: now,
@@ -293,6 +342,7 @@ function normalizePersonalRecoveryModel(model) {
   const exercises = {};
   for (const [exerciseId, entry] of Object.entries(model.exercises ?? {})) {
     if (!EXERCISE_BY_ID.has(exerciseId)) continue;
+    const confidence = ["collecting", "low", "medium", "high"].includes(entry.confidence) ? entry.confidence : "collecting";
     exercises[exerciseId] = {
       exerciseId,
       sideConvention: entry.sideConvention ?? MOVEMENT_SIDE_CONVENTION,
@@ -304,7 +354,11 @@ function normalizePersonalRecoveryModel(model) {
       currentBalanceRatio: roundMetric(entry.currentBalanceRatio),
       trendSlopePctPerWeek: roundMetric(entry.trendSlopePctPerWeek, 2),
       variability: roundMetric(entry.variability),
-      confidence: ["collecting", "low", "medium", "high"].includes(entry.confidence) ? entry.confidence : "collecting",
+      uncertaintyHalfWidth: roundMetric(entry.uncertaintyHalfWidth),
+      currentRatioLow: roundMetric(entry.currentRatioLow),
+      currentRatioHigh: roundMetric(entry.currentRatioHigh),
+      confidence,
+      trendStatus: normalizedTrendStatus(entry, confidence),
       currentRatioAsOf: typeof entry.currentRatioAsOf === "string" ? entry.currentRatioAsOf : null,
       isCurrentStale: entry.isCurrentStale === true,
       lastUpdatedAt: entry.lastUpdatedAt ?? model.trainedAt ?? null,

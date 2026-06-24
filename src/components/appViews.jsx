@@ -2,8 +2,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Home, Sparkles, BookOpen, TrendingUp, Play, X, ChevronLeft, ChevronRight, Eye, Flame, Check, Heart, Info, ArrowRight, Loader2, Volume2, VolumeX, Zap, AlertCircle, Share2, Trash2, Save, RotateCcw, Plus, Minus, Download, Upload } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
+import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC, summarizeAssessmentSession } from "../domain/assessment";
+import { clinicalScaleInputCompletenessSummaries, clinicalScaleInputGapSummaries, clinicalScaleMovementLabels, clinicalScaleRestingEvidenceSummary } from "../domain/clinicalScales";
+import { clinicalScalePresentationPolicy, compactClinicalScaleValueLabel, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
+import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
+import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { applySessionDose, buildSessionExercises, clampNumber, daysBetween, exerciseHoldSec, exercisePlannedSec, formatClock, getComfortDosing, isCountedSession, nextSessionAt, spreadRepeatedExercises, todayISO } from "../domain/session";
 import { formatDuration, formatSessionDate, shareSessionReport } from "../reports/sessionReport";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
@@ -96,6 +101,56 @@ function progressSummaryLabel(progress) {
 
 function progressSideLabel(progress) {
   return progress?.affectedProgressRatio != null ? "affected" : progress?.side;
+}
+
+function clinicalScaleEstimateCards(scales, presentation, inputNotesByScale = {}) {
+  if (!scales) return [];
+  return [
+    scales.houseBrackmann ? {
+      key: "houseBrackmann",
+      label: "House-Brackmann-inspired",
+      value: `Grade ${scales.houseBrackmann.grade}`,
+      sublabel: scales.houseBrackmann.label,
+      statusLabel: scaleNounForClinicalScale(presentation, "houseBrackmann"),
+    } : null,
+    scales.sunnybrook ? {
+      key: "sunnybrook",
+      label: "Sunnybrook-style",
+      value: `${Math.round(scales.sunnybrook.compositeScore)}/100`,
+      sublabel: `${scales.sunnybrook.voluntaryMovementScore} vol - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synk${inputNotesByScale.sunnybrook ? ` · ${inputNotesByScale.sunnybrook}` : ""}`,
+      statusLabel: scaleNounForClinicalScale(presentation, "sunnybrook"),
+    } : null,
+    scales.eface ? {
+      key: "eface",
+      label: "eFACE-style",
+      value: `${Math.round(scales.eface.totalScore)}/100`,
+      sublabel: `${Math.round(scales.eface.staticScore)} static · ${Math.round(scales.eface.dynamicScore)} dynamic · ${Math.round(scales.eface.synkinesisScore)} synk${inputNotesByScale.eface ? ` · ${inputNotesByScale.eface}` : ""}`,
+      statusLabel: scaleNounForClinicalScale(presentation, "eface"),
+    } : null,
+  ].filter(Boolean);
+}
+
+function omittedClinicalScaleMovementLabels(clinicalScales) {
+  const ids = clinicalScales?.evidence?.omittedMovementExerciseIds ?? clinicalScales?.coverage?.unusableExerciseIds ?? [];
+  return clinicalScaleMovementLabels(ids);
+}
+
+function sourceSessionForAssessment(assessment, sessions = []) {
+  if (!assessment) return null;
+  return sessions.find((session) => (
+    (assessment.sourceSessionId && session.id === assessment.sourceSessionId)
+    || (assessment.sourceSessionTs && session.ts === assessment.sourceSessionTs)
+  )) ?? null;
+}
+
+function assessmentWithClinicalScaleFallback(assessment, sourceSession) {
+  if (!assessment || assessment.clinicalScales) return assessment ?? null;
+  if (!sourceSession) return assessment;
+  const sourceSummary = summarizeAssessmentSession(sourceSession);
+  return {
+    ...assessment,
+    clinicalScales: sourceSummary.clinicalScales ?? null,
+  };
 }
 
 function clampJournalRating(value) {
@@ -266,7 +321,7 @@ function BaselineManagerPanel({ profile, onRedo, onReset }) {
   );
 }
 
-function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onStartProfile, onStartSession, onGo, onResetPersonalPlan }) {
+function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onStartProfile, onStartSession, onStartAssessment, onGo, onResetPersonalPlan }) {
   // Home is a derived dashboard: it summarizes today's stored records and maps the
   // configured daily goal into the next practice prompt.
   const todaysSessions = data.sessions.filter((s) => s.date === todayISO());
@@ -292,6 +347,16 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
     [planSessionExercises]
   );
   const planTargetRepCount = planSessionExercises.reduce((sum, ex) => sum + (ex.reps ?? 0), 0);
+  const assessmentExercises = STANDARD_ASSESSMENT_EXERCISE_IDS.map((id) => EXERCISES.find((exercise) => exercise.id === id)).filter(Boolean);
+  const assessmentDurationSec = assessmentExercises.reduce((sum, exercise) => sum + STANDARD_ASSESSMENT_REPS * exercise.holdSec + (STANDARD_ASSESSMENT_REPS + 1) * STANDARD_ASSESSMENT_REST_SEC, 0)
+    + Math.max(0, assessmentExercises.length - 1) * INTERSTITIAL_SEC;
+  const latestAssessmentRaw = [...(data.assessments ?? [])].sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))[0] ?? null;
+  const latestAssessment = assessmentWithClinicalScaleFallback(latestAssessmentRaw, sourceSessionForAssessment(latestAssessmentRaw, data.sessions));
+  const latestAssessmentDate = latestAssessment?.date ? formatSessionDate(latestAssessment) : null;
+  const showClinicalScaleEstimates = data.prefs?.clinicalScaleEstimatesEnabled !== false;
+  const latestClinicalScales = showClinicalScaleEstimates && latestAssessment?.clinicalScales?.status === "estimated" ? latestAssessment.clinicalScales.scales : null;
+  const clinicalScalePolicy = clinicalScalePresentationPolicy();
+  const latestClinicalLabel = compactClinicalScaleValueLabel(latestClinicalScales, clinicalScalePolicy);
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -422,6 +487,32 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
           )}
         </div>
       )}
+      <div className="rounded-2xl p-4" style={{ background: "rgba(255,255,255,0.56)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <div className="text-sm font-semibold">Standard assessment</div>
+            <div className="text-xs text-stone-500 mt-0.5">{assessmentExercises.length} movements · {STANDARD_ASSESSMENT_REPS} reps each · ~{formatDuration(assessmentDurationSec)}</div>
+          </div>
+          {latestAssessment && (
+            <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ background: "rgba(122,143,115,0.16)", color: "#4A6B47" }}>
+              {latestClinicalLabel ?? (latestAssessment.averageVoluntaryMovement != null ? `${Math.round(latestAssessment.averageVoluntaryMovement * 100)}%` : "saved")}
+            </div>
+          )}
+        </div>
+        <div className="grid grid-cols-5 gap-1.5 mb-3">
+          {assessmentExercises.map((exercise) => (
+            <div key={exercise.id} title={exercise.name} className="rounded-xl py-2 flex items-center justify-center" style={{ background: "rgba(31,27,22,0.04)" }}>
+              <ExerciseGlyph exercise={exercise} size="xs" />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={onStartAssessment} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
+            <Play className="w-3.5 h-3.5 fill-current" />Start assessment
+          </button>
+          {latestAssessmentDate && <div className="text-xs text-stone-500">Last: {latestAssessmentDate}</div>}
+        </div>
+      </div>
       <div className="grid grid-cols-3 gap-3">
         <StatCard label="Streak" value={streak} unit={streak === 1 ? "day" : "days"} />
         <StatCard label="Today's symmetry" value={todaysAvgSymmetry != null ? `${displayPct(todaysAvgSymmetry)}` : "—"} unit={todaysAvgSymmetry != null ? "%" : "no data"} />
@@ -684,7 +775,7 @@ function LiveExercisePreview({ exerciseId, stream, faceLandmarker, mirrorEnabled
     let raf = 0;
     let alive = true;
     let lastTs = 0;
-    const tick = () => {
+    const tick = async () => {
       if (!alive) return;
       const v = videoRef.current;
       const c = canvasRef.current;
@@ -693,7 +784,8 @@ function LiveExercisePreview({ exerciseId, stream, faceLandmarker, mirrorEnabled
         try {
           const ts = Math.max(lastTs + 1, performance.now());
           lastTs = ts;
-          const result = faceLandmarker.detectForVideo(v, ts);
+          const result = await faceLandmarker.detectForVideo(v, ts);
+          if (!alive) return;
           lm = result?.faceLandmarks?.[0] ?? null;
         } catch {
           // Detection is best-effort; transient frame errors should not break preview.
@@ -1410,9 +1502,212 @@ function InterstitialView({ just, nextExercise, secondsLeft, exIdx, totalExercis
   );
 }
 
+function qualityColor(key) {
+  if (key === "strong") return "#A8C39F";
+  if (key === "usable") return "#D4A574";
+  if (key === "weak") return "#FFB48F";
+  return "#A8A29E";
+}
+
+function coactivationColor(risk) {
+  if (risk === "high") return "#FFB48F";
+  if (risk === "medium") return "#D4A574";
+  return "#A8C39F";
+}
+
+function trendStatusLabel(status) {
+  const labels = {
+    collecting: "collecting",
+    "low-confidence": "low confidence",
+    stable: "stable",
+    improving: "improving",
+    "worse-capture-quality": "worse capture quality",
+  };
+  return labels[status] ?? status ?? "collecting";
+}
+
+function percentLabel(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : null;
+}
+
+function JournalSafetyPromptCard({ prompts }) {
+  if (!prompts?.length) return null;
+  return (
+    <div className="rounded-2xl p-4" style={{ background: "rgba(184, 84, 58, 0.08)", border: "1px solid rgba(184, 84, 58, 0.16)" }}>
+      <div className="flex items-start gap-2 mb-3">
+        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#B8543A" }} />
+        <div>
+          <div className="text-sm font-semibold">Safety notes</div>
+          <div className="text-xs text-stone-600">From recent journal entries</div>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {prompts.map((item) => (
+          <div key={item.id} className="text-xs leading-relaxed flex items-start gap-2" style={{ color: item.severity === "urgent" ? "#8F3A25" : "#5E4A39" }}>
+            <span className="mt-1 h-1.5 w-1.5 rounded-full shrink-0" style={{ background: item.severity === "urgent" ? "#B8543A" : "#D4A574" }} />
+            <span>{item.prompt}{item.entryCount > 1 ? ` (${item.entryCount} entries)` : ""}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SessionDiagnosticsPanel({ diagnostics }) {
+  if (!diagnostics?.hasDiagnostics) return null;
+  const quality = diagnostics.captureQuality;
+  const setupQuality = diagnostics.setupQuality;
+  const validRatio = percentLabel(quality?.validFrameRatio);
+  const rejectedRatio = percentLabel(quality?.rejectionRatio);
+  const coactivation = diagnostics.coactivation;
+  const showCoactivation = coactivation && coactivation.risk !== "low";
+  return (
+    <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(244, 239, 230, 0.06)", border: "1px solid rgba(244, 239, 230, 0.1)" }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">Scoring diagnostics</div>
+          {diagnostics.scoringModelVersion && <div className="text-[10px] opacity-45 mt-0.5">Model v{diagnostics.scoringModelVersion}</div>}
+        </div>
+        {quality && (
+          <div className="rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider shrink-0" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>
+            {quality.label ?? quality.key}
+          </div>
+        )}
+      </div>
+      {quality && (
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div>
+            <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{validRatio ?? "--"}</div>
+            <div className="text-[10px] uppercase tracking-wider opacity-50">valid frames</div>
+          </div>
+          <div>
+            <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{quality.rejectedFrameCount ?? 0}</div>
+            <div className="text-[10px] uppercase tracking-wider opacity-50">{rejectedRatio ? `${rejectedRatio} rejected` : "rejected"}</div>
+          </div>
+          <div>
+            <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{quality.observedFrameCount ?? 0}</div>
+            <div className="text-[10px] uppercase tracking-wider opacity-50">observed</div>
+          </div>
+        </div>
+      )}
+      {diagnostics.captureQualityNote && <div className="text-xs leading-relaxed opacity-70 mb-3">{diagnostics.captureQualityNote}</div>}
+      {setupQuality && (
+        <div className="rounded-xl px-3 py-2 mb-3" style={{ background: `${qualityColor(setupQuality.key)}1F`, color: qualityColor(setupQuality.key) }}>
+          <div className="text-xs font-semibold">Setup: {setupQuality.label ?? setupQuality.key}</div>
+          {setupQuality.actionItems?.length > 0 && <div className="text-[11px] opacity-75 mt-0.5">{setupQuality.actionItems[0]}</div>}
+        </div>
+      )}
+      {diagnostics.topDropReasons.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {diagnostics.topDropReasons.map((item) => (
+            <span key={item.reason} className="rounded-full px-2 py-1 text-[10px] font-semibold" style={{ background: "rgba(244,239,230,0.08)", color: "#F4EFE6" }}>
+              {item.label} x{item.count}
+            </span>
+          ))}
+        </div>
+      )}
+      {showCoactivation && (
+        <div className="rounded-xl px-3 py-2 mb-3" style={{ background: "rgba(212, 165, 116, 0.12)", color: coactivationColor(coactivation.risk) }}>
+          <div className="text-xs font-semibold">Quiet-region movement: {coactivation.risk}</div>
+          {coactivation.regions?.length > 0 && <div className="text-[11px] opacity-75 mt-0.5">{coactivation.regions.slice(0, 2).map((item) => item.region).join(", ")}</div>}
+        </div>
+      )}
+      {diagnostics.safetyPrompts.length > 0 && (
+        <div className="space-y-1.5">
+          {diagnostics.safetyPrompts.map((prompt) => (
+            <div key={prompt} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: "#FFD3C1" }}>
+              <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />{prompt}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExerciseDiagnosticsLine({ diagnostics }) {
+  if (!diagnostics) return null;
+  const quality = diagnostics.captureQuality;
+  const coactivation = diagnostics.coactivation;
+  const coactivationPenalty = diagnostics.coactivationPenalty;
+  const chips = [];
+  if (quality) chips.push({ key: "quality", label: `Quality ${quality.label ?? quality.key}`, color: qualityColor(quality.key) });
+  if (diagnostics.topDropReasons?.[0]) chips.push({ key: "drop", label: `${diagnostics.topDropReasons[0].label} x${diagnostics.topDropReasons[0].count}`, color: "#D4A574" });
+  if (coactivation && coactivation.risk !== "low") chips.push({ key: "coactivation", label: `Quiet movement ${coactivation.risk}`, color: coactivationColor(coactivation.risk) });
+  if (coactivationPenalty) chips.push({ key: "coactivation-penalty", label: `Practice score -${coactivationPenalty.penaltyPct}%`, color: coactivationColor(coactivationPenalty.risk) });
+  if (!chips.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {chips.map((chip) => (
+        <span key={chip.key} className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: `${chip.color}1F`, color: chip.color }}>
+          {chip.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function ClinicalScaleEstimatePanel({ clinicalScales }) {
+  if (!clinicalScales) return null;
+  const presentation = clinicalScalePresentationPolicy();
+  const estimated = clinicalScales.status === "estimated";
+  const inputCompletenessSummaries = estimated ? clinicalScaleInputCompletenessSummaries(clinicalScales) : [];
+  const inputNotesByScale = Object.fromEntries(inputCompletenessSummaries.map((summary) => [summary.scaleKey, summary.shortLabel]));
+  const cards = estimated ? clinicalScaleEstimateCards(clinicalScales.scales, presentation, inputNotesByScale) : [];
+  const coverage = clinicalScales.coverage;
+  const omittedMovements = omittedClinicalScaleMovementLabels(clinicalScales);
+  const inputGaps = clinicalScaleInputGapSummaries(clinicalScales);
+  const restingEvidence = clinicalScaleRestingEvidenceSummary(clinicalScales);
+  return (
+    <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.24)" }}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">{presentation.panelTitle}</div>
+          <div className="text-sm font-semibold mt-1">{estimated ? presentation.availableLabel : presentation.unavailableLabel}</div>
+        </div>
+        <div className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider" style={{ background: estimated ? "rgba(122,143,115,0.24)" : "rgba(212,165,116,0.16)", color: estimated ? "#D9E5D2" : "#F6D8B2" }}>
+          {estimated ? presentation.badgeLabel : "No scale"}
+        </div>
+      </div>
+      {estimated ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {cards.map((card) => (
+            <div key={card.key} className="rounded-xl p-3" style={{ background: "rgba(244,239,230,0.06)", border: "1px solid rgba(244,239,230,0.08)" }}>
+              <div className="flex items-start justify-between gap-2 mb-1">
+                <div className="text-[10px] uppercase tracking-wider opacity-50">{card.label}</div>
+                <div className="text-[9px] uppercase tracking-wider opacity-50">{card.statusLabel}</div>
+              </div>
+              <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600 }}>{card.value}</div>
+              <div className="text-[11px] opacity-62 mt-1 leading-snug">{card.sublabel}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {(clinicalScales.reasons ?? ["insufficient assessment data"]).map((reason) => (
+            <div key={reason} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: "#F6D8B2" }}>
+              <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />{reason}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 text-[11px] leading-relaxed opacity-62">
+        {coverage ? `${coverage.usableMovementCount}/${coverage.requiredMovementCount} standard movements usable. ` : ""}
+        {restingEvidence ? `${restingEvidence.availableCount}/${restingEvidence.requiredCount} required resting metrics available. ` : ""}
+        {restingEvidence && !restingEvidence.complete ? `Missing resting metrics: ${restingEvidence.missingMetricLabels.join(", ")}. ` : ""}
+        {inputGaps.length ? `${inputGaps.map((gap) => gap.message).join(" ")} ` : ""}
+        {inputCompletenessSummaries.length ? `${inputCompletenessSummaries.map((summary) => summary.message).join(" ")} ` : ""}
+        {omittedMovements.length ? `Omitted from scale formulas: ${omittedMovements.join(", ")}. ` : ""}
+        {clinicalScales.evidence?.label ? `${clinicalScales.evidence.label}. ` : ""}
+        {presentation.shortNotice}
+      </div>
+    </div>
+  );
+}
+
 // Dual-mode: live mode receives `scores` (in-progress array) + `onFinish`; view mode
 // receives a saved `session` record + `onClose`. Both render the same comprehensive report.
-function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, kind, startedAt, comfortLevel, onFinish, session, onClose }) {
+function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, restingMetrics, kind, startedAt, comfortLevel, prefs = {}, onFinish, session, onClose }) {
   const isView = !!session;
   const scoresArr = isView ? (session.scores || []) : scores;
   const usableProgress = (progress) => progressUsesLegacySideConvention(progress) ? null : progress;
@@ -1422,7 +1717,8 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
   const sessionInitialMovement = isView ? usableProgress(session.initialMovementProgress) : initialMovementProgress;
   const effectiveKind = isView ? session.kind : kind;
   const isPractice = effectiveKind === "practice";
-  const nextFocus = sessionFocusRecommendation(scoresArr);
+  const isAssessment = effectiveKind === "assessment";
+  const nextFocus = isAssessment ? null : sessionFocusRecommendation(scoresArr);
   const nextFocusProgress = preferredMovementProgress(nextFocus) ?? preferredBaselineProgress(nextFocus);
   const overall = isView
     ? session.sessionAvg
@@ -1439,10 +1735,14 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
     initialBaselineProgress: sessionInitialBaseline,
     movementProgress: sessionMovement,
     initialMovementProgress: sessionInitialMovement,
+    ...(restingMetrics ? { restingMetrics } : {}),
     scores: scoresArr,
     comfortLevel,
     kind: effectiveKind,
   };
+  const assessmentSummary = isAssessment ? summarizeAssessmentSession(reportSession) : null;
+  const showClinicalScaleEstimates = prefs.clinicalScaleEstimatesEnabled !== false;
+  const diagnostics = summarizeSessionDiagnostics(reportSession);
   const overallPct = displayPct(overall);
   const [timelapse, setTimelapse] = useState(null); // { exerciseIdx, startIdx }
   const sessionN = (sessionsToday ?? 0) + 1;
@@ -1450,6 +1750,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
   const remainingAfter = Math.max(0, goal - sessionN);
   const nextSlot = remainingAfter > 0 ? nextSessionAt(goal, sessionN) : null;
   const message = (() => {
+    if (isAssessment) return "Assessment saved for comparison.";
     if (overall == null) return isView ? "Session recorded." : "Session done. Nicely steady work.";
     if (overall >= 0.85) return "Beautifully even today.";
     if (overall >= 0.7) return "Strong symmetric work.";
@@ -1465,7 +1766,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           <button onClick={onClose} className="self-start mb-4 w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "rgba(244, 239, 230, 0.1)" }} aria-label="Close report"><X className="w-5 h-5" /></button>
         )}
         <div className="text-center mb-8">
-          <div className="text-xs uppercase tracking-widest opacity-60 mb-2">{isView ? formatSessionDate(session) : isPractice ? "Practice complete" : "Session complete"}</div>
+          <div className="text-xs uppercase tracking-widest opacity-60 mb-2">{isView ? formatSessionDate(session) : isAssessment ? "Assessment complete" : isPractice ? "Practice complete" : "Session complete"}</div>
           <h2 className="text-3xl mb-3" style={{ fontFamily: "Fraunces", fontWeight: 500, letterSpacing: "-0.02em" }}>
             <em style={{ fontStyle: "italic", fontWeight: 400 }}>{message}</em>
           </h2>
@@ -1479,6 +1780,11 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
           {!isView && isPractice && (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)" }}>
               <span className="opacity-80">Practice run · doesn't count toward daily goal</span>
+            </div>
+          )}
+          {!isView && isAssessment && (
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs" style={{ background: "rgba(244,239,230,0.08)" }}>
+              <span className="opacity-80">Standard assessment · separate from daily practice</span>
             </div>
           )}
           {isView && session.duration != null && (
@@ -1516,6 +1822,8 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
             )}
           </div>
         )}
+        <SessionDiagnosticsPanel diagnostics={diagnostics} />
+        {isAssessment && showClinicalScaleEstimates && <ClinicalScaleEstimatePanel clinicalScales={assessmentSummary?.clinicalScales} />}
         {nextFocus && (
           <div className="rounded-2xl p-4 mb-6" style={{ background: "rgba(122,143,115,0.12)", border: "1px solid rgba(122,143,115,0.2)" }}>
             <div className="text-xs uppercase tracking-wider opacity-55 mb-2">Next focus</div>
@@ -1535,6 +1843,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
             const scoreInitialMovement = usableProgress(s.initialMovementProgress);
             const scoreBaseline = usableProgress(s.baselineProgress);
             const scoreInitialBaseline = usableProgress(s.initialBaselineProgress);
+            const scoreDiagnostics = diagnostics.exercises[exIdx];
             return (
               <div key={`${s.exerciseId}-${exIdx}`} className="rounded-2xl p-4" style={{ background: "rgba(244, 239, 230, 0.06)" }}>
               <div className="flex items-center gap-3">
@@ -1547,6 +1856,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
                   {scoreInitialMovement && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · affected side · {movementProgressLabel(scoreInitialMovement)}</div>}
                   {scoreInitialMovement && movementBalanceLabel(scoreInitialMovement) && <div className="text-xs mt-0.5 opacity-70">{movementBalanceLabel(scoreInitialMovement)}</div>}
                   {!scoreInitialMovement && scoreInitialBaseline && <div className="text-xs mt-0.5" style={{ color: "#A8C39F" }}>first · {scoreInitialBaseline.side} side · {baselineProgressLabel(scoreInitialBaseline)}</div>}
+                  <ExerciseDiagnosticsLine diagnostics={scoreDiagnostics} />
                 </div>
                 {s.avg != null ? <div className="text-xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color: scoreColor(s.avg) }}>{displayPct(s.avg)}%</div> : <div className="text-xs opacity-50">—</div>}
               </div>
@@ -1572,7 +1882,7 @@ function SessionSummary({ scores, sessionsToday, dailyGoal, baselineProgress, in
         <div className="text-xs opacity-60 leading-relaxed mb-6 px-2 text-center">Symmetry is auto-detected from facial landmarks. Some movement variation is normal even in healthy faces.</div>
         <div className="mt-auto space-y-3">
           <button
-            onClick={() => shareSessionReport(reportSession)}
+            onClick={() => shareSessionReport(reportSession, { includeClinicalScaleEstimates: showClinicalScaleEstimates })}
             className="w-full rounded-full py-3 font-medium flex items-center justify-center gap-2"
             style={{ background: "rgba(244, 239, 230, 0.1)", color: "#F4EFE6", border: "1px solid rgba(244, 239, 230, 0.18)" }}
           >
@@ -1590,6 +1900,8 @@ function PastSessionRow({ session, onOpen, onDelete }) {
   const [confirming, setConfirming] = useState(false);
   const exCount = (session.exercises ?? session.scores ?? []).length;
   const progress = preferredMovementProgress(session) ?? preferredBaselineProgress(session);
+  const diagnostics = summarizeSessionDiagnostics(session);
+  const quality = diagnostics.captureQuality;
   const canDelete = typeof onDelete === "function";
   return (
     <div className="rounded-xl px-3 py-2.5 flex items-center gap-3 transition hover:bg-white" style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}>
@@ -1599,6 +1911,7 @@ function PastSessionRow({ session, onOpen, onDelete }) {
           <div className="text-sm flex items-center gap-2">
             <span>{exCount} exercise{exCount !== 1 ? "s" : ""}</span>
             {session.kind === "practice" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: "rgba(184, 84, 58, 0.12)", color: "#B8543A" }}>Practice</span>}
+            {quality && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>{quality.label}</span>}
           </div>
           <div className="text-xs text-stone-500 tabular-nums">{formatDuration(session.duration)}{progress ? ` · ${progressSummaryLabel(progress)}` : ""}</div>
         </div>
@@ -1632,6 +1945,57 @@ function PastSessionsList({ sessions, onOpen, onDelete }) {
         {sorted.map((s) => {
           const exCount = (s.exercises ?? s.scores ?? []).length;
           return <PastSessionRow key={s.id || s.ts || `${s.date}-${exCount}`} session={s} onOpen={onOpen} onDelete={onDelete} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PastAssessmentRow({ assessment, sourceSession, onOpen, showClinicalScaleEstimates = true }) {
+  const displayAssessment = assessmentWithClinicalScaleFallback(assessment, sourceSession);
+  const zones = displayAssessment.zones ?? [];
+  const quality = displayAssessment.captureQuality;
+  const coactivation = displayAssessment.coactivationRisk;
+  const restingAsymmetry = displayAssessment.resting?.averageAsymmetryRatio;
+  const clinicalScales = showClinicalScaleEstimates && displayAssessment.clinicalScales?.status === "estimated" ? displayAssessment.clinicalScales.scales : null;
+  const clinicalLabel = compactClinicalScaleValueLabel(clinicalScales, clinicalScalePresentationPolicy());
+  return (
+    <button
+      onClick={() => sourceSession && onOpen?.(sourceSession)}
+      disabled={!sourceSession}
+      className="w-full rounded-xl px-3 py-2.5 flex items-center gap-3 text-left disabled:opacity-70"
+      style={{ background: "rgba(255,255,255,0.4)", border: "1px solid rgba(31, 27, 22, 0.04)" }}
+    >
+      <div className="text-xs text-stone-500 tabular-nums w-28 shrink-0">{formatSessionDate(assessment)}</div>
+      <div className="flex-1 min-w-0">
+        <div className="text-sm flex items-center gap-2">
+          <span>{zones.length} zone{zones.length !== 1 ? "s" : ""}</span>
+          {quality && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${qualityColor(quality.key)}22`, color: qualityColor(quality.key) }}>{quality.label ?? quality.key}</span>}
+          {coactivation && coactivation !== "low" && <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded" style={{ background: `${coactivationColor(coactivation)}22`, color: coactivationColor(coactivation) }}>quiet {coactivation}</span>}
+        </div>
+        <div className="text-xs text-stone-500">
+          {[
+            displayAssessment.averageVoluntaryMovement != null ? `${Math.round(displayAssessment.averageVoluntaryMovement * 100)}% voluntary movement` : "assessment saved",
+            Number.isFinite(restingAsymmetry) ? `${Math.round(restingAsymmetry * 100)}% rest asymmetry` : null,
+            clinicalLabel,
+          ].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+      {sourceSession ? <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" /> : <div className="text-xs text-stone-400 shrink-0">record only</div>}
+    </button>
+  );
+}
+
+function PastAssessmentsList({ assessments, sessions, onOpen, showClinicalScaleEstimates = true }) {
+  const sorted = [...(assessments ?? [])].sort((a, b) => (b.ts || 0) - (a.ts || 0)).slice(0, 12);
+  if (!sorted.length) return null;
+  return (
+    <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+      <div className="text-sm font-semibold mb-3">Past assessments</div>
+      <div className="space-y-1.5">
+        {sorted.map((assessment) => {
+          const sourceSession = sourceSessionForAssessment(assessment, sessions);
+          return <PastAssessmentRow key={assessment.sourceSessionId ?? assessment.sourceSessionTs ?? assessment.ts} assessment={assessment} sourceSession={sourceSession} onOpen={onOpen} showClinicalScaleEstimates={showClinicalScaleEstimates} />;
         })}
       </div>
     </div>
@@ -1868,10 +2232,14 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
           )}
         </div>
       )}
-      <div className="grid grid-cols-3 gap-2 mb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
           <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Profile</div>
           <div className="text-sm font-semibold tabular-nums">v{profile.version ?? "—"}</div>
+        </div>
+        <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
+          <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Setup</div>
+          <div className="text-sm font-semibold truncate" style={{ color: qualityColor(profile.setupQuality?.key) }}>{profile.setupQuality?.label ?? profile.setupQuality?.key ?? "—"}</div>
         </div>
         <div className="rounded-2xl p-3" style={{ background: "rgba(244,239,230,0.06)" }}>
           <div className="text-[10px] uppercase tracking-wider opacity-45 mb-1">Noise</div>
@@ -1915,7 +2283,7 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
               </div>
             ))}
             {comparison.noiseDelta != null && (
-              <div className="text-[11px] opacity-60">Calibration noise {comparison.noiseDelta <= 0 ? "decreased" : "increased"} by {Math.abs(comparison.noiseDelta).toFixed(5)}</div>
+              <div className="text-[11px] opacity-60">{comparison.noiseLabel ?? "Calibration noise"} {comparison.noiseDelta <= 0 ? "decreased" : "increased"} by {Math.abs(comparison.noiseDelta).toFixed(5)}</div>
             )}
           </div>
         </div>
@@ -1942,7 +2310,9 @@ function MovementProfileCard({ profile, initialProfile, history, sessions, progr
             <ExerciseGlyph exerciseId={ex.exerciseId} region={ex.region} size="xs" tone="dark" />
             <div className="flex-1 min-w-0">
               <div className="font-medium truncate">{ex.name}</div>
-              <div className="opacity-55">limited side: {ex.limitedSide} · threshold {ex.activationThreshold ?? "—"}</div>
+              <div className="opacity-55">
+                limited side: {ex.limitedSide} · reliable {ex.thresholdBands?.reliableMovement ?? ex.activationThreshold ?? "—"} · target {ex.thresholdBands?.baselineTarget ?? "—"}
+              </div>
               {ex.quality && <div className="opacity-55">quality: {ex.quality.label}{ex.quality.issues?.length ? ` · ${ex.quality.issues.join(", ")}` : ""}</div>}
               {progressByExercise?.[ex.exerciseId] && <div className="mt-0.5" style={{ color: "#D4A574" }}>{progressSummaryLabel(progressByExercise[ex.exerciseId])}</div>}
             </div>
@@ -2004,12 +2374,15 @@ function BaselineView({ data, onStartProfile, onResetBaselines }) {
   );
 }
 
-function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onExportData, onImportData }) {
+function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, onSetPref, onOpenReport, onDeleteSession, onExportData, onExportClinicianBundle, onExportValidationDataset, onImportData }) {
   // Progress charts are projections of journal/session history. Keeping them derived
   // avoids migration work when scoring or display rules change.
-  const totalSessions = data.sessions.length;
-  const last7DaysSessions = data.sessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
+  const practiceSessions = useMemo(() => data.sessions.filter((session) => session.kind !== "assessment"), [data.sessions]);
+  const assessments = useMemo(() => data.assessments ?? [], [data.assessments]);
+  const totalSessions = practiceSessions.length;
+  const last7DaysSessions = practiceSessions.filter((s) => { const days = daysBetween(s.date, todayISO()); return days >= 0 && days < 7; }).length;
   const personalModelDisabled = prefs.personalModelEnabled === false;
+  const showClinicalScaleEstimates = prefs.clinicalScaleEstimatesEnabled !== false;
   const personalModel = personalModelDisabled ? null : data.personalRecoveryModel;
   const personalModelEntries = Object.values(personalModel?.exercises ?? {}).filter((entry) => entry.currentRatio != null);
   const trainedEntries = personalModelEntries.filter((entry) => entry.confidence !== "collecting");
@@ -2020,24 +2393,26 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
   const modelStatus = personalModelDisabled ? "disabled" : personalModel?.status ?? "collecting";
   const modelStatusColor = modelStatus === "high" ? "#7A8F73" : modelStatus === "medium" ? "#6E7F59" : modelStatus === "low" ? "#D4A574" : modelStatus === "disabled" ? "#A8A29E" : "#A8A29E";
   const journalChartData = useMemo(() => data.journal.length === 0 ? [] : data.journal.slice(-21).map((j) => ({ date: new Date(j.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), symmetry: j.symmetry })), [data.journal]);
-  const aiSymmetryData = useMemo(() => data.sessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [data.sessions]);
-  const baselineProgressData = useMemo(() => data.sessions.map((s) => {
+  const aiSymmetryData = useMemo(() => practiceSessions.filter((s) => s.sessionAvg != null).slice(-21).map((s) => ({ date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: displayPct(s.sessionAvg) })), [practiceSessions]);
+  const assessmentTrendData = useMemo(() => assessments.filter((assessment) => assessment.averageVoluntaryMovement != null).slice(-21).map((assessment) => ({ date: new Date(assessment.date ?? assessment.ts).toLocaleDateString(undefined, { month: "short", day: "numeric" }), score: Math.round(assessment.averageVoluntaryMovement * 100) })), [assessments]);
+  const journalSafetyPrompts = useMemo(() => summarizeJournalSafetyPrompts(data.journal), [data.journal]);
+  const baselineProgressData = useMemo(() => practiceSessions.map((s) => {
     const progress = preferredMovementProgress(s) ?? preferredBaselineProgress(s);
     const ratio = progress?.affectedProgressRatio ?? progress?.ratio;
     return ratio == null ? null : { date: new Date(s.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }), progress: Math.round(ratio * 100) };
-  }).filter(Boolean).slice(-21), [data.sessions]);
+  }).filter(Boolean).slice(-21), [practiceSessions]);
   const activityGrid = useMemo(() => {
     const today = new Date(); const grid = [];
     for (let i = 13; i >= 0; i--) {
       const d = new Date(today); d.setDate(d.getDate() - i);
       const iso = d.toISOString().split("T")[0];
-      const daySessions = data.sessions.filter((s) => s.date === iso);
+      const daySessions = practiceSessions.filter((s) => s.date === iso);
       const symAvgs = daySessions.map((s) => s.sessionAvg).filter((v) => v != null);
       const dayAvg = symAvgs.length > 0 ? symAvgs.reduce((a, b) => a + b, 0) / symAvgs.length : null;
       grid.push({ date: iso, count: daySessions.length, avg: dayAvg });
     }
     return grid;
-  }, [data.sessions]);
+  }, [practiceSessions]);
 
   return (
     <div className="space-y-6">
@@ -2050,6 +2425,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
         <StatCard label="Last 7 days" value={last7DaysSessions} unit="sessions" />
         <StatCard label="All time" value={totalSessions} unit="sessions" />
       </div>
+      <JournalSafetyPromptCard prompts={journalSafetyPrompts} />
       <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
@@ -2081,6 +2457,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
               const trend = item.trendSlopePctPerWeek;
               const trendLabel = trend == null ? "trend collecting" : `${trend >= 0 ? "+" : ""}${Math.round(trend)} pts/week`;
               const detailParts = [`${Math.round((item.currentRatio ?? 0) * 100)}% of first baseline`];
+              if (item.currentRatioLow != null && item.currentRatioHigh != null) detailParts.push(`range ${Math.round(item.currentRatioLow * 100)}-${Math.round(item.currentRatioHigh * 100)}%`);
               if (item.currentBalanceRatio != null) detailParts.push(`balance ${Math.round(item.currentBalanceRatio * 100)}%`);
               detailParts.push(trendLabel);
               if (item.isCurrentStale && item.currentRatioAsOf) detailParts.push(`as of ${item.currentRatioAsOf}`);
@@ -2090,7 +2467,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
                     <div className="text-sm font-medium truncate">{exercise?.name ?? item.exerciseId}</div>
                     <div className="text-xs text-stone-500">{detailParts.join(" · ")}</div>
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-stone-500 shrink-0">{item.confidence}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-stone-500 shrink-0">{trendStatusLabel(item.trendStatus ?? item.confidence)}</div>
                 </div>
               );
             })}
@@ -2125,6 +2502,23 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="flex items-center gap-2 mb-1"><Zap className="w-3.5 h-3.5" style={{ color: "#B8543A" }} /><div className="text-sm font-semibold">Measured symmetry</div></div>
           <div className="text-xs text-stone-500 mt-1">Complete a couple of sessions with the camera on to see your measured symmetry trend over time.</div>
+        </div>
+      )}
+      {assessmentTrendData.length > 1 && (
+        <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
+          <div className="flex items-center gap-2 mb-1"><Check className="w-3.5 h-3.5" style={{ color: "#7A8F73" }} /><div className="text-sm font-semibold">Standard assessment trend</div></div>
+          <div className="text-xs text-stone-500 mb-4">Separate from daily practice sessions</div>
+          <div style={{ width: "100%", height: 160 }}>
+            <ResponsiveContainer>
+              <AreaChart data={assessmentTrendData} margin={{ top: 5, right: 5, left: -25, bottom: 5 }}>
+                <defs><linearGradient id="assessmentGradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#7A8F73" stopOpacity={0.4} /><stop offset="100%" stopColor="#7A8F73" stopOpacity={0} /></linearGradient></defs>
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#7C7066" }} axisLine={false} tickLine={false} />
+                <YAxis domain={[0, "dataMax + 20"]} tick={{ fontSize: 10, fill: "#7C7066" }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ background: "#1F1B16", border: "none", borderRadius: 8, color: "#F4EFE6", fontSize: 12 }} formatter={(v) => [`${v}%`, "Assessment"]} />
+                <Area type="monotone" dataKey="score" stroke="#7A8F73" strokeWidth={2} fill="url(#assessmentGradient)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       )}
       {baselineProgressData.length > 0 && (
@@ -2175,7 +2569,8 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           <span>Symmetric</span>
         </div>
       </div>
-      <PastSessionsList sessions={data.sessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
+      <PastAssessmentsList assessments={assessments} sessions={data.sessions} onOpen={onOpenReport} showClinicalScaleEstimates={showClinicalScaleEstimates} />
+      <PastSessionsList sessions={practiceSessions} onOpen={onOpenReport} onDelete={onDeleteSession} />
       {journalChartData.length > 1 && (
         <div className="rounded-2xl p-5" style={{ background: "rgba(255, 255, 255, 0.5)", border: "1px solid rgba(31, 27, 22, 0.06)" }}>
           <div className="text-sm font-semibold mb-1">Self-rated symmetry</div>
@@ -2193,13 +2588,14 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           </div>
         </div>
       )}
-      <BrowserDataControls status={dataTransferStatus} onExport={onExportData} onImport={onImportData} />
+      <BrowserDataControls status={dataTransferStatus} onExport={onExportData} onExportClinicianBundle={onExportClinicianBundle} onExportValidationDataset={onExportValidationDataset} onImport={onImportData} />
       <div>
         <div className="text-sm uppercase tracking-wider text-stone-500 mb-3">Preferences</div>
         <div className="space-y-2">
           <DailyGoalSelector value={prefs.dailyGoal ?? 3} onChange={(v) => onSetPref("dailyGoal", v)} />
           <ToggleRow label="Symmetry tracking" description="Auto-measure symmetry during exercises" value={prefs.symmetryEnabled} onToggle={() => onTogglePref("symmetryEnabled")} />
           <ToggleRow label="Personal recovery model" description="Train local trend estimates from your saved sessions" value={prefs.personalModelEnabled !== false} onToggle={() => onTogglePref("personalModelEnabled")} />
+          <ToggleRow label="Scale-inspired estimates" description="Show optional HB-inspired, Sunnybrook-style, and eFACE-style self-tracking estimates after assessments" value={showClinicalScaleEstimates} onToggle={() => onTogglePref("clinicalScaleEstimatesEnabled")} />
           <ToggleRow label="Local data capture" description="Store sampled landmarks for debugging and future model work" value={prefs.dataCaptureEnabled === true} onToggle={() => onTogglePref("dataCaptureEnabled")} />
           <ScoringNoiseModeSelector value={prefs.scoringNoiseMode ?? "normal"} onChange={(mode) => onSetPref("scoringNoiseMode", mode)} />
           <ToggleRow label="Scoring diagnostics" description="Log scoring signals in the browser console" value={prefs.scoringDiagnosticsEnabled === true} onToggle={() => onSetPref("scoringDiagnosticsEnabled", !(prefs.scoringDiagnosticsEnabled === true))} />
@@ -2214,7 +2610,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
   );
 }
 
-function BrowserDataControls({ status, onExport, onImport }) {
+function BrowserDataControls({ status, onExport, onExportClinicianBundle, onExportValidationDataset, onImport }) {
   const inputRef = useRef(null);
   const [pendingImportFile, setPendingImportFile] = useState(null);
   const busy = status?.kind === "working";
@@ -2233,6 +2629,12 @@ function BrowserDataControls({ status, onExport, onImport }) {
         <div className="flex flex-wrap gap-2">
           <button disabled={busy} onClick={onExport} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "#1F1B16", color: "#F4EFE6" }}>
             <Download className="w-3.5 h-3.5" />Export data
+          </button>
+          <button disabled={busy} onClick={onExportClinicianBundle} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(122,143,115,0.16)", color: "#4A6B47", border: "1px solid rgba(122,143,115,0.24)" }}>
+            <Download className="w-3.5 h-3.5" />Clinician bundle
+          </button>
+          <button disabled={busy} onClick={onExportValidationDataset} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(212,165,116,0.16)", color: "#7C5528", border: "1px solid rgba(212,165,116,0.3)" }}>
+            <Download className="w-3.5 h-3.5" />Validation set
           </button>
           <button disabled={busy} onClick={() => inputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-45" style={{ background: "rgba(31,27,22,0.08)", color: "#1F1B16", border: "1px solid rgba(31,27,22,0.08)" }}>
             <Upload className="w-3.5 h-3.5" />Import data

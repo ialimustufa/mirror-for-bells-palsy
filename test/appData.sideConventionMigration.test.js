@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { APP_SIDE_CONVENTION_VERSION, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "../src/domain/appData.js";
-import { LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION } from "../src/ml/faceMetrics.js";
+import { APP_SIDE_CONVENTION_VERSION, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "../src/domain/appData.js";
+import { compareMovementProfiles, LEGACY_MOVEMENT_SIDE_CONVENTION, MOVEMENT_SIDE_CONVENTION } from "../src/ml/faceMetrics.js";
 
 const EXERCISE_ID = "closed-smile";
 
@@ -119,16 +119,89 @@ test("returns the original profile when reset has no matching baselines", () => 
   assert.equal(resetMovementProfileBaselines(profile, ["closed-smile"], 1234), profile);
 });
 
+test("partial retakes record setup quality without replacing the profile setup summary", () => {
+  const merged = mergeMovementProfileRetake(
+    {
+      setupQuality: { key: "strong", sampleCount: 24 },
+      calibrationQuality: { avgNoise: 0.01 },
+      exercises: {
+        "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.6 },
+      },
+    },
+    {
+      setupQuality: { key: "weak", sampleCount: 24 },
+      calibrationQuality: { avgNoise: 0.04 },
+      exercises: {
+        "open-smile": { exerciseId: "open-smile", initialSymmetry: 0.8 },
+      },
+    },
+  );
+
+  assert.deepEqual(merged.setupQuality, { key: "strong", sampleCount: 24 });
+  assert.deepEqual(merged.lastPartialSetupQuality, { key: "weak", sampleCount: 24 });
+  assert.deepEqual(merged.lastPartialCalibrationQuality, { avgNoise: 0.04 });
+  assert.deepEqual(merged.lastPartialRetakeExerciseIds, ["open-smile"]);
+  assert.equal(merged.initialAvgSymmetry, 0.7);
+});
+
+test("movement profile comparison uses strict core calibration noise when available", () => {
+  const comparison = compareMovementProfiles(
+    {
+      createdAt: Date.UTC(2026, 0, 2),
+      initialAvgSymmetry: 0.8,
+      calibrationQuality: { avgNoise: 0.04, coreAvgNoise: 0.008 },
+      exercises: { "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.8 } },
+    },
+    {
+      createdAt: Date.UTC(2026, 0, 1),
+      initialAvgSymmetry: 0.7,
+      calibrationQuality: { avgNoise: 0.01, coreAvgNoise: 0.006 },
+      exercises: { "closed-smile": { exerciseId: "closed-smile", initialSymmetry: 0.7 } },
+    },
+  );
+
+  assert.equal(comparison.noiseMetric, "coreAvgNoise");
+  assert.equal(comparison.noiseLabel, "Core calibration noise");
+  assert.equal(comparison.noiseDelta, 0.002);
+});
+
+test("movement profile comparison falls back to legacy average calibration noise", () => {
+  const comparison = compareMovementProfiles(
+    { calibrationQuality: { avgNoise: 0.02 }, exercises: {} },
+    { calibrationQuality: { avgNoise: 0.03 }, exercises: {} },
+  );
+
+  assert.equal(comparison.noiseMetric, "avgNoise");
+  assert.ok(Math.abs(comparison.noiseDelta + 0.01) < 1e-10);
+});
+
 test("normalizes scoring noise prefs with safe defaults", () => {
   const defaults = normalizeAppData({});
   assert.equal(defaults.prefs.scoringNoiseMode, "normal");
   assert.equal(defaults.prefs.scoringDiagnosticsEnabled, false);
+  assert.equal(defaults.prefs.clinicalScaleEstimatesEnabled, true);
 
-  const raw = normalizeAppData({ prefs: { scoringNoiseMode: "raw", scoringDiagnosticsEnabled: true } });
+  const raw = normalizeAppData({ prefs: { scoringNoiseMode: "raw", scoringDiagnosticsEnabled: true, clinicalScaleEstimatesEnabled: false } });
   assert.equal(raw.prefs.scoringNoiseMode, "raw");
   assert.equal(raw.prefs.scoringDiagnosticsEnabled, true);
+  assert.equal(raw.prefs.clinicalScaleEstimatesEnabled, false);
 
-  const invalid = normalizeAppData({ prefs: { scoringNoiseMode: "loud", scoringDiagnosticsEnabled: "true" } });
+  const invalid = normalizeAppData({ prefs: { scoringNoiseMode: "loud", scoringDiagnosticsEnabled: "true", clinicalScaleEstimatesEnabled: "false" } });
   assert.equal(invalid.prefs.scoringNoiseMode, "normal");
   assert.equal(invalid.prefs.scoringDiagnosticsEnabled, false);
+  assert.equal(invalid.prefs.clinicalScaleEstimatesEnabled, true);
+});
+
+test("normalizes assessments as separate dated records", () => {
+  const normalized = normalizeAppData({
+    assessments: [
+      { ts: 30, zones: [{ zone: "mouth" }] },
+      { sourceSessionTs: 10 },
+      null,
+    ],
+  });
+
+  assert.equal(normalized.assessments.length, 2);
+  assert.deepEqual(normalized.assessments.map((item) => item.ts), [10, 30]);
+  assert.deepEqual(normalized.assessments[0].zones, []);
 });

@@ -1,0 +1,159 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildClinicianBundleRecords, createClinicianBundleExportBlob, CLINICIAN_BUNDLE_LINES_KIND } from "../src/domain/clinicianBundle.js";
+
+function recordsBySection(records, section) {
+  return records.filter((line) => line.section === section).map((line) => line.record);
+}
+
+test("clinician bundle exports assessment trend, sessions, journals, images, and frame samples", async () => {
+  const source = {
+    stores: {
+      appState: [{
+        id: "appState",
+        assessments: [{
+          date: "2026-06-15",
+          ts: 215,
+          averageVoluntaryMovement: 0.62,
+          coactivationRisk: "high",
+          resting: { averageAsymmetryRatio: 0.24 },
+          zones: [{ zone: "eye", label: "Eye", exerciseIds: ["eye-close"], voluntaryMovement: 0.58, coactivationRisk: "high" }],
+        }, {
+          date: "2026-06-22",
+          ts: 220,
+          sourceSessionId: "assessment-session",
+          averageVoluntaryMovement: 0.72,
+          coactivationRisk: "medium",
+          resting: { averageAsymmetryRatio: 0.18 },
+          zones: [{ zone: "eye", label: "Eye", exerciseIds: ["eye-close"], voluntaryMovement: 0.7 }],
+        }],
+        journal: [
+          { date: "2026-06-21", symmetry: 62, mood: "ok", notes: "Dry eye in the evening.", ts: 210 },
+        ],
+      }],
+      sessions: [
+        {
+          id: "old-session",
+          date: "2026-06-20",
+          ts: 200,
+          kind: "session",
+          sessionAvg: 0.5,
+          scores: [{ exerciseId: "closed-smile", avg: 0.5 }],
+        },
+        {
+          id: "recent-session",
+          date: "2026-06-21",
+          ts: 210,
+          kind: "session",
+          scoringModelVersion: 2,
+          sessionAvg: 0.66,
+          scores: [{ exerciseId: "pucker", avg: 0.66, initialMovementProgress: { affectedProgressRatio: 1.1 } }],
+        },
+        {
+          id: "assessment-session",
+          date: "2026-06-22",
+          ts: 220,
+          kind: "assessment",
+          scoringModelVersion: 2,
+          captureQuality: { key: "strong" },
+          scores: [{ exerciseId: "eye-close", avg: 0.7, captureQuality: { key: "strong" } }],
+          restingMetrics: { averageAsymmetryRatio: 0.18 },
+        },
+      ],
+      sessionImages: [
+        { id: "img-old", sessionId: "old-session", role: "rep", dataUrl: "data:image/jpeg;base64,old" },
+        { id: "img-assessment-baseline", sessionId: "assessment-session", role: "sessionBaseline", dataUrl: "data:image/jpeg;base64,baseline" },
+        { id: "img-assessment-rep", sessionId: "assessment-session", role: "rep", dataUrl: "data:image/jpeg;base64,rep" },
+      ],
+      sessionFrameSamples: [
+        { id: "sample-assessment", sessionId: "assessment-session", exerciseId: "eye-close", phase: "hold", scoring: { scoringModelVersion: 2 } },
+        { id: "sample-old", sessionId: "old-session", exerciseId: "closed-smile", phase: "hold" },
+      ],
+    },
+  };
+
+  const records = buildClinicianBundleRecords(source, { recentSessionLimit: 1, exportedAt: "2026-06-23T00:00:00.000Z" });
+  const manifest = records[0];
+  const sessions = recordsBySection(records, "session");
+  const assessments = recordsBySection(records, "assessmentTrend");
+  const comparisons = recordsBySection(records, "assessmentComparison");
+  const journals = recordsBySection(records, "journal");
+  const images = recordsBySection(records, "image");
+  const samples = recordsBySection(records, "frameSample");
+
+  assert.equal(manifest.kind, CLINICIAN_BUNDLE_LINES_KIND);
+  assert.equal(manifest.summary.sessions, 1);
+  assert.equal(manifest.summary.assessments, 2);
+  assert.equal(manifest.summary.assessmentComparisons, 1);
+  assert.equal(manifest.summary.journalEntries, 1);
+  assert.equal(manifest.summary.journalSafetyPrompts, 1);
+  assert.equal(manifest.summary.images, 2);
+  assert.equal(manifest.summary.frameSamples, 1);
+  assert.equal(manifest.summary.containsImageDataUrls, true);
+  assert.deepEqual(sessions.map((session) => session.id), ["assessment-session"]);
+  assert.equal(sessions[0].diagnostics.safetyPrompts.length >= 0, true);
+  assert.deepEqual(assessments.map((assessment) => assessment.averageVoluntaryMovement), [0.62, 0.72]);
+  assert.equal(assessments[1].resting.averageAsymmetryRatio, 0.18);
+  assert.equal(comparisons[0].averageVoluntaryMovement.delta, 0.1);
+  assert.equal(comparisons[0].restingAsymmetry.delta, -0.06);
+  assert.equal(comparisons[0].coactivationRisk.change, "lower-risk");
+  assert.equal(journals[0].notes, "Dry eye in the evening.");
+  assert.deepEqual(journals[0].safetyPrompts.map((prompt) => prompt.id), ["eye-protection"]);
+  assert.deepEqual(images.map((image) => image.id).sort(), ["img-assessment-baseline", "img-assessment-rep"]);
+  assert.deepEqual(samples.map((sample) => sample.id), ["sample-assessment"]);
+
+  const blobText = await createClinicianBundleExportBlob(records).text();
+  const lines = blobText.trim().split("\n").map((line) => JSON.parse(line));
+  assert.equal(lines[0].kind, CLINICIAN_BUNDLE_LINES_KIND);
+  assert.equal(lines.some((line) => line.section === "frameSample"), true);
+});
+
+test("clinician bundle derives clinical scale estimates for legacy assessment summaries from source sessions", () => {
+  const source = {
+    stores: {
+      appState: [{
+        id: "appState",
+        assessments: [{
+          date: "2026-06-22",
+          ts: 220,
+          sourceSessionId: "assessment-session",
+          averageVoluntaryMovement: 0.72,
+          resting: { averageAsymmetryRatio: 0.12 },
+          zones: [{ zone: "eye", label: "Eye", exerciseIds: ["eye-close"], voluntaryMovement: 0.7 }],
+        }],
+      }],
+      sessions: [{
+        id: "assessment-session",
+        date: "2026-06-22",
+        ts: 220,
+        kind: "assessment",
+        restingMetrics: {
+          version: 1,
+          averageAsymmetryRatio: 0.08,
+          metrics: {
+            palpebralFissure: { label: "Palpebral fissure", userLeft: 0.05, userRight: 0.052, asymmetryRatio: 0.03 },
+            nasolabialMidface: { label: "Nasolabial/midface proxy", userLeft: 0.06, userRight: 0.064, asymmetryRatio: 0.05 },
+            oralCommissure: { label: "Oral commissure vertical position", userLeft: 0.58, userRight: 0.59, asymmetryRatio: 0.02 },
+          },
+        },
+        scores: [
+          { exerciseId: "eyebrow-raise", initialMovementProgress: { affectedProgressRatio: 0.95 }, captureQuality: { key: "strong" } },
+          { exerciseId: "eye-close", initialMovementProgress: { affectedProgressRatio: 0.9 }, captureQuality: { key: "strong" } },
+          { exerciseId: "open-smile", initialMovementProgress: { affectedProgressRatio: 0.82 }, captureQuality: { key: "strong" } },
+          { exerciseId: "nose-wrinkle", initialMovementProgress: { affectedProgressRatio: 0.75 }, captureQuality: { key: "usable" } },
+          { exerciseId: "pucker", initialMovementProgress: { affectedProgressRatio: 0.8 }, captureQuality: { key: "strong" } },
+        ],
+      }],
+      sessionImages: [],
+      sessionFrameSamples: [],
+    },
+  };
+
+  const records = buildClinicianBundleRecords(source, { recentSessionLimit: 1, exportedAt: "2026-06-23T00:00:00.000Z" });
+  const [assessment] = recordsBySection(records, "assessmentTrend");
+
+  assert.equal(assessment.clinicalScales.status, "estimated");
+  assert.equal(assessment.clinicalScales.coverage.usableMovementCount, 5);
+  assert.equal(assessment.clinicalScales.scales.houseBrackmann.grade, "II");
+  assert.ok(assessment.clinicalScales.scales.sunnybrook.compositeScore >= 80);
+});

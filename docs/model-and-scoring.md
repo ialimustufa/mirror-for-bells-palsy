@@ -49,12 +49,16 @@ The ML model only provides geometry and blendshape estimates. The rehab-oriented
 
 ## Runtime Pipeline
 
-The live session loop runs inside `SessionMode`.
+The live session loop runs inside `SessionMode`. The `useFaceLandmarker`
+hook exposes an async detector facade. On browsers that support worker
+bitmap transfer, MediaPipe loads in `src/workers/faceLandmarker.worker.js` so
+the synchronous `detectForVideo` call runs off the UI thread; otherwise the
+same facade falls back to the main-thread MediaPipe runtime.
 
 For each animation frame:
 
 1. Read the current video frame.
-2. Run `faceLandmarker.detectForVideo(video, timestamp)`.
+2. Await `faceLandmarker.detectForVideo(video, timestamp)` through the detector facade.
 3. Extract the first face's landmarks, blendshapes, and facial transformation matrix.
 4. Smooth landmarks and the transform matrix using an exponential moving average.
 5. During calibration, collect stable neutral frames and neutral pose matrices.
@@ -275,6 +279,37 @@ Examples:
 - Emoji reactions: practical expression combinations such as smile, big smile, surprise, raised brow, wink, smirk, kiss, sad frown, and nose scrunch. These reuse the same region-specific landmark families but are exposed as separate exercises so real-world expressions can have their own baselines and progress history.
 
 The mapping is defined in `EXERCISE_LANDMARK_PAIRS`.
+
+## Direction-Specific Scoring
+
+Some common movements now use `computeDirectionalExerciseSymmetry` instead of
+generic 3D displacement magnitude:
+
+- Smile and `vowel-e`/`vowel-i`: outward and slightly upward mouth pull.
+- Pucker, kiss, `vowel-o`, and `vowel-u`: inward lip movement toward the midline.
+- Cheek puff: outward cheek movement.
+- Cheek suck: inward cheek movement.
+- Eye close, blink, and wink: decreased eyelid aperture.
+- `vowel-a`: increased mouth aperture.
+
+This prevents wrong-direction movement from counting as a valid score. For example,
+an inward pucker should not score as a smile, lateral eye drift should not score as
+eye closure, and smile-only movement should not score as `vowel-a`.
+
+The directional scorer still returns the same user/anatomical fields used by the
+rest of the app:
+
+```text
+leftDisp
+rightDisp
+symmetry
+peak
+```
+
+Calibration records movement-specific neutral jitter keys such as `smilePull`,
+`puckerInward`, `cheekPuffOutward`, `cheekSuckInward`, `eyeClosure`, and
+`mouthOpen`. When older profiles do not have these keys, scoring falls back to
+the relevant landmark group's neutral noise floor so old backups remain usable.
 
 ## Brow-Specific Scoring
 
@@ -602,23 +637,34 @@ For each assessment exercise, Mirror stores user/anatomical side metrics:
 - Peak user-right movement.
 - Average symmetry during the hold.
 - Estimated limited side.
-- A personalized activation threshold.
+- Personalized threshold bands.
 
-The activation threshold is currently heuristic:
+The profile now stores per-exercise threshold bands:
 
 ```text
-activationThreshold = max(max(left_peak, right_peak) * 0.35, 0.004)
+minimumVisible   = max(max(left_peak, right_peak) * 0.20, 0.002)
+reliableMovement = max(max(left_peak, right_peak) * 0.35, 0.004)
+baselineTarget   = max(left_peak, right_peak)
 ```
+
+`activationThreshold` is retained as a compatibility alias for
+`thresholdBands.reliableMovement`, which is still the threshold used by live
+sessions to decide whether a hold-frame movement is strong enough to count.
 
 Nostril flare uses a lower nose-specific threshold because its face-local movement is
 much smaller than smile, brow, or cheek exercises. New nose baselines use:
 
 ```text
-activationThreshold = max(max(left_peak, right_peak) * 0.25, NOSE_PROFILE_THRESHOLD_FLOOR)
+minimumVisible   = max(max(left_peak, right_peak) * 0.15, NOSE_PROFILE_THRESHOLD_FLOOR * 0.6)
+reliableMovement = max(max(left_peak, right_peak) * 0.25, NOSE_PROFILE_THRESHOLD_FLOOR)
+baselineTarget   = max(left_peak, right_peak)
 ```
 
 During sessions, existing saved nose profiles are capped at `NOSE_PROFILE_THRESHOLD_MAX`
-so older generic `0.004` thresholds do not block real nostril-flare frames.
+so older generic `0.004` thresholds do not block real nostril-flare frames. New
+session movement features and frame-sample scoring payloads store the threshold
+bands alongside `profileThreshold`, making replay exports auditable against
+minimum-visible, reliable, and baseline-target movement levels.
 
 This gives future sessions a user-specific movement scale instead of relying only on global constants.
 
@@ -641,11 +687,13 @@ The profile is used in normal app behavior after it is saved:
 
 - `buildPersonalizedDailyPlan` prioritizes daily-session exercises with lower initial symmetry and affected-side focus.
 - `getAdaptiveFocusItems` exposes the highest-priority movements for Home, Practice, and Progress UI by combining baseline profile data, affected-side progress, affected/proper balance, and recent symmetry.
+- Adaptive plan ranking also uses local journal fatigue/pain prompts, missed counted-session days, weak capture quality, and quiet-region coactivation risk so stale or risky evidence does not increase plan intensity by itself.
 - `PracticeView` preselects the baseline-derived focus plan instead of starting empty when a profile exists.
 - `SessionMode` uses `activationThreshold` to decide whether a hold-frame movement is strong enough to count.
 - `buildSessionExercises` applies comfort-level dosing before a session starts.
 - Live feedback can show the focused side's current movement relative to the working baseline.
 - Exercise summaries and saved sessions store legacy `baselineProgress` plus the newer affected-side `movementProgress`.
+- Personal recovery trend training gives controlled assessment samples higher weight than normal sessions and downweights standalone practice runs, weak capture quality, coactivation risk, sub-threshold movement, raw/soft scoring modes, and weak profile baselines.
 - Session summaries can open a printable report intended to be saved as a PDF for a physiotherapist.
 - The Progress screen charts affected-side movement from the first saved baseline over time.
 - `MovementProfileCard` shows the current focus list and latest per-exercise progress from saved sessions.
@@ -677,6 +725,8 @@ otherwise             -> Noisy
 
 `calibrationQuality.coreQualityPoints` is persisted with new profiles so reports and
 future threshold tuning can identify which landmark subset produced `coreAvgNoise`.
+Profile retake comparisons use the same core metric when available, falling back to
+legacy average noise only for older profiles.
 
 Profiles are also considered stale after:
 
@@ -765,6 +815,109 @@ advanced -> 115% reps, catalog holds, 2s rest
 Hold durations are clamped so advanced mode does not push longer sustained contractions by default.
 `SessionMode` reads `current.reps`, `current.holdSec`, and `current.restSec`, so scoring and timers follow the same session-specific dose shown in the UI.
 
+### Pre-Calibration Setup Quality
+
+Before calibration, scored sessions run a short camera setup check. This phase does
+not create a clinical score. It records a compact `setupQuality` summary with:
+
+- Face-present frame ratio.
+- Centered/level alignment ratio.
+- Landmark stability ratio.
+- Approximate camera FPS.
+- Small-frame brightness and contrast.
+- Eye-distance proxy for camera distance.
+- Occlusion/glare risk proxy from face presence, alignment, brightness, and contrast.
+
+The setup quality appears in session diagnostics and reports so weak lighting,
+distance, occlusion/glare risk, or camera stability can be separated from true
+movement change.
+
+### Standard Assessment Records
+
+Standard assessments are saved separately from daily practice trend records. The
+assessment flow uses a fixed set of movements:
+
+```text
+eyebrow-raise, eye-close, open-smile, nose-wrinkle, pucker
+```
+
+Each assessment stores a compact summary in `assessments` with:
+
+- Rest section: whether a neutral calibration review image is available plus compact resting asymmetry metrics.
+- Voluntary movement sections grouped by brow/forehead, eye, midface/nose, and mouth zones.
+- Coactivation risk from quiet-region movement recorded during the assessment.
+- Optional `clinicalScales` estimates for House-Brackmann-inspired, Sunnybrook-style, and eFACE-style domains when at least 80% of standard movements are usable and all required resting metrics are available.
+- Source session timestamp so the original report and images can still be opened.
+
+Clinician bundle exports include consecutive assessment comparisons. These compare
+average voluntary movement, resting asymmetry, coactivation risk, capture quality,
+and each zone's voluntary movement using Mirror practice metrics only.
+
+Resting asymmetry metrics are computed from the neutral calibration landmarks in
+the same face-local frame used by the scorer. They are practice-review metrics,
+not a clinical grade:
+
+- Palpebral fissure: per-side eyelid aperture, with the narrower user side.
+- Nasolabial/midface proxy: per-side midface distance from the face midline.
+- Oral commissure vertical position: per-side mouth-corner height, with the lower user side.
+
+Only compact rounded metric summaries are saved in `restingMetrics`; raw neutral
+landmarks are not stored as part of the assessment summary.
+
+Scale-inspired estimates are stored with explicit status and caveats:
+
+- `version: 5` for the current estimator. Reviewed v1/v2/v3/v4 clinical-scale
+  labels are stale after the v5 House-Brackmann eye-closure input guard
+  and cannot support the clinical-facing release gate.
+- `status: "estimated"` only when the 80% evidence standard is met.
+- `status: "insufficient-data"` when movement coverage or complete resting
+  metrics are missing.
+- `evidence.tier: "complete-standard-assessment"` when all five standard
+  movements are usable, `"minimum-standard-assessment"` when the local 4/5
+  movement floor is met, or `"insufficient-standard-evidence"` when estimates
+  are blocked.
+- Scale formulas use only movements that meet the usable movement/capture-quality
+  gate. Missing or weak-capture movements are omitted from calculations and
+  listed in `evidence.omittedMovementExerciseIds`.
+- House-Brackmann is a conservative global estimate derived from the Sunnybrook estimate, eye-closure level, resting asymmetry, and coactivation. If gentle eye closure is the omitted movement in a minimum-standard assessment, Mirror omits the HB estimate instead of inferring an eye-closure level.
+- Sunnybrook estimates the documented rest, voluntary movement, and synkinesis components from Mirror's standard assessment movements.
+- eFACE is represented as an eFACE-style domain estimate from available static,
+  dynamic, and synkinesis proxies, with proxy scores clamped to 0-100; it is not
+  a clinician-entered eFACE form.
+- Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
+  Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
+  treat missing or weak-capture movement rows as zero movement.
+- Clinical-release validation is stricter than estimate display for
+  Sunnybrook/eFACE: primary-scale agreement comparisons require complete
+  scale-specific movement input, so normalized 4/5 Sunnybrook/eFACE estimates
+  count as missing estimates in those release denominators.
+- App panels and printable reports also surface scale-specific input gaps, such
+  as `House-Brackmann-inspired estimate unavailable: requires Gentle eye closure`, so a
+  withheld scale is not silently hidden when other eligible estimates remain.
+- v5 estimates also record required, available, and missing resting metric keys
+  and require `estimateCalculationUsesCompleteRestingMetrics: true`.
+
+These values are scale-inspired self-tracking estimates, not clinician-assigned
+grades, diagnosis, prognosis, or treatment guidance. `docs/validation-status.json`
+has `clinicalFacingScoresAllowed: false`, and the runtime presentation policy in
+`src/domain/clinicalScalePresentation.js` keeps app panels, dashboard summaries,
+assessment history, and printable reports in estimate-only wording.
+Users can also turn off `prefs.clinicalScaleEstimatesEnabled` to hide optional
+scale-inspired estimates from the assessment summary, assessment history, and
+printable report output. The preference is display-only: validation datasets and
+clinician bundles still preserve the underlying assessment evidence for explicit
+review/export workflows.
+
+Validation JSONL exports include the clinical-scale evidence tier and movement
+coverage in the assessment source summary. Normal label sheets expose those
+read-only audit fields; blinded sheets blank the estimate-derived fields while
+keeping `clinicalScaleEstimateVersion` so reviewer outputs remain tied to the
+current estimator.
+
+Assessments are also saved as `kind: "assessment"` session records for local image
+hydration and PDF generation, but they do not count toward daily practice goals or
+practice streaks.
+
 ### Session Report Export
 
 `buildSessionReportHtml` converts a saved or just-completed session into a printable clinical review report.
@@ -772,17 +925,389 @@ Hold durations are clamped so advanced mode does not push longer sustained contr
 The report includes:
 
 - Session date, time, duration, type, and comfort level.
+- Pre-calibration setup quality, when available.
 - Average session symmetry.
+- Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
+- Resting asymmetry metrics for assessment reports when neutral calibration was available.
+- Scale-inspired estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, including the complete/minimum evidence tier, or an insufficient-data reason when it is not.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
 - Per-rep symmetry chips.
+- Capture-quality flags, rejected-frame reasons, quiet-region movement summaries, and safety notes when the data suggests caution.
 - Target reps, hold seconds, and rest seconds used for each exercise.
 - A side-by-side image comparison with the neutral baseline frame on the left and the strongest movement frame on the right.
 - Higher-resolution captured rep snapshots when they were available.
 
 `shareSessionReport` opens that report in a new window and triggers the browser print flow.
 The intended user action is saving the print output as a PDF and sending that PDF to a physiotherapist.
+
+### Safety Prompt Sources
+
+Safety prompts are conservative practice guidance, not diagnosis. They are generated
+locally from:
+
+- Session diagnostics: weak pre-calibration setup, weak or unscored capture quality,
+  quiet-region coactivation, and low eye-closure scores that may be relevant to eye
+  protection.
+- Exercise diagnostics show a derived quiet-region practice-score penalty when
+  coactivation risk is medium or high. This penalty is feedback-only; the raw saved
+  symmetry score is unchanged.
+- Recent journal notes: text mentions of eye dryness/irritation, pain or strain,
+  significant fatigue, and new or worsening symptoms such as sudden worsening,
+  numbness, speech changes, vision changes, dizziness, confusion, limb weakness, or
+  severe headache.
+
+Journal-note prompts are grouped in Progress and exported as prompt metadata on
+clinician-bundle journal records. Obvious negated notes such as "no pain" do not
+raise a prompt.
+
+### Clinician Bundle Export
+
+The Progress view can also export a local JSONL clinician bundle. This is a
+shareable review package, not a restore backup. The bundle includes:
+
+- Assessment trend rows from compact `assessments` records.
+- Assessment comparison rows for consecutive standardized assessments.
+- Clinical-scale estimate payloads attached to assessment trend rows when available.
+- Recent sessions plus source sessions referenced by assessments.
+- Per-exercise progress, capture-quality summaries, rejected-frame reasons, and safety prompts.
+- Journal entries, including user notes and local safety prompt metadata for fatigue, dryness, discomfort, or symptoms.
+- Selected report image records for included sessions: neutral baseline images and rep snapshots.
+- Frame-sample records for included sessions when local data capture was enabled, so a clinician or developer can replay the audit trail.
+
+The full device backup still uses `Export data`; the clinician bundle is a
+separate explicit export so sharing remains user-controlled.
+
+### Validation Dataset Export
+
+The Progress view can export an opt-in local JSONL validation dataset when local
+data capture has saved frame samples or when standard assessment rows are
+available for clinical-scale review. This export is for review and tuning work,
+not restore.
+
+The first JSONL line is a manifest with `kind: "mirror-validation-dataset-jsonl"`,
+dataset version, summary counts, and a label schema. Subsequent lines include:
+
+- `sessionContext` records with compact session date, type, scoring version, setup
+  quality, capture quality, and exercise ids.
+- `assessmentClinicalScale` records for included standard assessment sessions,
+  with the current House-Brackmann, Sunnybrook, and eFACE-style estimates plus
+  empty reviewer target fields.
+- Assessment clinical-scale rows include estimate status, evidence tier, usable
+  movement coverage, used/omitted movement exercise IDs, and the
+  usable-movements-only calculation flag so reviewer sheets remain tied to the
+  exact estimator inputs. The current label schema also carries House-Brackmann
+  input-completeness provenance: required exercise IDs, used exercise IDs,
+  missing required exercise IDs, and the complete flag. It also carries
+  Sunnybrook and eFACE input-completeness provenance with each scale's complete
+  flag plus used and omitted movement exercise IDs. It lists
+  `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
+  target fields rather than required fields because valid targets count
+  scale-by-scale. Label schema v9 requires review metadata for rows intended to
+  count: `validationCaseId`, explicit high/medium `clinicianConfidence`,
+  `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`, `reviewerId`, and
+  `reviewerRole`, plus `reviewedAt` as a UTC ISO timestamp.
+- `frameSample` records with the original sampled frame payload, including
+  landmarks/blendshapes/pose/scoring metadata when those fields were captured.
+- A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
+  `quality`, `visibleMovementLevel`, `coactivationNotes`, `reviewerRole`,
+  `reviewedAt`, and free-text `notes`.
+- A `label` template on each assessment clinical-scale row with
+  `validationCaseId`, `houseBrackmannGrade`, `sunnybrookComposite`,
+  `efaceTotal`, optional eFACE domain scores, reviewer confidence, reviewer
+  id, reviewer role, independent-source metadata, review time, and notes. At
+  least one valid primary target is needed for a row to count, and each valid
+  primary target counts only for its own scale after the row passes the
+  confidence, blinding, source, and reviewer-identity gates.
+
+Label fields start empty except for values Mirror can infer locally, such as the
+sample's intended exercise and the profile affected side. A reviewed validation set
+can then be used to report replay accuracy, false-positive rate, false-negative
+rate, and measurement drift against the same examples.
+
+Clinical-scale assessment rows can be exported even when no frame samples were
+captured. That lets a reviewer assign House-Brackmann, Sunnybrook, and eFACE
+targets from the assessment review package while keeping frame replay validation
+separate when local data capture was not enabled.
+
+Run:
+
+```bash
+npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
+npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
+npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv --source-dataset validation-dataset.jsonl
+npm run validate:dataset -- validation-dataset.jsonl
+npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
+npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
+npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
+npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md
+```
+
+The label-sheet command creates a CSV for clinician, user, or developer review.
+The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. Use
+`--blinded` for primary clinical-scale review so Mirror estimate columns are left
+blank during target assignment while preserving estimate provenance columns such
+as evidence tier, coverage, used/omitted movement IDs, House-Brackmann
+input-completeness fields, Sunnybrook/eFACE input-completeness fields, and
+estimator version. The
+merge command copies reviewed label fields back into a new JSONL dataset without
+changing the original export. The evaluator replays labeled frame samples through
+the current scorer and reports
+scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
+mean absolute stored-vs-replayed score drift. Frames labeled with
+`visibleMovementLevel: "none"` are treated as negative examples; `trace`, `low`, `moderate`, and `strong`
+are treated as positive examples unless the label quality is `unusable` or
+`uncertain`. When frame samples contain threshold bands, the evaluator also reports
+how many labeled frames landed above minimum-visible, reliable, and baseline-target
+movement, plus how many stayed below minimum-visible movement. It also reports
+per-exercise validation rates so weak movement families are visible instead of
+being hidden by aggregate accuracy.
+
+When reviewed `assessmentClinicalScale` labels are present, the same evaluator
+also emits a clinical-scale validation report. The default minimum standard is at
+least 30 reviewed assessment labels, at least 80% observed agreement for each
+primary scale, at least 10 distinct pseudonymous validation cases through
+`validationCaseId`, and a Wilson 95% lower confidence bound of at least 80% for
+each primary agreement rate. The primary tolerances are House-Brackmann within
+one grade, Sunnybrook composite within 10 points, and eFACE total within 10
+points.
+eFACE static, dynamic, and synkinesis domain agreement is reported when those
+labels are supplied. The clinical-scale gate also requires House-Brackmann labels
+to cover HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete,
+with at least three eligible labels in each represented severity band. Counted
+clinical-scale labels must also reference the current clinical-scale estimator
+version and must set clinician confidence to high or medium; stale, missing
+estimator-version, blank-confidence, low-confidence, or uncertain-confidence
+rows, plus rows without a UTC ISO `reviewedAt` timestamp, are excluded and
+reported. This
+same counted-row gate requires the paired Mirror estimate to be `status:
+"estimated"` with a complete/minimum v5 evidence tier and at least 80% usable
+movement coverage. For v5, counted rows must also preserve used/omitted movement
+exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`,
+Sunnybrook/eFACE input-completeness provenance, required, available, and missing
+resting metric keys, and `estimateCalculationUsesCompleteRestingMetrics: true`;
+inconsistent or missing movement, scale-input, or resting-metric provenance
+excludes the reviewed row. Duplicate or missing clinical-scale assessment ids
+also block readiness so one reviewed assessment cannot inflate agreement
+denominators. Missing `validationCaseId` values are excluded, and repeated
+assessments from one validation case cannot satisfy the distinct-case release
+floor by themselves. Missing `reviewerId` values are also excluded because the
+reference-standard package cannot prove reviewer identity. House-Brackmann
+agreement treats the paired estimate
+as missing unless the estimate provenance shows the required gentle eye-closure
+input was used. Sunnybrook and eFACE primary agreement comparisons require
+complete scale-specific movement input; normalized 4/5 Sunnybrook/eFACE
+estimates stay auditable but count as missing estimates for those release
+denominators. Valid primary targets
+count scale by scale; a missing or invalid estimate is reported as a missing
+estimate for that scale rather than excluding other valid targets on the row. This
+report does not make Mirror
+estimates clinician-assigned grades; it only documents agreement against
+reviewed target labels for the local validation set.
+The same report includes an agreement sample plan per primary scale. It reports
+how many current labels are in the denominator, how many are within tolerance,
+the success count required at the current denominator, and the minimum additional
+all-success eligible labels needed to clear the 80% observed and Wilson
+lower-bound gates. The plan is deliberately separated from readiness status
+because projected labels are not evidence.
+
+The threshold calibration command groups reviewed labels by exercise and writes a
+recommendation report. It includes current reliable thresholds, positive/negative
+peak summaries, recommended minimum-visible/reliable/baseline-target bands, and
+projected false-positive/false-negative rates at the recommended reliable
+threshold. The report carries the reviewed dataset `sourceDatasetSha256`, and
+calibrated status must list that hash in `thresholdCalibrationSourceDatasetSha256s`
+before ready-exercise coverage can count. The report does not change production
+constants; a human review step is still required before changing scoring
+behavior.
+
+The model-readiness command reads either a reviewed dataset JSONL file or a
+validation report JSON file and writes a conservative decision report. It fails
+closed when reviewed frame, positive/negative, or exercise coverage is too small.
+When reviewed replay disagreement is mild, it recommends threshold review before
+model training. When disagreement is high after that threshold workflow, it flags
+lightweight correction-model review. It does not justify a clinical-domain landmark
+model from movement labels alone; that requires reviewed landmark-localization
+annotations.
+
+The clinical-readiness command reads a reviewed dataset, combined validation
+report, or clinical-scale validation report and writes a schema-v1 release
+decision artifact for the clinical-scale estimates. It evaluates
+House-Brackmann, Sunnybrook composite, and eFACE total rows independently,
+requiring each passing scale to meet the 30-label,
+10-distinct-validation-case, 80% observed agreement, and 80% Wilson lower-bound
+standard. The all-primary-scale status also requires all primary checks, the
+House-Brackmann severity-band case-mix gate, and current clinical-scale
+estimator-version evidence to pass. The case-mix gate counts only comparable
+House-Brackmann estimate/label pairs, so missing HB estimates cannot fill
+severity bands. It also emits
+`clinicalScaleAvailabilityRecommendation` entries for the House-Brackmann,
+Sunnybrook, and eFACE status keys, so a reviewer can see which individual scale
+rows are evidence-eligible after human review when the full set is not ready.
+Passing this report still does not flip `clinicalFacingScoresAllowed`; a
+human-reviewed status update is required because Mirror values remain estimates
+rather than clinician-assigned grades. The full review protocol is documented in
+`docs/clinical-scale-review-protocol.md`.
+
+The clinical-report command converts a reviewed dataset, clinical validation
+report, or schema-v1 clinical-readiness report into a Markdown clinical-scale agreement
+report or, when the output path ends in `.json`, a structured agreement artifact.
+Saved readiness reports must also include the source validation report so
+agreement evidence remains traceable to the reviewed inputs.
+It records the dataset summary, primary-scale agreement table or rows, Wilson
+confidence intervals, House-Brackmann case-mix table, missing estimate counts,
+scale-specific target-label and estimate-gap reason counts, estimator-version
+counts, a scale-specific availability recommendation table, distinct
+validation-case counts, blocking reasons, reference-standard controls, and a
+sample of out-of-tolerance assessment rows for adjudication. The JSON
+artifact is preferred for machine release checks because `npm run
+validation:status` can validate the counts and controls without parsing
+Markdown tables. The report is designed for the release reviewer to attach under
+`docs/validation/` before any status update.
+
+When two clinicians review the same blinded clinical-scale labels, the
+reviewer-agreement command compares the two CSVs before merge. It reports
+per-scale paired counts, exact agreement, tolerance-based agreement, missing
+labels, Wilson 95% confidence intervals, estimator-version counts,
+stale/missing estimator-version rows, estimate-evidence blockers,
+House-Brackmann severity-band case mix, and disagreement rows. Agreement
+denominators include only eligible reviewer pairs
+that pass the blinding, independence, current-version, and estimate-evidence
+gates; excluded reviewer pairs are counted separately and cannot support release.
+Each scale enabled in `clinicalScaleAvailability` must have at least 30 eligible
+paired labels, at least 10 distinct pseudonymous validation cases, at least 80%
+observed reviewer agreement, and a Wilson lower confidence bound of at least 80%
+before the reviewer agreement artifact can support clinical-facing release for
+that scale. The artifact must also show exactly one pseudonymous reviewer id in
+each raw reviewer sheet, no reviewer-id overlap between the two sheets, and HB
+I-II, HB III-IV, and HB V-VI
+represented by at least three same-band eligible paired reviewer labels, so a
+reviewer-agreement report cannot pass on one severity range alone. Any
+House-Brackmann cross-severity band reviewer disagreement must be adjudicated
+before the reviewer-agreement artifact can support clinical-facing release.
+Disabled primary scales may stay
+in estimate mode when their rows are not ready, but metadata, blinding,
+current-version, and estimate-evidence blockers still invalidate the artifact. It
+also rejects reviewer rows that are unblinded, non-independent, non-clinician,
+uncertain, copied, rehearsal, incomplete, out-of-range, or paired with an
+insufficient Mirror estimate. Missing, stale, or mismatched
+clinical-scale estimator versions, estimate status, complete/minimum evidence
+tier, or 80% usable-movement coverage are blocking report findings because
+adjudicated labels must remain tied to the qualifying estimate evidence that
+generated the blinded review package. When an adjudication output path is
+provided, it writes a CSV with raw reviewer values, raw estimator versions, and
+raw estimate-evidence provenance preserved in audit columns and blank target
+columns for the final consensus label. The adjudication CSV preserves a
+mergeable `validationCaseId` only when both reviewer sheets agree on the same
+pseudonymous case id. It leaves the mergeable `reviewerId` blank for the final
+adjudicator or adjudication panel to fill, while preserving raw reviewer ids in
+audit columns.
+
+`docs/validation-status.json` is the machine-readable release status for validation.
+It currently records that validation tooling exists but no clinician-reviewed
+dataset is committed, production thresholds are not clinically calibrated, and
+`clinicalFacingScoresAllowed` is false. The app and printable report copy read
+this status through `src/domain/clinicalScalePresentation.js`, and the current
+product presentation remains scale-inspired and estimate-only. Future optional
+clinical validation review would require the same high-level status evidence as
+the release gate: reviewed dataset and frame counts, reviewed clinical-scale
+assessment coverage, calibration reports, clinical agreement reports,
+reviewer-agreement reports, calibrated thresholds, ready exercise coverage,
+schema-v1 dated status metadata, the explicit `clinicalFacingScoresAllowed`
+flag, and the explicit `clinical-scale-agreement-reviewed` status value. It
+also requires the status file to list clinical evidence source hashes for
+agreement, reviewer-agreement, and package-verification artifacts. For every
+future reviewed scale entry in `clinicalScaleAvailability`, the runtime also
+requires a per-scale evidence summary pointing to the listed clinical agreement,
+reviewer-agreement, and clinical review package verification reports, repeating
+`sourceDatasetSha256`, and showing current estimator version, reviewed-label
+count, distinct-case count, observed agreement, Wilson lower bound, reviewer
+paired-label count, reviewer distinct-case count, reviewer observed agreement,
+and reviewer Wilson lower bound. `npm run validation:status` cross-checks those
+per-scale summaries against the parsed report artifacts, so a status file cannot
+claim unsupported counts, rates, Wilson lower bounds, or report paths. `npm run
+validation:status-evidence` can generate a draft of that status block from the
+clinical agreement, reviewer-agreement, and review-package verification
+artifacts; with `--status-patch`, it also drafts the matching clinical,
+reviewer, and package-verification report path arrays and their matching
+source-hash arrays. The release decision remains a future human-reviewed status
+file update. It also audits the machine-readable minimum standard for future
+validation review: the 30-assessment floor, 10 distinct validation cases, 80%
+observed agreement, 80% Wilson lower bound, 80% usable movement coverage, Wilson
+95% confidence interval, current clinical-scale estimator version, review
+protocol, and House-Brackmann severity-band floors must remain at or above the
+documented release standard. The status file must also include
+`clinicalScaleAvailability` entries for House-Brackmann, Sunnybrook, and eFACE,
+so every future reviewed release records an explicit per-scale validation
+decision. A per-scale availability flag is only evidence metadata; it cannot
+bypass the global release gate, and a global reviewed status must name at least
+one enabled primary scale. The runtime presentation policy still fails closed
+when a primary scale is not explicitly listed in `clinicalScaleAvailability`,
+even if the global `clinicalFacingScoresAllowed` flag is true.
+
+`npm run validation:status` validates both the status JSON and any referenced
+report artifacts. Clinical agreement report paths must point to Markdown reports
+with the Mirror clinical-scale agreement heading, primary
+House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
+observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
+coverage, an agreement sample plan, current estimator-version evidence, the 80%
+usable-movement coverage floor, complete/minimum estimate evidence-tier controls,
+unique assessment-id controls, explicit distinct validation-case controls,
+explicit movement, scale-input, and resting-metric provenance controls, explicit
+reference-standard controls, scale-specific label/estimate gap counters, and
+release-control text. When all three primary scales are enabled, the report
+status must also be the passing
+confidence-standard status. Structured clinical agreement JSON artifacts must be
+`mirror-clinical-scale-agreement-report` schema v1 before they can be used as
+machine release evidence, observed agreement rates must match the reported
+within-tolerance counts, label denominators, and Wilson score intervals, and the
+summary must include primary-scale issue-counter objects. Every
+clinical agreement, reviewer-agreement, clinical review package verification,
+and threshold calibration artifact must include a UTC ISO `generatedAt`
+timestamp that is not later than the validation status `updatedAt` date.
+Clinical reviewer-agreement report paths must point to JSON
+`mirror-clinical-scale-reviewer-agreement-report` schema-v1 artifacts with
+current-version eligible reviewer sheets, `sourceDatasetSha256` matching the
+clinical agreement report and listed passed review package verification report,
+within-tolerance rates that match the reported paired-label counts and Wilson
+score intervals, complete/minimum estimate evidence and 80% usable-movement
+coverage provenance, scale-specific input provenance, complete resting-metric
+provenance, no excluded reviewer-pair, metadata, or estimate-evidence blockers,
+zero incomplete scale-specific estimate-input skips for every enabled primary
+scale, at least 30 eligible paired labels on every enabled primary scale, at
+least 10 distinct pseudonymous validation cases, at least 80% observed reviewer
+agreement, distinct pseudonymous reviewer ids for the raw reviewer sheets, zero
+cross-severity House-Brackmann reviewer disagreements, and Wilson lower-bound
+reviewer agreement meeting the configured 80% standard, plus House-Brackmann
+same-band reviewer severity coverage before that scale can be counted in any
+future reviewed validation status.
+Clinical review package verification report paths must point to JSON
+`mirror-clinical-scale-review-package-verification` schema-v1 artifacts with
+`status: passed`, a source dataset SHA-256 match, blinded-manifest controls,
+stable row identities, hidden estimate-value columns, unchanged
+estimate-provenance columns, no verification errors, and at least the configured
+minimum reviewed clinical-scale assessment rows before that package can support
+any future reviewed validation status. Clinical agreement and reviewer-agreement
+reports used for
+enabled scales must carry `sourceDatasetSha256`, and those values must match one
+of the listed passed review package verification reports so release evidence
+traces back to the blinded source dataset package. The status file must list the
+same source hashes in `clinicalScaleAgreementSourceDatasetSha256s`,
+`clinicalScaleReviewerAgreementSourceDatasetSha256s`, and
+`clinicalScaleReviewPackageVerificationSourceDatasetSha256s`; an enabled scale
+whose hash is missing from any of those lists remains in estimate mode. The
+artifact validator also rejects referenced clinical agreement,
+reviewer-agreement, or package-verification reports when the artifact's own
+`sourceDatasetSha256` is not listed in the corresponding status hash array, and
+the status schema rejects source-hash arrays that are not paired with their
+report path arrays. Each source-hash array must exactly match the source hashes
+of its referenced artifacts, without stale extra hashes.
+Threshold calibration report paths must point to JSON
+`mirror-threshold-calibration-report` schema-v1 artifacts with
+`sourceDatasetSha256` and ready-exercise coverage that matches the status claim.
+The status file must list exactly those hashes in
+`thresholdCalibrationSourceDatasetSha256s`.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

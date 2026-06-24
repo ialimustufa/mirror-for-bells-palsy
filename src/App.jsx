@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { archiveMovementProfile, mergeMissingMovementProfileBaselines, mergeMovementProfileRetake, needsSideConventionMigration, normalizeAppData, resetMovementProfileBaselines } from "./domain/appData";
 import { PROFILE_HISTORY_LIMIT } from "./domain/config";
+import { ASSESSMENT_SESSION_KIND, appendAssessmentRecord, buildStandardAssessmentExercises, summarizeAssessmentSession } from "./domain/assessment";
+import { buildClinicianBundleRecords, createClinicianBundleExportBlob } from "./domain/clinicianBundle";
 import { EXERCISE_BY_ID } from "./domain/exercises";
 import { trainPersonalRecoveryModel } from "./domain/personalRecoveryModel";
+import { buildValidationDatasetRecords, createValidationDatasetExportBlob } from "./domain/validationDataset";
 import {
   DEFAULT_DATA,
   DEFAULT_PERSONAL_PLAN,
@@ -186,6 +189,21 @@ export default function App() {
     const kind = ids.length > 1 ? "session" : "practice";
     setSession({ exercises, kind, startedAt: Date.now(), comfortLevel: getComfortDosing(data.movementProfile).key });
   };
+  const startAssessment = () => {
+    const exercises = buildStandardAssessmentExercises(data.movementProfile);
+    const firstExercise = exercises[0];
+    primeSpeech(data.prefs.voiceEnabled, {
+      text: firstExercise ? `Standard assessment. Up next: ${firstExercise.name}.` : "Standard assessment ready.",
+      volume: 1,
+    });
+    setSession({
+      exercises,
+      kind: ASSESSMENT_SESSION_KIND,
+      assessmentKind: "standard-assessment",
+      startedAt: Date.now(),
+      comfortLevel: getComfortDosing(data.movementProfile).key,
+    });
+  };
   const completeSession = (rec) => {
     let shouldPromptJournal = false;
     persist((currentData) => {
@@ -193,7 +211,11 @@ export default function App() {
       shouldPromptJournal = isCountedSession(rec)
         && existingCountedSessionsToday === 0
         && !currentData.journal.some((entry) => entry.date === rec.date);
-      return withPersonalRecoveryModel(appendSessionRecord(currentData, rec));
+      const withSession = appendSessionRecord(currentData, rec);
+      const withAssessment = rec.kind === ASSESSMENT_SESSION_KIND
+        ? appendAssessmentRecord(withSession, summarizeAssessmentSession(rec))
+        : withSession;
+      return withPersonalRecoveryModel(withAssessment);
     });
     setSession(null);
     if (shouldPromptJournal) setJournalPrompt({ session: rec });
@@ -225,12 +247,12 @@ export default function App() {
 
   const streak = useMemo(() => computeStreak(data.sessions), [data.sessions]);
   const recommendedPlanIds = useMemo(
-    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { orderByRegion: true }),
-    [data.movementProfile, data.sessions],
+    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { journal: data.journal, orderByRegion: true }),
+    [data.movementProfile, data.sessions, data.journal],
   );
   const personalizedPlanIds = useMemo(
-    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { personalPlan: data.prefs.personalPlan, orderByRegion: true }),
-    [data.movementProfile, data.sessions, data.prefs.personalPlan],
+    () => buildPersonalizedDailyPlan(data.movementProfile, data.sessions, undefined, { journal: data.journal, personalPlan: data.prefs.personalPlan, orderByRegion: true }),
+    [data.movementProfile, data.sessions, data.journal, data.prefs.personalPlan],
   );
   const savePersonalPlan = useCallback((selectedExerciseIds, repeatCounts = {}, repCounts = {}) => {
     const selected = orderExerciseIdsByRegion([...new Set(selectedExerciseIds ?? [])].filter((id) => EXERCISE_BY_ID.has(id)), recommendedPlanIds);
@@ -284,6 +306,42 @@ export default function App() {
       setDataTransferStatus({ kind: "error", message: "Could not export browser data." });
     }
   }, []);
+  const exportClinicianBundle = useCallback(async () => {
+    setDataTransferStatus({ kind: "working", message: "Preparing clinician bundle..." });
+    try {
+      await persistQueueRef.current.catch(() => {});
+      const payload = await exportMirrorBrowserData();
+      const records = buildClinicianBundleRecords(payload);
+      const blob = createClinicianBundleExportBlob(records);
+      const filename = `mirror-clinician-bundle-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      downloadFile(blob, filename);
+      setDataTransferStatus({ kind: "success", message: `Exported clinician bundle with ${records[0]?.summary?.sessions ?? 0} sessions.` });
+    } catch (error) {
+      console.error("Failed to export clinician bundle", error);
+      setDataTransferStatus({ kind: "error", message: "Could not export clinician bundle." });
+    }
+  }, []);
+  const exportValidationDataset = useCallback(async () => {
+    setDataTransferStatus({ kind: "working", message: "Preparing validation dataset..." });
+    try {
+      await persistQueueRef.current.catch(() => {});
+      const payload = await exportMirrorBrowserData();
+      const records = buildValidationDatasetRecords(payload);
+      const sampleCount = records[0]?.summary?.frameSamples ?? 0;
+      const clinicalScaleAssessmentCount = records[0]?.summary?.assessmentClinicalScaleRecords ?? 0;
+      if (!sampleCount && !clinicalScaleAssessmentCount) {
+        setDataTransferStatus({ kind: "success", message: "No local frame samples or standard assessment rows to export. Turn on Local data capture before a session, or complete a standard assessment." });
+        return;
+      }
+      const blob = createValidationDatasetExportBlob(records);
+      const filename = `mirror-validation-dataset-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      downloadFile(blob, filename);
+      setDataTransferStatus({ kind: "success", message: `Exported validation dataset with ${sampleCount} frame samples and ${clinicalScaleAssessmentCount} clinical-scale assessment rows.` });
+    } catch (error) {
+      console.error("Failed to export validation dataset", error);
+      setDataTransferStatus({ kind: "error", message: "Could not export validation dataset." });
+    }
+  }, []);
   const importBrowserData = useCallback(async (file) => {
     if (!file) return;
     setDataTransferStatus({ kind: "working", message: "Importing browser data..." });
@@ -326,11 +384,11 @@ export default function App() {
       <div className="relative max-w-2xl mx-auto px-5 pb-28 pt-8 lg:pb-12">
         <Header view={view} streak={streak} />
         <main className="mt-8 lg:mt-2">
-          {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
+          {view === "home" && <HomeView data={data} streak={streak} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} onStartProfile={openProfileAssessment} onStartSession={startSession} onStartAssessment={startAssessment} onGo={setView} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "practice" && <PracticeView movementProfile={data.movementProfile} sessions={data.sessions} personalizedPlanIds={personalizedPlanIds} recommendedPlanIds={recommendedPlanIds} savedRepeatCounts={data.prefs.personalPlan?.repeatCounts} savedRepCounts={data.prefs.personalPlan?.repCounts} onStartSession={startSession} onShowDetail={setExerciseDetail} onSavePersonalPlan={savePersonalPlan} onResetPersonalPlan={resetPersonalPlan} />}
           {view === "baseline" && <BaselineView data={data} onStartProfile={openProfileAssessment} onResetBaselines={resetMovementBaselines} />}
           {view === "journal" && <JournalView entries={data.journal} onSave={saveJournal} />}
-          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} dataTransferStatus={dataTransferStatus} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onExportData={exportBrowserData} onImportData={importBrowserData} />}
+          {view === "progress" && <ProgressView data={data} streak={streak} prefs={data.prefs} dataTransferStatus={dataTransferStatus} onTogglePref={togglePref} onSetPref={setPref} onOpenReport={openStoredReport} onDeleteSession={deleteSession} onExportData={exportBrowserData} onExportClinicianBundle={exportClinicianBundle} onExportValidationDataset={exportValidationDataset} onImportData={importBrowserData} />}
         </main>
         <footer className="mt-10 text-center text-xs text-stone-500">
           <MadeByFooter />
@@ -341,7 +399,7 @@ export default function App() {
       {exerciseDetail && <ExerciseDetail exercise={exerciseDetail} movementProfile={data.movementProfile} onClose={() => setExerciseDetail(null)} onStart={(id) => { setExerciseDetail(null); startSession([id]); }} />}
       {showOnboarding && <Onboarding onDone={finishOnboarding} dailyGoal={data.prefs.dailyGoal} onSetDailyGoal={(n) => setPref("dailyGoal", n)} voiceEnabled={data.prefs.voiceEnabled} onToggleVoice={() => togglePref("voiceEnabled")} />}
       {profileAssessment && <ProfileAssessment existingProfile={data.movementProfile} retakeExerciseIds={profileAssessment.retakeExerciseIds} prefs={data.prefs} onTogglePref={togglePref} onComplete={saveMovementProfile} onSkip={() => setProfileAssessment(null)} />}
-      {viewingReport && <SessionSummary session={viewingReport} onClose={() => setViewingReport(null)} />}
+      {viewingReport && <SessionSummary session={viewingReport} prefs={data.prefs} onClose={() => setViewingReport(null)} />}
       {journalPrompt && (
         <JournalPrompt
           session={journalPrompt.session}

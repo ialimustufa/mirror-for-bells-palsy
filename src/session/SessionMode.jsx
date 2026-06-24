@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Play, Pause, X, ChevronRight, Volume2, VolumeX, Camera, CameraOff } from "lucide-react";
 import { CALIBRATION_FRAMES, CALIBRATION_RESET_EPS, INTERSTITIAL_SEC } from "../domain/config";
+import { summarizeCaptureQualityFromFeatures, summarizeSessionCaptureQuality } from "../domain/captureQuality";
+import { SETUP_SAMPLE_TARGET, summarizeCaptureSetupQuality } from "../domain/captureSetupQuality";
 import { canPromptRetakeAfterRep, exerciseHoldSec, exercisePlannedSec, exerciseRestSec, todayISO } from "../domain/session";
 import { flushSpeech, primeSpeech, speak } from "../lib/speech";
 import { useCameraStream } from "../hooks/useCameraStream";
 import { useFaceLandmarker } from "../hooks/useFaceLandmarker";
 import { InterstitialView, PreviewView, RealtimeFeedback, SessionSummary, TrackerStatusPill } from "../components/appViews";
-import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetry, computeMovementProgressFromDisplacements, computeNoiseFloor, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
+import { BROW_EXERCISES, EXERCISE_BLENDSHAPES, NOSE_EXERCISES, SCORE_DROP_REASONS, SCORING_MODEL_VERSION, averageBlendshapes, averageFacialTransformationMatrix, averageLandmarks, bsActivation, calibrationPrompt, captureSnapshot, computeBaselineProgress, computeBaselineProgressFromDisplacements, computeExerciseSymmetryDiagnostic, computeMovementProgressFromDisplacements, computeNoiseFloor, computeQuietRegionCoactivation, createLiveScoreStabilizer, drawOverlay, effectiveProfileThreshold, faceAlignmentFeedback, firstFacialTransformationMatrix, getProfileExercise, normalizeScoringNoiseMode, normalizedFrameDelta, smoothFacialTransformationMatrix, smoothLandmarks, summarizeBaselineProgress, summarizeMovementProgress, summarizeRestingAsymmetry, summarizeSessionBaselineProgress, summarizeSessionMovementProgress } from "../ml/faceMetrics";
 
 const TRACKING_ISSUES = {
   faceMissing: "Find your face in the camera.",
@@ -27,6 +29,16 @@ function createHoldTracking(exerciseId = null, threshold = null) {
 
 function profileActivationThreshold(profile, exerciseId) {
   return effectiveProfileThreshold(exerciseId, getProfileExercise(profile, exerciseId)?.activationThreshold) ?? null;
+}
+
+function profileThresholdBands(profile, exerciseId) {
+  const bands = getProfileExercise(profile, exerciseId)?.thresholdBands;
+  if (!bands || typeof bands !== "object") return null;
+  return {
+    minimumVisible: compactNumber(bands.minimumVisible),
+    reliableMovement: compactNumber(effectiveProfileThreshold(exerciseId, bands.reliableMovement)),
+    baselineTarget: compactNumber(bands.baselineTarget),
+  };
 }
 
 function hasRetakeGate(tracking, exerciseId) {
@@ -73,6 +85,97 @@ function compactNumber(value, digits = 5) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
 }
 
+function addReasonCount(counts = {}, reason) {
+  if (!reason) return counts;
+  return { ...counts, [reason]: (counts[reason] ?? 0) + 1 };
+}
+
+function mergeReasonCounts(items = []) {
+  const merged = {};
+  for (const item of items) {
+    for (const [reason, count] of Object.entries(item ?? {})) {
+      if (!Number.isFinite(count) || count <= 0) continue;
+      merged[reason] = (merged[reason] ?? 0) + count;
+    }
+  }
+  return Object.keys(merged).length ? merged : null;
+}
+
+function percentile(values, pct) {
+  const valid = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!valid.length) return null;
+  const idx = (valid.length - 1) * pct;
+  const lower = Math.floor(idx);
+  const upper = Math.ceil(idx);
+  if (lower === upper) return valid[lower];
+  return valid[lower] + (valid[upper] - valid[lower]) * (idx - lower);
+}
+
+function scoreDistribution(values = []) {
+  const valid = values.filter(Number.isFinite);
+  if (!valid.length) return null;
+  const sum = valid.reduce((a, b) => a + b, 0);
+  const p25 = percentile(valid, 0.25);
+  const median = percentile(valid, 0.5);
+  const p75 = percentile(valid, 0.75);
+  return {
+    count: valid.length,
+    mean: compactNumber(sum / valid.length, 5),
+    min: compactNumber(Math.min(...valid), 5),
+    p25: compactNumber(p25, 5),
+    median: compactNumber(median, 5),
+    p75: compactNumber(p75, 5),
+    max: compactNumber(Math.max(...valid), 5),
+    iqr: p25 != null && p75 != null ? compactNumber(p75 - p25, 5) : null,
+  };
+}
+
+function summarizeScoreDistributions(features = []) {
+  const distributions = features.map((item) => item?.scoreDistribution).filter(Boolean);
+  if (!distributions.length) return null;
+  const totalCount = distributions.reduce((sum, item) => sum + (item.count ?? 0), 0);
+  if (!totalCount) return null;
+  const weighted = (key) => {
+    const valid = distributions.filter((item) => Number.isFinite(item[key]) && Number.isFinite(item.count) && item.count > 0);
+    const weight = valid.reduce((sum, item) => sum + item.count, 0);
+    return weight ? compactNumber(valid.reduce((sum, item) => sum + item[key] * item.count, 0) / weight, 5) : null;
+  };
+  const p25 = weighted("p25");
+  const p75 = weighted("p75");
+  return {
+    count: totalCount,
+    mean: weighted("mean"),
+    min: compactNumber(Math.min(...distributions.map((item) => item.min).filter(Number.isFinite)), 5),
+    p25,
+    median: weighted("median"),
+    p75,
+    max: compactNumber(Math.max(...distributions.map((item) => item.max).filter(Number.isFinite)), 5),
+    iqr: p25 != null && p75 != null ? compactNumber(p75 - p25, 5) : null,
+  };
+}
+
+function summarizeCoactivation(samples = []) {
+  const valid = samples.filter((item) => Number.isFinite(item?.score));
+  if (!valid.length) return null;
+  const mean = valid.reduce((sum, item) => sum + item.score, 0) / valid.length;
+  const max = Math.max(...valid.map((item) => item.score));
+  const riskRank = { low: 0, medium: 1, high: 2 };
+  const risk = valid.reduce((current, item) => (riskRank[item.risk] > riskRank[current] ? item.risk : current), "low");
+  const regionScores = {};
+  for (const sample of valid) {
+    for (const region of sample.regions ?? []) {
+      regionScores[region.region] = Math.max(regionScores[region.region] ?? 0, region.movement ?? 0);
+    }
+  }
+  return {
+    score: compactNumber(mean, 4),
+    maxScore: compactNumber(max, 4),
+    risk,
+    sampleCount: valid.length,
+    regions: Object.entries(regionScores).map(([region, movement]) => ({ region, movement: compactNumber(movement, 5) })),
+  };
+}
+
 function compactLandmarksForCapture(landmarks) {
   if (!Array.isArray(landmarks)) return null;
   return landmarks.map((point) => point ? {
@@ -101,6 +204,78 @@ function compactMatrixForCapture(matrix) {
   };
 }
 
+function sampleVideoLighting(video, canvas) {
+  if (!video || !canvas || !video.videoWidth || !video.videoHeight) return null;
+  const width = 24;
+  const height = 16;
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  try {
+    ctx.drawImage(video, 0, 0, width, height);
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let sum = 0;
+    const values = [];
+    for (let i = 0; i < data.length; i += 4) {
+      const value = (data[i] * 0.2126 + data[i + 1] * 0.7152 + data[i + 2] * 0.0722) / 255;
+      values.push(value);
+      sum += value;
+    }
+    const brightness = sum / values.length;
+    const variance = values.reduce((acc, value) => acc + (value - brightness) ** 2, 0) / values.length;
+    return { brightness: compactNumber(brightness, 4), contrast: compactNumber(Math.sqrt(variance), 4) };
+  } catch {
+    return null;
+  }
+}
+
+function eyeDistance(lm) {
+  if (!lm?.[33] || !lm?.[263]) return null;
+  return Math.hypot(lm[263].x - lm[33].x, lm[263].y - lm[33].y);
+}
+
+function setupQualityColor(key) {
+  if (key === "strong") return "#A8C39F";
+  if (key === "usable") return "#D4A574";
+  if (key === "weak") return "#FFB48F";
+  return "#A8A29E";
+}
+
+function SetupQualityPanel({ summary }) {
+  if (!summary) return null;
+  const color = setupQualityColor(summary.key);
+  const pct = summary.score != null ? Math.round(summary.score * 100) : null;
+  const progress = Math.min(1, (summary.sampleCount ?? 0) / SETUP_SAMPLE_TARGET);
+  const items = summary.actionItems?.length
+    ? summary.actionItems
+    : summary.ready
+      ? ["Setup looks ready for calibration."]
+      : ["Hold still while Mirror checks camera quality."];
+  return (
+    <div className="absolute left-4 right-4 bottom-4 rounded-2xl p-3" style={{ background: "rgba(31, 27, 22, 0.78)", border: `1px solid ${color}88`, color: "#F4EFE6" }}>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <div className="text-xs uppercase tracking-wider opacity-55">Setup quality</div>
+          <div className="text-sm font-semibold" style={{ color }}>{summary.label}</div>
+        </div>
+        <div className="text-2xl tabular-nums" style={{ fontFamily: "Fraunces", fontWeight: 600, color }}>{pct == null ? "--" : `${pct}`}</div>
+      </div>
+      <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: "rgba(244,239,230,0.14)" }}>
+        <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: color }} />
+      </div>
+      <div className="grid grid-cols-3 gap-2 mb-2">
+        <div className="text-[10px] opacity-65">Face {summary.facePresenceRatio == null ? "--" : `${Math.round(summary.facePresenceRatio * 100)}%`}</div>
+        <div className="text-[10px] opacity-65">Centered {summary.alignmentRatio == null ? "--" : `${Math.round(summary.alignmentRatio * 100)}%`}</div>
+        <div className="text-[10px] opacity-65">FPS {summary.fps == null ? "--" : Math.round(summary.fps)}</div>
+      </div>
+      <div className="space-y-1">
+        {items.map((item) => <div key={item} className="text-xs leading-relaxed opacity-80">{item}</div>)}
+      </div>
+    </div>
+  );
+}
+
 function movementFeaturesFromHold({
   current,
   leftAvg,
@@ -110,13 +285,20 @@ function movementFeaturesFromHold({
   holdScoreCount,
   holdFaceFrames,
   holdAlignedFrames,
+  holdObservedFrames,
   activationPeak,
   profileThreshold,
+  thresholdBands,
   scoringNoiseMode,
+  scoreValues,
+  dropReasonCounts,
+  coactivationSamples,
 }) {
   const progress = initialMovementProgress ?? movementProgress;
   const alignedFrameRatio = holdFaceFrames > 0 ? holdAlignedFrames / holdFaceFrames : null;
+  const rejectedFrameCount = Math.max(0, (holdObservedFrames ?? holdFaceFrames ?? 0) - (holdScoreCount ?? 0));
   return {
+    scoringModelVersion: SCORING_MODEL_VERSION,
     exerciseId: current.id,
     affectedMovement: compactNumber(progress?.affectedMovement),
     properMovement: compactNumber(progress?.properMovement),
@@ -127,8 +309,14 @@ function movementFeaturesFromHold({
     activationPeak: compactNumber(activationPeak),
     validScoredFrameCount: holdScoreCount,
     holdFrameCount: holdFaceFrames,
+    observedFrameCount: holdObservedFrames,
+    rejectedFrameCount,
+    dropReasonCounts: Object.keys(dropReasonCounts ?? {}).length ? dropReasonCounts : null,
+    scoreDistribution: scoreDistribution(scoreValues),
+    coactivation: summarizeCoactivation(coactivationSamples),
     alignedFrameRatio: compactNumber(alignedFrameRatio, 4),
     profileThreshold: compactNumber(profileThreshold),
+    thresholdBands,
     scoringNoiseMode,
   };
 }
@@ -149,8 +337,11 @@ function summarizeMovementFeatures(features = []) {
   };
   const totalValidFrames = valid.reduce((sum, item) => sum + (item.validScoredFrameCount ?? 0), 0);
   const totalHoldFrames = valid.reduce((sum, item) => sum + (item.holdFrameCount ?? 0), 0);
+  const totalObservedFrames = valid.reduce((sum, item) => sum + (item.observedFrameCount ?? item.holdFrameCount ?? 0), 0);
+  const totalRejectedFrames = valid.reduce((sum, item) => sum + (item.rejectedFrameCount ?? 0), 0);
   const alignedFrames = valid.reduce((sum, item) => sum + ((item.alignedFrameRatio ?? 0) * (item.holdFrameCount ?? 0)), 0);
   return {
+    scoringModelVersion: SCORING_MODEL_VERSION,
     exerciseId: valid[0].exerciseId,
     affectedMovement: weightedAverage("affectedMovement"),
     properMovement: weightedAverage("properMovement"),
@@ -161,8 +352,14 @@ function summarizeMovementFeatures(features = []) {
     activationPeak: compactNumber(Math.max(...valid.map((item) => item.activationPeak ?? 0))),
     validScoredFrameCount: totalValidFrames,
     holdFrameCount: totalHoldFrames,
+    observedFrameCount: totalObservedFrames,
+    rejectedFrameCount: totalRejectedFrames,
+    dropReasonCounts: mergeReasonCounts(valid.map((item) => item.dropReasonCounts)),
+    scoreDistribution: summarizeScoreDistributions(valid),
+    coactivation: summarizeCoactivation(valid.map((item) => item.coactivation).filter(Boolean)),
     alignedFrameRatio: totalHoldFrames > 0 ? compactNumber(alignedFrames / totalHoldFrames, 4) : null,
     profileThreshold: weightedAverage("profileThreshold"),
+    thresholdBands: valid.find((item) => item.thresholdBands)?.thresholdBands ?? null,
     scoringNoiseMode: valid[0].scoringNoiseMode,
     reps: valid.length,
   };
@@ -356,9 +553,9 @@ function AscentRail({ exercises, exIdx, phase, phaseColor, elapsedFraction }) {
 }
 
 function SessionMode({ session, prefs, movementProfile, initialMovementProfile, sessionsToday, onComplete, onCancel, onTogglePref, onRequestProfileRetake }) {
-  // Phases: optional calibrate → rest (2s entry) → hold (4s) → rest (2s) → hold → ... → interstitial (10s) → next exercise → ... → summary
+  // Phases: optional setup → calibrate → rest (entry) → hold → rest → hold → ... → interstitial → next exercise → ... → summary
   // The single `rest` phase plays double-duty as exercise-entry settle AND between-rep recovery.
-  const [phase, setPhase] = useState(() => (prefs.symmetryEnabled && prefs.mirrorEnabled ? "calibrate" : "preview"));
+  const [phase, setPhase] = useState(() => (prefs.symmetryEnabled && prefs.mirrorEnabled ? "setup" : "preview"));
   const [exIdx, setExIdx] = useState(0);
   const [repIdx, setRepIdx] = useState(0);
   // Initialized to the first phase's duration because the session opens directly into preview — if this
@@ -385,6 +582,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const calibMatrixBufferRef = useRef([]);
   const lastCalibLmRef = useRef(null);
   const lastCalibMatrixRef = useRef(null);
+  const setupSamplesRef = useRef([]);
+  const lastSetupLmRef = useRef(null);
+  const lastSetupMatrixRef = useRef(null);
+  const lastSetupSampleAtRef = useRef(0);
+  const [setupQuality, setSetupQuality] = useState(null);
   const neutralRef = useRef(null);
   const noiseRef = useRef(null);
   const neutralBsRef = useRef(null);
@@ -411,8 +613,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const holdScoreCountRef = useRef(0);
   const holdLeftSumRef = useRef(0);
   const holdRightSumRef = useRef(0);
+  const holdScoreValuesRef = useRef([]);
+  const holdCoactivationRef = useRef([]);
   const holdFaceFramesRef = useRef(0);
   const holdAlignedFramesRef = useRef(0);
+  const holdObservedFrameCountRef = useRef(0);
+  const holdDropReasonCountsRef = useRef({});
   const holdActivationPeakRef = useRef(0);
   const liveScoreStabilizerRef = useRef(createLiveScoreStabilizer());
   const repMovementFeaturesRef = useRef([]);
@@ -433,6 +639,18 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   const autoPaused = symEnabled && trackerStatus === "ready" && (phase === "rest" || phase === "hold") && !postureAligned;
   const timerPaused = paused || autoPaused || Boolean(retakePrompt) || endSessionConfirmStep > 0;
   const dataCaptureEnabled = prefs.dataCaptureEnabled === true;
+
+  const recordSetupSample = useCallback((sample) => {
+    const now = sample?.ts ?? Date.now();
+    if (now - lastSetupSampleAtRef.current < 120) return;
+    lastSetupSampleAtRef.current = now;
+    setupSamplesRef.current = [...setupSamplesRef.current.slice(-80), { ...sample, ts: now }];
+    setSetupQuality(summarizeCaptureSetupQuality(setupSamplesRef.current));
+  }, []);
+
+  const recordHoldDropReason = useCallback((reason) => {
+    holdDropReasonCountsRef.current = addReasonCount(holdDropReasonCountsRef.current, reason);
+  }, []);
 
   const captureFrameSample = useCallback((sample) => {
     if (!dataCaptureEnabled) return;
@@ -461,6 +679,16 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   }, []);
 
   useEffect(() => {
+    if (phase !== "setup") return;
+    setupSamplesRef.current = [];
+    lastSetupLmRef.current = null;
+    lastSetupMatrixRef.current = null;
+    lastSetupSampleAtRef.current = 0;
+    setSetupQuality(summarizeCaptureSetupQuality([]));
+    speak(prefs.voiceEnabled, "Camera setup. Center your face and hold still.");
+  }, [phase, prefs.voiceEnabled]);
+
+  useEffect(() => {
     if (phase !== "calibrate") return;
     calibBufferRef.current = [];
     calibBsBufferRef.current = [];
@@ -478,7 +706,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   }, [phase, prefs.voiceEnabled]);
 
   useEffect(() => {
-    if (phase !== "calibrate") return;
+    if (phase !== "calibrate" && phase !== "setup") return;
     if (!symEnabled || cameraError || trackerStatus === "error") {
       setPhase("preview");
       setSecondsLeft(null);
@@ -496,8 +724,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
       holdScoreCountRef.current = 0;
       holdLeftSumRef.current = 0;
       holdRightSumRef.current = 0;
+      holdScoreValuesRef.current = [];
+      holdCoactivationRef.current = [];
       holdFaceFramesRef.current = 0;
       holdAlignedFramesRef.current = 0;
+      holdObservedFrameCountRef.current = 0;
+      holdDropReasonCountsRef.current = {};
       holdActivationPeakRef.current = 0;
       liveScoreStabilizerRef.current.reset();
       holdTrackingRef.current = createHoldTracking(current.id, profileActivationThreshold(movementProfile, current.id));
@@ -517,31 +749,40 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         // Post-hold rest: record this rep using the TIME-AVERAGED hold score; snapshot at peak movement.
         const avgScore = holdScoreCountRef.current > 0 ? holdScoreSumRef.current / holdScoreCountRef.current : null;
         if (avgScore != null) repScoresRef.current = [...repScoresRef.current, avgScore];
+        let leftAvg = null;
+        let rightAvg = null;
+        let movementProgress = null;
+        let initialMovementProgress = null;
         if (holdScoreCountRef.current > 0) {
-          const leftAvg = holdLeftSumRef.current / holdScoreCountRef.current;
-          const rightAvg = holdRightSumRef.current / holdScoreCountRef.current;
+          leftAvg = holdLeftSumRef.current / holdScoreCountRef.current;
+          rightAvg = holdRightSumRef.current / holdScoreCountRef.current;
           const progress = computeBaselineProgressFromDisplacements(current.id, leftAvg, rightAvg, movementProfile);
           const initialProgress = computeBaselineProgressFromDisplacements(current.id, leftAvg, rightAvg, initialMovementProfile);
-          const movementProgress = computeMovementProgressFromDisplacements(current.id, leftAvg, rightAvg, movementProfile);
-          const initialMovementProgress = computeMovementProgressFromDisplacements(current.id, leftAvg, rightAvg, initialMovementProfile);
+          movementProgress = computeMovementProgressFromDisplacements(current.id, leftAvg, rightAvg, movementProfile);
+          initialMovementProgress = computeMovementProgressFromDisplacements(current.id, leftAvg, rightAvg, initialMovementProfile);
           if (progress) repBaselineProgressRef.current = [...repBaselineProgressRef.current, progress];
           if (initialProgress) repInitialBaselineProgressRef.current = [...repInitialBaselineProgressRef.current, initialProgress];
           if (movementProgress) repMovementProgressRef.current = [...repMovementProgressRef.current, movementProgress];
           if (initialMovementProgress) repInitialMovementProgressRef.current = [...repInitialMovementProgressRef.current, initialMovementProgress];
-          repMovementFeaturesRef.current = [...repMovementFeaturesRef.current, movementFeaturesFromHold({
-            current,
-            leftAvg,
-            rightAvg,
-            movementProgress,
-            initialMovementProgress,
-            holdScoreCount: holdScoreCountRef.current,
-            holdFaceFrames: holdFaceFramesRef.current,
-            holdAlignedFrames: holdAlignedFramesRef.current,
-            activationPeak: holdActivationPeakRef.current,
-            profileThreshold: profileActivationThreshold(movementProfile, current.id),
-            scoringNoiseMode,
-          })];
         }
+        repMovementFeaturesRef.current = [...repMovementFeaturesRef.current, movementFeaturesFromHold({
+          current,
+          leftAvg,
+          rightAvg,
+          movementProgress,
+          initialMovementProgress,
+          holdScoreCount: holdScoreCountRef.current,
+          holdFaceFrames: holdFaceFramesRef.current,
+          holdAlignedFrames: holdAlignedFramesRef.current,
+          holdObservedFrames: holdObservedFrameCountRef.current,
+          activationPeak: holdActivationPeakRef.current,
+          profileThreshold: profileActivationThreshold(movementProfile, current.id),
+          thresholdBands: profileThresholdBands(movementProfile, current.id),
+          scoringNoiseMode,
+          scoreValues: holdScoreValuesRef.current,
+          dropReasonCounts: holdDropReasonCountsRef.current,
+          coactivationSamples: holdCoactivationRef.current,
+        })];
         const snap = peakSnapshotRef.current ?? captureSnapshot(videoRef.current, snapshotCanvasRef.current);
         if (snap) repSnapshotsRef.current = [...repSnapshotsRef.current, { ts: Date.now(), score: avgScore, dataUrl: snap }];
         speak(prefs.voiceEnabled, "Resting pose");
@@ -549,6 +790,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     } else if (phase === "interstitial") {
       setTrackingIssue(null);
       speak(prefs.voiceEnabled, "Nice work. Take a breath.");
+    } else if (phase === "setup") {
+      setTrackingIssue(null);
     } else if (phase === "preview") {
       setTrackingIssue(null);
       speak(prefs.voiceEnabled, `Up next: ${current.name}. ${current.instruction}`);
@@ -556,7 +799,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   }, [phase, exIdx, repIdx, current, initialMovementProfile, movementProfile, paused, prefs.voiceEnabled, scoringNoiseMode]);
 
   useEffect(() => {
-    if (timerPaused || phase === "summary" || phase === "calibrate" || phase === "preview") return;
+    if (timerPaused || phase === "summary" || phase === "setup" || phase === "calibrate" || phase === "preview") return;
     if (secondsLeft <= 0) {
       // Each branch sets BOTH the new phase and the new timer in one batch — otherwise the advance
       // effect would re-fire with stale secondsLeft = 0 and skip past the just-entered phase.
@@ -598,9 +841,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           const movementProgress = summarizeMovementProgress(repMovementProgressRef.current);
           const initialMovementProgress = summarizeMovementProgress(repInitialMovementProgressRef.current);
           const snapshots = repSnapshotsRef.current;
+          const repDiagnostics = repMovementFeaturesRef.current;
           const movementFeatures = summarizeMovementFeatures(repMovementFeaturesRef.current);
+          const captureQuality = summarizeCaptureQualityFromFeatures(repDiagnostics);
           const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-          setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, movementFeatures }]);
+          setExerciseScores((prev) => [...prev, { scoringModelVersion: SCORING_MODEL_VERSION, exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, movementFeatures, repDiagnostics, captureQuality }]);
           repScoresRef.current = [];
           repBaselineProgressRef.current = [];
           repInitialBaselineProgressRef.current = [];
@@ -629,7 +874,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     return () => clearTimeout(t);
   }, [current, currentHoldSec, currentReps, currentRestSec, exIdx, phase, prefs.voiceEnabled, repIdx, secondsLeft, timerPaused, totalExercises]);
 
-  // FaceLandmarker detection + overlay loop — synchronous detectForVideo, runs continuously so the overlay stays live
+  // FaceLandmarker detection + overlay loop. The hook workerizes MediaPipe when supported
+  // and falls back to the same async facade on the main thread when needed.
   useEffect(() => {
     if (!faceLandmarker || !videoRef.current) return;
     const bsMapping = EXERCISE_BLENDSHAPES[current.id] ?? null;
@@ -637,17 +883,19 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const isNose = NOSE_EXERCISES.has(current.id);
 
     let raf, alive = true, lastTs = 0;
-    const tick = () => {
+    const tick = async () => {
       if (!alive) return;
       const v = videoRef.current;
       if (!v || v.readyState < 2 || v.paused) { raf = requestAnimationFrame(tick); return; }
       try {
         const ts = Math.max(lastTs + 1, performance.now());
         lastTs = ts;
-        const taskResult = faceLandmarker.detectForVideo(v, ts);
+        const taskResult = await faceLandmarker.detectForVideo(v, ts);
+        if (!alive) return;
         const rawLm = taskResult.faceLandmarks?.[0];
         const bsArr = taskResult.faceBlendshapes?.[0]?.categories;
         const rawMatrix = firstFacialTransformationMatrix(taskResult);
+        if (phase === "hold") holdObservedFrameCountRef.current++;
 
         if (rawLm) {
           if (phase === "hold" && hasRetakeGate(holdTrackingRef.current, current.id)) {
@@ -665,7 +913,20 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           setPostureAligned((prev) => (prev === aligned ? prev : aligned));
           let captureScoring = null;
 
-          if (phase === "calibrate") {
+          if (phase === "setup") {
+            const lighting = sampleVideoLighting(v, snapshotCanvasRef.current);
+            const stabilityDelta = prevLm ? normalizedFrameDelta(lm, prevLm, facialTransformationMatrix, prevMatrix) : null;
+            recordSetupSample({
+              facePresent: true,
+              aligned,
+              centerOff: compactNumber(alignment.centerOff),
+              tiltRad: compactNumber(alignment.tiltRad),
+              stabilityDelta: compactNumber(stabilityDelta),
+              eyeDistance: compactNumber(eyeDistance(lm), 4),
+              brightness: lighting?.brightness ?? null,
+              contrast: lighting?.contrast ?? null,
+            });
+          } else if (phase === "calibrate") {
             if (!neutralRef.current) {
               if (!aligned) {
                 calibBufferRef.current = [];
@@ -716,7 +977,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               setLiveScore(null);
               setLiveBalance(null);
               setLiveBaselineProgress(null);
-              captureScoring = { activated: false, reason: "alignment" };
+              recordHoldDropReason(SCORE_DROP_REASONS.alignment);
+              captureScoring = {
+                scoringModelVersion: SCORING_MODEL_VERSION,
+                activated: false,
+                reason: SCORE_DROP_REASONS.alignment,
+                dropReason: SCORE_DROP_REASONS.alignment,
+              };
               if (hasRetakeGate(holdTrackingRef.current, current.id)) {
                 setTrackingIssue((prev) => (prev === TRACKING_ISSUES.alignment ? prev : TRACKING_ISSUES.alignment));
               }
@@ -731,18 +998,27 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               // Other exercises: face-local landmark-pair displacement with per-landmark noise
               // subtracted out. Fallback: generic 9-pair.
               const scoringOptions = { scoringNoiseMode, scoringDiagnosticsEnabled };
-              symResult = computeExerciseSymmetry(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current, facialTransformationMatrix, neutralMatrixRef.current, scoringOptions);
+              const scoringDiagnostic = computeExerciseSymmetryDiagnostic(current.id, lm, neutralRef.current, noiseRef.current, bsMap, neutralBsRef.current, facialTransformationMatrix, neutralMatrixRef.current, scoringOptions);
+              symResult = scoringDiagnostic.result;
               if (symResult != null) {
                 const profileExercise = getProfileExercise(movementProfile, current.id);
                 const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                const thresholdBands = profileThresholdBands(movementProfile, current.id);
                 const activated = !profileThreshold || symResult.peak >= profileThreshold;
+                const coactivation = computeQuietRegionCoactivation(current.id, lm, neutralRef.current, noiseRef.current, facialTransformationMatrix, neutralMatrixRef.current, symResult.peak, scoringOptions);
+                if (coactivation) holdCoactivationRef.current = [...holdCoactivationRef.current, coactivation];
                 captureScoring = {
+                  scoringModelVersion: SCORING_MODEL_VERSION,
                   rawSymmetry: compactNumber(symResult.symmetry, 5),
                   leftDisp: compactNumber(symResult.leftDisp),
                   rightDisp: compactNumber(symResult.rightDisp),
                   peak: compactNumber(symResult.peak),
                   profileThreshold: compactNumber(profileThreshold),
+                  thresholdBands,
                   activated,
+                  dropReason: activated ? null : SCORE_DROP_REASONS.belowActivationThreshold,
+                  normalizationMethod: scoringDiagnostic.normalizationMethod,
+                  coactivation,
                 };
                 logScoringSessionDebug("hold frame", {
                   exerciseId: current.id,
@@ -782,6 +1058,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                   // A saved movement profile raises this from generic movement to user-scaled movement.
                   holdScoreSumRef.current += symResult.symmetry;
                   holdScoreCountRef.current++;
+                  holdScoreValuesRef.current = [...holdScoreValuesRef.current, symResult.symmetry];
                   holdLeftSumRef.current += symResult.leftDisp;
                   holdRightSumRef.current += symResult.rightDisp;
                   setLiveBaselineProgress(computeBaselineProgress(current.id, liveResult ?? symResult, movementProfile));
@@ -792,6 +1069,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
                     setTrackingIssue((prev) => (prev == null ? prev : null));
                   }
                 } else {
+                  recordHoldDropReason(SCORE_DROP_REASONS.belowActivationThreshold);
                   const liveResult = liveScoreStabilizerRef.current.update(null);
                   captureScoring.displaySymmetry = compactNumber(liveResult?.symmetry, 5);
                   captureScoring.displayLeftDisp = compactNumber(liveResult?.leftDisp);
@@ -807,11 +1085,17 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               } else {
                 const profileExercise = getProfileExercise(movementProfile, current.id);
                 const profileThreshold = effectiveProfileThreshold(current.id, profileExercise?.activationThreshold);
+                const thresholdBands = profileThresholdBands(movementProfile, current.id);
                 captureScoring = {
+                  scoringModelVersion: SCORING_MODEL_VERSION,
                   activated: false,
                   profileThreshold: compactNumber(profileThreshold),
-                  reason: "no-symmetry-result",
+                  thresholdBands,
+                  reason: scoringDiagnostic.dropReason ?? SCORE_DROP_REASONS.noSymmetryResult,
+                  dropReason: scoringDiagnostic.dropReason ?? SCORE_DROP_REASONS.noSymmetryResult,
+                  normalizationMethod: scoringDiagnostic.normalizationMethod,
                 };
+                recordHoldDropReason(captureScoring.dropReason);
                 logScoringSessionDebug("no symmetry result", {
                   exerciseId: current.id,
                   rawProfileThreshold: debugSessionMetric(profileExercise?.activationThreshold),
@@ -872,6 +1156,33 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           setLiveScore(null);
           setLiveBalance(null);
           setLiveBaselineProgress(null);
+          if (phase === "setup") {
+            const lighting = sampleVideoLighting(v, snapshotCanvasRef.current);
+            recordSetupSample({
+              facePresent: false,
+              aligned: false,
+              brightness: lighting?.brightness ?? null,
+              contrast: lighting?.contrast ?? null,
+            });
+          }
+          if (phase === "hold") {
+            recordHoldDropReason(SCORE_DROP_REASONS.noFace);
+            captureFrameSample({
+              aligned: false,
+              alignmentIssue: SCORE_DROP_REASONS.noFace,
+              rawLandmarks: null,
+              landmarks: null,
+              blendshapes: null,
+              rawFacialTransformationMatrix: compactMatrixForCapture(rawMatrix),
+              facialTransformationMatrix: null,
+              scoring: {
+                scoringModelVersion: SCORING_MODEL_VERSION,
+                activated: false,
+                reason: SCORE_DROP_REASONS.noFace,
+                dropReason: SCORE_DROP_REASONS.noFace,
+              },
+            });
+          }
           if (phase === "hold" && hasRetakeGate(holdTrackingRef.current, current.id)) {
             setTrackingIssue((prev) => (prev === TRACKING_ISSUES.faceMissing ? prev : TRACKING_ISSUES.faceMissing));
           }
@@ -894,7 +1205,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     };
     raf = requestAnimationFrame(tick);
     return () => { alive = false; cancelAnimationFrame(raf); };
-  }, [captureFrameSample, current, dataCaptureEnabled, exIdx, faceLandmarker, latestRef, phase, repIdx, currentRestSec, movementProfile, scoringDiagnosticsEnabled, scoringNoiseMode]);
+  }, [captureFrameSample, current, dataCaptureEnabled, exIdx, faceLandmarker, latestRef, phase, repIdx, currentRestSec, movementProfile, recordHoldDropReason, recordSetupSample, scoringDiagnosticsEnabled, scoringNoiseMode]);
 
   const finalizeCurrentExercise = () => {
     const scores = repScoresRef.current;
@@ -903,9 +1214,11 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const movementProgress = summarizeMovementProgress(repMovementProgressRef.current);
     const initialMovementProgress = summarizeMovementProgress(repInitialMovementProgressRef.current);
     const snapshots = repSnapshotsRef.current;
+    const repDiagnostics = repMovementFeaturesRef.current;
     const movementFeatures = summarizeMovementFeatures(repMovementFeaturesRef.current);
+    const captureQuality = summarizeCaptureQualityFromFeatures(repDiagnostics);
     const avg = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
-    setExerciseScores((prev) => [...prev, { exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, movementFeatures }]);
+    setExerciseScores((prev) => [...prev, { scoringModelVersion: SCORING_MODEL_VERSION, exerciseId: current.id, name: current.name, region: current.region, repsTarget: current.reps, holdSec: current.holdSec, restSec: current.restSec, comfortLevel: current.comfortLevel, baselineSnapshot: baselineSnapshotRef.current, scores, avg, snapshots, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, movementFeatures, repDiagnostics, captureQuality }]);
     repScoresRef.current = [];
     repBaselineProgressRef.current = [];
     repInitialBaselineProgressRef.current = [];
@@ -961,6 +1274,12 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     setSecondsLeft(null);
   };
 
+  const beginCalibrationFromSetup = () => {
+    flushSpeech();
+    setPhase("calibrate");
+    setSecondsLeft(null);
+  };
+
   const nextInterstitial = () => { flushSpeech(); setSecondsLeft(0); };
 
   const handleRetakeBaseline = () => {
@@ -994,11 +1313,33 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
     const initialBaselineProgress = summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress");
     const movementProgress = summarizeSessionMovementProgress(exerciseScores);
     const initialMovementProgress = summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress");
+    const captureQuality = summarizeSessionCaptureQuality(exerciseScores);
     const frameSamples = dataCaptureEnabled && frameSamplesRef.current.length ? frameSamplesRef.current : undefined;
-    onComplete({ date: todayISO(), duration, exercises: exerciseScores.map((e) => e.exerciseId), scores: exerciseScores, sessionAvg, scoringNoiseMode, baselineProgress, initialBaselineProgress, movementProgress, initialMovementProgress, baselineSnapshot: baselineSnapshotRef.current, frameSamples, comfortLevel: session.comfortLevel, kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"), ts: Date.now() });
+    const restingMetrics = summarizeRestingAsymmetry(neutralRef.current, neutralMatrixRef.current);
+    onComplete({
+      scoringModelVersion: SCORING_MODEL_VERSION,
+      date: todayISO(),
+      duration,
+      exercises: exerciseScores.map((e) => e.exerciseId),
+      scores: exerciseScores,
+      sessionAvg,
+      scoringNoiseMode,
+      baselineProgress,
+      initialBaselineProgress,
+      movementProgress,
+      initialMovementProgress,
+      setupQuality,
+      captureQuality,
+      baselineSnapshot: baselineSnapshotRef.current,
+      ...(restingMetrics ? { restingMetrics } : {}),
+      frameSamples,
+      comfortLevel: session.comfortLevel,
+      kind: session.kind ?? (exerciseScores.length > 1 ? "session" : "practice"),
+      ts: Date.now(),
+    });
   };
 
-  if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} movementProgress={summarizeSessionMovementProgress(exerciseScores)} initialMovementProgress={summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress")} onFinish={handleFinish} />;
+  if (phase === "summary") return <SessionSummary scores={exerciseScores} sessionsToday={sessionsToday} dailyGoal={prefs.dailyGoal ?? 3} kind={session.kind} startedAt={session.startedAt} comfortLevel={session.comfortLevel} prefs={prefs} baselineProgress={summarizeSessionBaselineProgress(exerciseScores)} initialBaselineProgress={summarizeSessionBaselineProgress(exerciseScores, "initialBaselineProgress")} movementProgress={summarizeSessionMovementProgress(exerciseScores)} initialMovementProgress={summarizeSessionMovementProgress(exerciseScores, "initialMovementProgress")} restingMetrics={summarizeRestingAsymmetry(neutralRef.current, neutralMatrixRef.current)} onFinish={handleFinish} />;
   if (phase === "preview") {
     return (
       <PreviewView
@@ -1029,11 +1370,13 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
   }
 
   const phaseTone = {
+    setup: { tag: "CAMERA CHECK", title: "Setup check", prompt: setupQuality?.actionItems?.[0] ?? "Center your face and hold still.", color: setupQualityColor(setupQuality?.key), verb: "setup" },
     calibrate: { tag: "CALIBRATING", title: "Stay relaxed", prompt: calibrationStatus, color: "#D4A574", verb: "calibrate" },
     hold: { tag: "HOLD THE POSE", title: current.name, prompt: current.instruction, color: "#B8543A", verb: "contract" },
     rest: { tag: "RESTING POSE",  title: current.name, prompt: current.instruction, color: "#7A8F73", verb: "rest" },
   }[phase];
   const calibrationPct = Math.round((calibrationProgress / CALIBRATION_FRAMES) * 100);
+  const setupPct = setupQuality?.score != null ? Math.round(setupQuality.score * 100) : 0;
   const displayPrompt = autoPaused ? "Paused. Center your face inside the ring to continue." : phaseTone.prompt;
   const plannedSessionSec = session.exercises.reduce((sum, exercise) => sum + exercisePlannedSec(exercise), 0)
     + Math.max(0, totalExercises - 1) * INTERSTITIAL_SEC;
@@ -1077,7 +1420,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
               {phaseTone.title}
             </div>
             <div className="text-4xl tabular-nums leading-none transition-colors duration-300" style={{ fontFamily: "Fraunces", fontWeight: 600, color: phaseTone.color }}>
-              {phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
+              {phase === "setup" ? `${setupPct}%` : phase === "calibrate" ? `${calibrationPct}%` : (secondsLeft || "·")}
             </div>
           </div>
           <div className="text-sm leading-relaxed" style={{ color: "#F4EFE6" }}>{displayPrompt}</div>
@@ -1113,6 +1456,8 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           </div>
         )}
 
+        {phase === "setup" && <SetupQualityPanel summary={setupQuality} />}
+
         <div className="absolute top-4 right-[60px] flex flex-col items-end gap-2">
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap" style={{ background: "rgba(31, 27, 22, 0.7)", color: "#F4EFE6" }}>
             <span>Rep {repIdx + 1} / {currentReps}</span>
@@ -1133,7 +1478,7 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
           </div>
         )}
 
-        {(phase === "hold" || phase === "rest" || phase === "calibrate") && (
+        {(phase === "hold" || phase === "rest" || phase === "calibrate" || phase === "setup") && (
           <div className="absolute inset-x-0 top-0 h-1.5 transition-colors duration-300" style={{ background: phaseTone.color }} />
         )}
 
@@ -1144,14 +1489,19 @@ function SessionMode({ session, prefs, movementProfile, initialMovementProfile, 
         </div>
       </div>
 
-      <div className="p-4 shrink-0" style={{ borderTop: phase === "hold" || phase === "rest" || phase === "calibrate" ? `2px solid ${phaseTone.color}` : "2px solid transparent", transition: "border-color 300ms" }}>
+      <div className="p-4 shrink-0" style={{ borderTop: phase === "hold" || phase === "rest" || phase === "calibrate" || phase === "setup" ? `2px solid ${phaseTone.color}` : "2px solid transparent", transition: "border-color 300ms" }}>
         <div className="flex items-start gap-3">
           <button onClick={() => { setPaused((p) => { if (!p) flushSpeech(); return !p; }); }} className="flex-1 rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "rgba(244, 239, 230, 0.15)", color: "#F4EFE6" }}>
             {paused ? <Play className="w-4 h-4 fill-current" /> : <Pause className="w-4 h-4" />}{paused ? "Resume" : "Pause"}
           </button>
           <div className="flex-1 flex flex-col items-stretch gap-1.5">
-            <button onClick={phase === "calibrate" ? skipCalibration : handleSkipExercise} className="rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{phase === "calibrate" ? "Start unscored" : "Skip"}<ChevronRight className="w-4 h-4" /></button>
-            {phase !== "calibrate" && (
+            <button onClick={phase === "setup" ? beginCalibrationFromSetup : phase === "calibrate" ? skipCalibration : handleSkipExercise} className="rounded-full py-3 flex items-center justify-center gap-2 font-semibold" style={{ background: "#B8543A", color: "#F4EFE6" }}>{phase === "setup" ? "Continue" : phase === "calibrate" ? "Start unscored" : "Skip"}<ChevronRight className="w-4 h-4" /></button>
+            {phase === "setup" && (
+              <button onClick={skipCalibration} className="self-center text-xs font-semibold underline-offset-4 hover:underline" style={{ color: "rgba(244, 239, 230, 0.74)" }}>
+                Start unscored
+              </button>
+            )}
+            {phase !== "calibrate" && phase !== "setup" && (
               <button onClick={beginEndSessionConfirmation} className="self-center text-xs font-semibold underline-offset-4 hover:underline" style={{ color: "rgba(244, 239, 230, 0.74)" }}>
                 End session
               </button>

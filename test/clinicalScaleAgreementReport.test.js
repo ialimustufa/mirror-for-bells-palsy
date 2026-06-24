@@ -1,0 +1,348 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  buildClinicalScaleAgreementMarkdown,
+  buildClinicalScaleAgreementReport,
+} from "../src/ml/clinicalScaleAgreementReport.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
+
+const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
+
+function scaleReport({
+  labeledCount,
+  withinToleranceCount,
+  agreementRate = withinToleranceCount / labeledCount,
+  lower = 0.887,
+  upper = 1,
+  mismatches = [],
+  agreementSamplePlan,
+}) {
+  return {
+    labeledCount,
+    comparableCount: labeledCount,
+    missingEstimateCount: 0,
+    withinToleranceCount,
+    agreementRate,
+    agreementConfidenceInterval: {
+      method: "wilson-score",
+      confidenceLevel: 0.95,
+      lower,
+      upper,
+    },
+    agreementSamplePlan: agreementSamplePlan ?? {
+      currentReviewedLabels: labeledCount,
+      currentWithinToleranceCount: withinToleranceCount,
+      minimumReviewedLabels: 30,
+      requiredWithinToleranceAtCurrentLabelCount: labeledCount >= 30 ? 29 : null,
+      additionalPerfectLabelsToReachStandard: lower >= 0.8 && agreementRate >= 0.8 && labeledCount >= 30 ? 0 : null,
+      projectedReviewedLabelsAtStandard: lower >= 0.8 && agreementRate >= 0.8 && labeledCount >= 30 ? labeledCount : null,
+      projectedWithinToleranceAtStandard: lower >= 0.8 && agreementRate >= 0.8 && labeledCount >= 30 ? withinToleranceCount : null,
+    },
+    meanAbsDelta: 2,
+    mismatches,
+  };
+}
+
+function validationReport(overrides = {}) {
+  return {
+    kind: "mirror-clinical-scale-validation-report",
+    generatedAt: "2026-06-24T00:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
+    standard: {
+      minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
+      minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
+      minUsableMovementCoverageRatio: 0.8,
+      sunnybrookTolerance: 10,
+      efaceTolerance: 10,
+      confidenceInterval: {
+        method: "wilson-score",
+        confidenceLevel: 0.95,
+      },
+      clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+      requiresV3MovementProvenance: true,
+      requiresV4RestingMetricProvenance: true,
+      requiresHouseBrackmannRequiredInput: true,
+      requiresV5ScaleInputProvenance: true,
+      requiresExplicitClinicalConfidence: true,
+      requiresIsoReviewTimestamp: true,
+    },
+    summary: {
+      assessmentClinicalScaleRecords: 30,
+      uniqueAssessmentClinicalScaleRecords: 30,
+      duplicateClinicalScaleAssessmentIdCount: 0,
+      missingClinicalScaleAssessmentIdCount: 0,
+      reviewedAssessmentCount: 30,
+      distinctClinicalCaseCount: 30,
+      excludedClinicalLabelCount: 0,
+      excludedClinicalLabelReasons: {},
+      primaryScaleLabelIssueReasons: {},
+      primaryScaleEstimateIssueReasons: {},
+      estimatedAssessmentCount: 30,
+      estimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: 30 },
+      meetsMinimumStandard: true,
+    },
+    byScale: {
+      houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1 }),
+      sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1 }),
+      efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1 }),
+      efaceStatic: scaleReport({ labeledCount: 30, withinToleranceCount: 25 }),
+    },
+    caseMix: {
+      scale: "houseBrackmann",
+      minHouseBrackmannSeverityBands: 3,
+      minAssessmentsPerSeverityBand: 3,
+      severityBands: {
+        mild: { label: "HB I-II mild/normal", min: 1, max: 2, count: 10, meetsMinimum: true },
+        moderate: { label: "HB III-IV moderate", min: 3, max: 4, count: 10, meetsMinimum: true },
+        severe: { label: "HB V-VI severe/complete", min: 5, max: 6, count: 10, meetsMinimum: true },
+      },
+      representedSeverityBands: ["mild", "moderate", "severe"],
+      representedSeverityBandCount: 3,
+      meetsMinimumStandard: true,
+      blockingReasons: [],
+    },
+    blockingReasons: [],
+    ...overrides,
+  };
+}
+
+test("clinical scale agreement markdown summarizes primary scale readiness", () => {
+  const markdown = buildClinicalScaleAgreementMarkdown(validationReport(), { generatedAt: "2026-06-24T12:00:00.000Z" });
+
+  assert.match(markdown, /# Mirror Clinical Scale Agreement Report/);
+  assert.match(markdown, /Status: meets-clinical-scale-confidence-standard/);
+  assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
+  assert.match(markdown, /Distinct validation case minimum: 10/);
+  assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+  assert.match(markdown, new RegExp(`Source dataset SHA-256: ${SOURCE_DATASET_SHA256}`));
+  assert.match(markdown, /Minimum usable movement coverage: 80\.0%/);
+  assert.match(markdown, /Estimator input provenance: counted current-version rows preserve used\/omitted movement IDs/);
+  assert.match(markdown, /Sunnybrook\/eFACE input-completeness provenance/);
+  assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates[\s\S]*Sunnybrook\/eFACE input-completeness provenance/);
+  assert.match(markdown, /Sunnybrook\/eFACE primary comparisons require complete scale-specific movement input/);
+  assert.match(markdown, /required\/available\/missing resting metric keys/);
+  assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
+  assert.match(markdown, /Sunnybrook composite \| within 10 points/);
+  assert.match(markdown, /eFACE total \| within 10 points/);
+  assert.match(markdown, /Agreement Sample Plan/);
+  assert.match(markdown, /House-Brackmann \| 30 \| 30 \| 29 \| 0 \| 30 \| 30/);
+  assert.match(markdown, /Additional-perfect-label planning assumes future rows are eligible/);
+  assert.match(markdown, /Scale-Specific Availability Recommendation/);
+  assert.match(markdown, /houseBrackmann \| House-Brackmann \| meets minimum \| true after human review/);
+  assert.match(markdown, /sunnybrook \| Sunnybrook composite \| meets minimum \| true after human review/);
+  assert.match(markdown, /This recommendation does not update `docs\/validation-status\.json`/);
+  assert.match(markdown, /eFACE static/);
+  assert.match(markdown, /95% Wilson score interval/);
+  assert.match(markdown, /Excluded clinical-label rows: 0/);
+  assert.match(markdown, /Primary Scale Label And Estimate Gaps/);
+  assert.match(markdown, /Primary target label gaps:\s+- None/);
+  assert.match(markdown, /Primary estimate gaps:\s+- None/);
+  assert.match(markdown, /Unique assessment clinical-scale records: 30/);
+  assert.match(markdown, /Duplicate assessment IDs: 0/);
+  assert.match(markdown, /Rows missing assessment IDs: 0/);
+  assert.match(markdown, /Distinct validation cases: 30/);
+  assert.match(markdown, new RegExp(`Estimate version counts: ${CURRENT_ESTIMATOR_VERSION_KEY}: 30`));
+  assert.match(markdown, /House-Brackmann Case Mix/);
+  assert.match(markdown, /Required severity bands: 3/);
+  assert.match(markdown, /HB I-II mild\/normal \| 10 \| yes/);
+  assert.match(markdown, /HB III-IV moderate \| 10 \| yes/);
+  assert.match(markdown, /HB V-VI severe\/complete \| 10 \| yes/);
+  assert.match(markdown, /Reference Standard Controls/);
+  assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
+  assert.match(markdown, /Case identity control: counted labels require a pseudonymous `validationCaseId`/);
+  assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);
+  assert.match(markdown, /Unique assessment control: counted labels require one stable assessment id/);
+  assert.match(markdown, new RegExp(`Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+  assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates with status `estimated`/);
+  assert.match(markdown, /complete\/minimum evidence tier/);
+  assert.match(markdown, /at least 80% usable movement coverage/);
+  assert.match(markdown, /used\/omitted movement IDs/);
+  assert.match(markdown, /usable-movements-only calculation flag/);
+  assert.match(markdown, /House-Brackmann estimates require the gentle eye-closure input/);
+  assert.match(markdown, /missing, incomplete-input, or invalid estimates are reported in that scale's denominator/);
+  assert.match(markdown, /Source dataset control: counted agreement evidence requires `sourceDatasetSha256` matching a verified blinded clinical review package/);
+  assert.match(markdown, /valid in-range target for that specific primary scale/);
+  assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
+  assert.match(markdown, /Reviewer identity control: counted labels require a pseudonymous `reviewerId`/);
+  assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role and `clinicianConfidence` set to high or medium/);
+  assert.match(markdown, /Review timestamp control: counted labels require `reviewedAt` as a UTC ISO timestamp/);
+  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, `reviewedAt`, `sourceDatasetSha256`, estimator `version`, estimate evidence tier\/coverage\/input-provenance controls, `labelSource`, and clinical `reviewerRole`/);
+  assert.match(markdown, /Primary target fields then count only for the scale where a valid target is present/);
+  assert.match(markdown, /human-reviewed release decision/);
+  assert.match(markdown, /TRIPOD\+AI/);
+  assert.match(markdown, /STARD 2015/);
+  assert.match(markdown, /Good Machine Learning Practice/);
+});
+
+test("clinical scale agreement JSON packages machine-readable release evidence", () => {
+  const report = buildClinicalScaleAgreementReport(validationReport(), { generatedAt: "2026-06-24T12:00:00.000Z" });
+
+  assert.equal(report.kind, "mirror-clinical-scale-agreement-report");
+  assert.equal(report.schemaVersion, 1);
+  assert.equal(report.generatedAt, "2026-06-24T12:00:00.000Z");
+  assert.equal(report.sourceDatasetSha256, SOURCE_DATASET_SHA256);
+  assert.equal(report.status, "meets-clinical-scale-confidence-standard");
+  assert.equal(report.evidenceStandard.minAgreementRate, 0.8);
+  assert.equal(report.evidenceStandard.minAgreementWilsonLowerBound, 0.8);
+  assert.equal(report.evidenceStandard.minReviewedAssessments, 30);
+  assert.equal(report.evidenceStandard.minDistinctClinicalCases, 10);
+  assert.equal(report.evidenceStandard.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.evidenceStandard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.evidenceStandard.requiresExplicitClinicalConfidence, true);
+  assert.equal(report.evidenceStandard.requiresIsoReviewTimestamp, true);
+  assert.equal(report.evidenceStandard.requiresSourceDatasetSha256, true);
+  assert.equal(report.summary.reviewedClinicalScaleAssessmentCount, 30);
+  assert.equal(report.summary.distinctClinicalCaseCount, 30);
+  assert.equal(report.summary.eligibleBlindedIndependentLabelCount, 30);
+  assert.deepEqual(report.summary.primaryScaleLabelIssueReasons, {});
+  assert.deepEqual(report.summary.primaryScaleEstimateIssueReasons, {});
+  assert.equal(report.primaryScaleAgreementRows.houseBrackmann.labeledCount, 30);
+  assert.equal(report.primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound, 0.887);
+  assert.equal(report.primaryScaleAgreementRows.sunnybrookComposite.status, "meets-confidence-standard");
+  assert.equal(report.houseBrackmannCaseMix.representedSeverityBandCount, 3);
+  assert.equal(report.houseBrackmannCaseMix.minimumLabelsPerRepresentedSeverityBand, 10);
+  assert.equal(report.referenceStandardControls.pseudonymousValidationCaseId, true);
+  assert.equal(report.referenceStandardControls.sourceLabelSheetModeBlinded, true);
+  assert.equal(report.referenceStandardControls.explicitClinicalConfidence, true);
+  assert.equal(report.referenceStandardControls.isoReviewTimestamp, true);
+  assert.equal(report.referenceStandardControls.sourceDatasetHashTraceability, true);
+  assert.equal(report.referenceStandardControls.houseBrackmannRequiredInput, true);
+  assert.equal(report.referenceStandardControls.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.clinicalScaleAvailabilityRecommendation.houseBrackmann.evidenceMeetsMinimum, true);
+  assert.match(report.note, /does not convert estimates into clinician-assigned grades/);
+});
+
+test("clinical scale agreement report accepts only schema-v1 readiness artifacts", () => {
+  const readinessReport = {
+    kind: "mirror-clinical-scale-readiness-report",
+    schemaVersion: 1,
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
+    status: "meets-clinical-scale-confidence-standard",
+    recommendation: "allow-controlled-estimate-availability-after-human-review",
+    thresholds: {
+      minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
+      minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
+      minUsableMovementCoverageRatio: 0.8,
+      clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+      confidenceInterval: { method: "wilson-score", confidenceLevel: 0.95 },
+    },
+    validationSummary: {
+      readyPrimaryScaleCount: 3,
+      primaryScaleCount: 3,
+    },
+    byScale: {
+      houseBrackmann: { status: "meets-confidence-standard", ...scaleReport({ labeledCount: 30, withinToleranceCount: 30 }) },
+      sunnybrookComposite: { status: "meets-confidence-standard", ...scaleReport({ labeledCount: 30, withinToleranceCount: 30 }) },
+      efaceTotal: { status: "meets-confidence-standard", ...scaleReport({ labeledCount: 30, withinToleranceCount: 30 }) },
+    },
+    blockingReasons: [],
+    sourceValidationReport: validationReport(),
+  };
+
+  assert.equal(buildClinicalScaleAgreementReport(readinessReport).sourceDatasetSha256, SOURCE_DATASET_SHA256);
+
+  const unversionedReadinessReport = { ...readinessReport };
+  delete unversionedReadinessReport.schemaVersion;
+  assert.throws(
+    () => buildClinicalScaleAgreementReport(unversionedReadinessReport),
+    /clinical readiness report schemaVersion must be 1/,
+  );
+
+  const incompleteReadinessReport = { ...readinessReport, sourceValidationReport: null };
+  assert.throws(
+    () => buildClinicalScaleAgreementReport(incompleteReadinessReport),
+    /clinical readiness report must include sourceValidationReport/,
+  );
+});
+
+test("clinical scale agreement markdown marks non-ready scales as estimate-only recommendations", () => {
+  const markdown = buildClinicalScaleAgreementMarkdown(validationReport({
+    byScale: {
+      houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1, lower: 0.887 }),
+      sunnybrookComposite: scaleReport({
+        labeledCount: 30,
+        withinToleranceCount: 24,
+        agreementRate: 0.8,
+        lower: 0.63,
+        agreementSamplePlan: {
+          currentReviewedLabels: 30,
+          currentWithinToleranceCount: 24,
+          minimumReviewedLabels: 30,
+          requiredWithinToleranceAtCurrentLabelCount: 29,
+          additionalPerfectLabelsToReachStandard: 49,
+          projectedReviewedLabelsAtStandard: 79,
+          projectedWithinToleranceAtStandard: 73,
+        },
+      }),
+      efaceTotal: scaleReport({
+        labeledCount: 30,
+        withinToleranceCount: 24,
+        agreementRate: 0.8,
+        lower: 0.63,
+        agreementSamplePlan: {
+          currentReviewedLabels: 30,
+          currentWithinToleranceCount: 24,
+          minimumReviewedLabels: 30,
+          requiredWithinToleranceAtCurrentLabelCount: 29,
+          additionalPerfectLabelsToReachStandard: 49,
+          projectedReviewedLabelsAtStandard: 79,
+          projectedWithinToleranceAtStandard: 73,
+        },
+      }),
+    },
+    blockingReasons: [
+      "sunnybrookComposite: needs 95% Wilson lower bound at least 80%",
+      "efaceTotal: needs 95% Wilson lower bound at least 80%",
+    ],
+  }));
+
+  assert.match(markdown, /Recommendation: allow-scale-specific-estimate-availability-after-human-review/);
+  assert.match(markdown, /houseBrackmann \| House-Brackmann \| meets minimum \| true after human review/);
+  assert.match(markdown, /sunnybrook \| Sunnybrook composite \| not ready \| false/);
+  assert.match(markdown, /eface \| eFACE total \| not ready \| false/);
+  assert.match(markdown, /Sunnybrook composite \| 30 \| 24 \| 29 \| 49 \| 79 \| 73/);
+});
+
+test("clinical scale agreement markdown includes blockers and mismatch review rows", () => {
+  const markdown = buildClinicalScaleAgreementMarkdown(validationReport({
+    summary: {
+      assessmentClinicalScaleRecords: 12,
+      reviewedAssessmentCount: 12,
+      excludedClinicalLabelCount: 2,
+      excludedClinicalLabelReasons: { "missing clinician reviewer role": 2 },
+      estimatedAssessmentCount: 12,
+      meetsMinimumStandard: false,
+    },
+    byScale: {
+      houseBrackmann: scaleReport({
+        labeledCount: 12,
+        withinToleranceCount: 8,
+        agreementRate: 0.6667,
+        mismatches: [{
+          assessmentId: "assessment-7:clinical-scale",
+          sessionId: "session-7",
+          estimate: 3,
+          label: 5,
+          delta: -2,
+        }],
+      }),
+      sunnybrookComposite: scaleReport({ labeledCount: 12, withinToleranceCount: 11, agreementRate: 0.9167 }),
+      efaceTotal: scaleReport({ labeledCount: 12, withinToleranceCount: 10, agreementRate: 0.8333 }),
+    },
+    blockingReasons: ["needs at least 30 reviewed clinical-scale assessments"],
+  }));
+
+  assert.match(markdown, /Status: needs-reviewed-clinical-scale-data/);
+  assert.match(markdown, /needs at least 30 reviewed clinical-scale assessments/);
+  assert.match(markdown, /Excluded Clinical-Label Rows/);
+  assert.match(markdown, /missing clinician reviewer role: 2/);
+  assert.match(markdown, /assessment-7:clinical-scale/);
+  assert.match(markdown, /session-7/);
+  assert.match(markdown, /-2\.00/);
+});

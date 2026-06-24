@@ -1,4 +1,8 @@
 import { COMFORT_DOSING } from "../domain/config";
+import { summarizeAssessmentSession } from "../domain/assessment";
+import { clinicalScaleInputCompletenessSummaries, clinicalScaleInputGapSummaries, clinicalScaleMovementLabels, clinicalScaleRestingEvidenceSummary } from "../domain/clinicalScales";
+import { clinicalScalePresentationPolicy, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
+import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
 import { baselineProgressLabel, movementBalanceLabel, movementProgressLabel, progressUsesLegacySideConvention } from "../ml/faceMetrics";
 import { displayPct, scoreColor } from "../ui/scoreFormatting";
@@ -24,11 +28,74 @@ function escapeHtml(str) {
   return String(str ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
+function formatRatioPct(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : "n/a";
+}
+
+function omittedClinicalScaleMovementLabels(clinicalScales) {
+  const ids = clinicalScales?.evidence?.omittedMovementExerciseIds ?? clinicalScales?.coverage?.unusableExerciseIds ?? [];
+  return clinicalScaleMovementLabels(ids);
+}
+
+function formatRestMetricValue(value) {
+  return Number.isFinite(value) ? value.toFixed(3) : "n/a";
+}
+
+function restingMetricSidePhrase(metric) {
+  const entries = [
+    ["narrowerSide", "narrower"],
+    ["smallerSide", "smaller"],
+    ["lowerSide", "lower"],
+    ["higherSide", "higher"],
+  ];
+  for (const [key, label] of entries) {
+    const side = metric?.[key];
+    if (!side || side === "balanced") continue;
+    return `${label} ${side}`;
+  }
+  return "balanced";
+}
+
+function restingMetricRows(restingMetrics) {
+  const metrics = restingMetrics?.metrics;
+  if (!metrics || typeof metrics !== "object") return [];
+  return ["palpebralFissure", "nasolabialMidface", "oralCommissure"]
+    .map((key) => metrics[key])
+    .filter(Boolean)
+    .map((metric) => `${metric.label}: L ${formatRestMetricValue(metric.userLeft)}, R ${formatRestMetricValue(metric.userRight)} · ${restingMetricSidePhrase(metric)} · asym ${formatRatioPct(metric.asymmetryRatio)}`);
+}
+
+function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScalePresentationPolicy()) {
+  if (!clinicalScales) return [];
+  if (clinicalScales.status !== "estimated") {
+    return [`Scale-inspired estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
+  }
+  const scales = clinicalScales.scales ?? {};
+  const omittedMovements = omittedClinicalScaleMovementLabels(clinicalScales);
+  const inputGaps = clinicalScaleInputGapSummaries(clinicalScales);
+  const inputCompletenessSummaries = clinicalScaleInputCompletenessSummaries(clinicalScales);
+  const restingEvidence = clinicalScaleRestingEvidenceSummary(clinicalScales);
+  return [
+    scales.houseBrackmann ? `House-Brackmann-inspired ${scaleNounForClinicalScale(presentation, "houseBrackmann")}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
+    scales.sunnybrook ? `Sunnybrook-style ${scaleNounForClinicalScale(presentation, "sunnybrook")}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
+    scales.eface ? `eFACE-style ${scaleNounForClinicalScale(presentation, "eface")}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
+    ...inputGaps.map((gap) => gap.message),
+    ...inputCompletenessSummaries.map((summary) => summary.message),
+    `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
+    restingEvidence ? `Resting evidence: ${restingEvidence.availableCount}/${restingEvidence.requiredCount} required resting metrics available${restingEvidence.complete ? "" : `; missing ${restingEvidence.missingMetricLabels.join(", ")}`}.` : null,
+    omittedMovements.length
+      ? `Omitted from scale formulas: ${omittedMovements.join(", ")}.`
+      : null,
+    clinicalScales.evidence?.label ? `Evidence tier: ${clinicalScales.evidence.label}.` : null,
+  ].filter(Boolean);
+}
+
 function usableProgress(progress) {
   return progressUsesLegacySideConvention(progress) ? null : progress;
 }
 
-function buildSessionReportHtml(s) {
+function buildSessionReportHtml(s, options = {}) {
+  const includeClinicalScaleEstimates = options.includeClinicalScaleEstimates !== false;
   const ts = s.ts ? new Date(s.ts) : new Date();
   const dateStr = ts.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const timeStr = formatClock(ts);
@@ -36,15 +103,59 @@ function buildSessionReportHtml(s) {
   const overallPct = displayPct(s.sessionAvg);
   const overallColor = scoreColor(s.sessionAvg);
   const comfort = s.comfortLevel ? (COMFORT_DOSING[s.comfortLevel]?.label ?? s.comfortLevel) : null;
-  const sessionType = s.kind === "practice" ? "Practice run" : "Daily session";
+  const sessionType = s.kind === "assessment" ? "Standard assessment" : s.kind === "practice" ? "Practice run" : "Daily session";
   const baseline = usableProgress(s.baselineProgress);
   const initialBaseline = usableProgress(s.initialBaselineProgress);
   const movement = usableProgress(s.movementProgress);
   const initialMovement = usableProgress(s.initialMovementProgress);
   const scoresArr = s.scores || [];
   const totalReps = scoresArr.reduce((sum, e) => sum + (e.scores?.length ?? 0), 0);
+  const diagnostics = summarizeSessionDiagnostics(s);
+  const assessment = s.kind === "assessment" ? summarizeAssessmentSession(s) : null;
+  const clinicalScalePolicy = clinicalScalePresentationPolicy();
+  const restingRows = restingMetricRows(assessment?.resting?.metrics);
+  const clinicalScaleRows = includeClinicalScaleEstimates ? clinicalScaleEstimateRows(assessment?.clinicalScales, clinicalScalePolicy) : [];
+  const quality = diagnostics.captureQuality;
+  const diagnosticFlags = [
+    diagnostics.setupQuality ? `Setup quality: ${diagnostics.setupQuality.label ?? diagnostics.setupQuality.key}${diagnostics.setupQuality.score != null ? ` (${Math.round(diagnostics.setupQuality.score * 100)}%)` : ""}` : null,
+    quality ? `Capture quality: ${quality.label ?? quality.key} (${formatRatioPct(quality.validFrameRatio)} valid frames, ${quality.rejectedFrameCount ?? 0} rejected)` : null,
+    diagnostics.topDropReasons.length ? `Top rejected frames: ${diagnostics.topDropReasons.map((item) => `${item.label} x${item.count}`).join(", ")}` : null,
+    diagnostics.coactivation && diagnostics.coactivation.risk !== "low" ? `Quiet-region movement: ${diagnostics.coactivation.risk}` : null,
+  ].filter(Boolean);
+  const diagnosticsBlock = diagnostics.hasDiagnostics ? `
+    <section class="diagnostics">
+      <h2>Data Quality And Safety Notes</h2>
+      ${diagnostics.scoringModelVersion ? `<div class="muted small">Scoring model version ${escapeHtml(diagnostics.scoringModelVersion)}</div>` : ""}
+      ${diagnostics.captureQualityNote ? `<p>${escapeHtml(diagnostics.captureQualityNote)}</p>` : ""}
+      ${diagnosticFlags.length ? `<ul>${diagnosticFlags.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : ""}
+      ${diagnostics.safetyPrompts.length ? `<div class="safety">${diagnostics.safetyPrompts.map((item) => `<div>${escapeHtml(item)}</div>`).join("")}</div>` : ""}
+    </section>` : "";
+  const assessmentBlock = assessment ? `
+    <section class="assessment">
+      <h2>Standard Assessment Sections</h2>
+      <div class="assessment-grid">
+        <div>
+          <div class="assessment-label">Rest</div>
+          <div class="muted small">${assessment.resting.baselineSnapshotAvailable ? "Neutral calibration image captured for review." : "Neutral calibration was used for scoring; no review image is attached."}</div>
+          ${restingRows.length ? `<ul class="resting-metrics">${restingRows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>` : `<div class="muted small">Resting asymmetry metrics were not available for this assessment.</div>`}
+        </div>
+        <div>
+          <div class="assessment-label">Voluntary movement</div>
+          <div class="muted small">${assessment.averageVoluntaryMovement == null ? "No aggregate voluntary movement score." : `${Math.round(assessment.averageVoluntaryMovement * 100)}% average across assessment zones.`}</div>
+        </div>
+        <div>
+          <div class="assessment-label">Coactivation</div>
+          <div class="muted small">${assessment.coactivationRisk ? `Quiet-region movement risk: ${escapeHtml(assessment.coactivationRisk)}.` : "No elevated quiet-region movement recorded."}</div>
+        </div>
+      </div>
+      <div class="zone-list">
+        ${assessment.zones.map((zone) => `<div><strong>${escapeHtml(zone.label)}</strong>: ${zone.voluntaryMovement == null ? "unscored" : `${Math.round(zone.voluntaryMovement * 100)}%`}${zone.coactivationRisk ? ` · quiet movement ${escapeHtml(zone.coactivationRisk)}` : ""}</div>`).join("")}
+      </div>
+      ${clinicalScaleRows.length ? `<div class="clinical-scales"><div class="assessment-label">${escapeHtml(clinicalScalePolicy.reportHeading)}</div><ul>${clinicalScaleRows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul><div class="muted small">${escapeHtml(clinicalScalePolicy.reportNotice)}</div></div>` : ""}
+    </section>` : "";
 
-  const exerciseRows = scoresArr.map((e) => {
+  const exerciseRows = scoresArr.map((e, scoreIndex) => {
+    const scoreDiagnostics = diagnostics.exercises[scoreIndex];
     const pct = displayPct(e.avg);
     const color = scoreColor(e.avg);
     const repsArr = e.scores ?? [];
@@ -78,6 +189,15 @@ function buildSessionReportHtml(s) {
       : exerciseInitialBaseline
       ? `<div class="muted small">First baseline: ${escapeHtml(exerciseInitialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(exerciseInitialBaseline) ?? "")}</div>`
       : "";
+    const qualityLine = scoreDiagnostics?.captureQuality
+      ? `<div class="muted small">Data quality: ${escapeHtml(scoreDiagnostics.captureQuality.label ?? scoreDiagnostics.captureQuality.key)} · ${escapeHtml(formatRatioPct(scoreDiagnostics.captureQuality.validFrameRatio))} valid frames</div>`
+      : "";
+    const coactivationLine = scoreDiagnostics?.coactivation && scoreDiagnostics.coactivation.risk !== "low"
+      ? `<div class="muted small">Quiet-region movement: ${escapeHtml(scoreDiagnostics.coactivation.risk)}</div>`
+      : "";
+    const dropLine = scoreDiagnostics?.topDropReasons?.length
+      ? `<div class="muted small">Rejected frames: ${escapeHtml(scoreDiagnostics.topDropReasons.map((item) => `${item.label} x${item.count}`).join(", "))}</div>`
+      : "";
     const allSnapshots = e.snapshots || [];
     const movementSnap = allSnapshots.reduce((best, snap) => {
       if (!best) return snap;
@@ -109,6 +229,9 @@ function buildSessionReportHtml(s) {
             <div class="muted small">${escapeHtml(doseBits)}</div>
             ${baselineLine}
             ${initialBaselineLine}
+            ${qualityLine}
+            ${coactivationLine}
+            ${dropLine}
           </div>
           <div class="ex-score" style="color:${color}">${pct == null ? "—" : pct + "%"}</div>
         </div>
@@ -135,6 +258,20 @@ function buildSessionReportHtml(s) {
   .summary-meta { font-size: 13px; color: #57534E; line-height: 1.6; }
   .summary-meta strong { color: #1F1B16; }
   .baseline { padding: 12px 16px; background: rgba(122,143,115,0.12); border-radius: 8px; font-size: 13px; color: #4A6B47; margin-bottom: 12px; }
+  .diagnostics { padding: 14px 16px; background: #FAF7F0; border: 1px solid #E7E5E4; border-radius: 10px; margin: 16px 0; font-size: 13px; color: #57534E; }
+  .diagnostics h2 { margin-top: 0; }
+  .diagnostics p { margin: 8px 0; }
+  .diagnostics ul { margin: 8px 0 0; padding-left: 18px; }
+  .diagnostics li { margin: 3px 0; }
+  .safety { margin-top: 10px; padding-top: 10px; border-top: 1px solid #E7E5E4; color: #8F3C2A; line-height: 1.5; }
+  .assessment { padding: 14px 16px; background: rgba(122,143,115,0.1); border: 1px solid rgba(122,143,115,0.24); border-radius: 10px; margin: 16px 0; font-size: 13px; color: #4A6B47; }
+  .assessment h2 { margin-top: 0; color: #4A6B47; }
+  .assessment-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px; }
+  .assessment-label { font-weight: 700; color: #1F1B16; margin-bottom: 2px; }
+  .resting-metrics { margin: 8px 0 0 0; padding-left: 16px; color: #4A6B47; }
+  .zone-list { margin-top: 12px; line-height: 1.6; }
+  .clinical-scales { margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(122,143,115,0.22); }
+  .clinical-scales ul { margin: 6px 0 0; padding-left: 16px; color: #4A6B47; }
   .exercise { padding: 16px 0; border-top: 1px solid #E7E5E4; }
   .exercise:first-of-type { border-top: none; }
   .ex-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -179,13 +316,15 @@ function buildSessionReportHtml(s) {
 
     ${movement ? `<div class="baseline"><strong>Current baseline progress:</strong> affected side · ${escapeHtml(movementProgressLabel(movement) ?? "")}</div>` : baseline ? `<div class="baseline"><strong>Current baseline progress:</strong> ${escapeHtml(baseline.side)} side · ${escapeHtml(baselineProgressLabel(baseline) ?? "")}</div>` : ""}
     ${initialMovement ? `<div class="baseline"><strong>Affected side:</strong> ${escapeHtml((movementProgressLabel(initialMovement) ?? "").replace("from baseline", "from first baseline"))}${movementBalanceLabel(initialMovement) ? `<br /><strong>Affected vs proper side:</strong> ${escapeHtml(movementBalanceLabel(initialMovement).replace(/^affected vs proper: /, ""))}` : ""}</div>` : initialBaseline ? `<div class="baseline"><strong>First baseline progress:</strong> ${escapeHtml(initialBaseline.side)} side · ${escapeHtml(baselineProgressLabel(initialBaseline) ?? "")}</div>` : ""}
+    ${assessmentBlock}
+    ${diagnosticsBlock}
 
     <h2>By Exercise</h2>
     ${exerciseRows || '<div class="muted">No exercises recorded.</div>'}
 
     <div class="footer">
       Symmetry is auto-detected from facial landmarks captured during the session. Some movement variation is normal even in healthy faces.
-      Generated for clinical review by a physiotherapist or facial retraining specialist.
+      Generated for clinical review by a physiotherapist or facial retraining specialist. ${escapeHtml(clinicalScalePolicy.footerNotice)}
     </div>
   </div>
   <script>window.addEventListener('load', function () { setTimeout(function () { window.print(); }, 250); });</script>
@@ -193,8 +332,8 @@ function buildSessionReportHtml(s) {
 </html>`;
 }
 
-function shareSessionReport(sessionLike) {
-  const html = buildSessionReportHtml(sessionLike);
+function shareSessionReport(sessionLike, options = {}) {
+  const html = buildSessionReportHtml(sessionLike, options);
   const win = window.open("", "_blank");
   if (!win) {
     const blob = new Blob([html], { type: "text/html" });
@@ -213,4 +352,4 @@ function shareSessionReport(sessionLike) {
   win.document.close();
   win.focus();
 }
-export { formatDuration, formatSessionDate, shareSessionReport };
+export { buildSessionReportHtml, clinicalScaleEstimateRows, formatDuration, formatSessionDate, shareSessionReport };

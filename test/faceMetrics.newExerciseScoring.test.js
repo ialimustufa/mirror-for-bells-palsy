@@ -4,6 +4,10 @@ import { computeExerciseSymmetry } from "../src/ml/faceMetrics.js";
 
 const LEFT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
 const RIGHT_EYE = [263, 249, 390, 373, 374, 380, 381, 382, 362, 398, 384, 385, 386, 387, 388, 466];
+const LEFT_EYE_TOP = [173, 157, 158, 159, 160, 161, 246];
+const RIGHT_EYE_TOP = [398, 384, 385, 386, 387, 388, 466];
+const LEFT_EYE_BOTTOM = [7, 163, 144, 145, 153, 154, 155];
+const RIGHT_EYE_BOTTOM = [249, 390, 373, 374, 380, 381, 382];
 const LEFT_PUCKER = [61, 91, 146, 78, 185, 95, 88, 178, 40, 39, 37, 0];
 const RIGHT_PUCKER = [291, 321, 375, 308, 409, 324, 318, 402, 270, 269, 267, 0];
 const LEFT_WATER = [205, 192, 213, 50, 187, 147, 36, 142, 207, 216, 61, 84, 91, 146];
@@ -34,6 +38,10 @@ function makeNeutralFace() {
   lm[263] = landmark(0.7, 0.5);
   setGroup(lm, LEFT_EYE, 0.34, 0.42);
   setGroup(lm, RIGHT_EYE, 0.66, 0.42);
+  setGroup(lm, LEFT_EYE_TOP, 0.34, 0.40);
+  setGroup(lm, RIGHT_EYE_TOP, 0.66, 0.40);
+  setGroup(lm, LEFT_EYE_BOTTOM, 0.34, 0.46);
+  setGroup(lm, RIGHT_EYE_BOTTOM, 0.66, 0.46);
   setGroup(lm, LEFT_PUCKER, 0.43, 0.58);
   setGroup(lm, RIGHT_PUCKER, 0.57, 0.58);
   setGroup(lm, LEFT_WATER, 0.40, 0.57);
@@ -46,7 +54,8 @@ function makeNeutralFace() {
 test("blink scores like soft eye closure", () => {
   const neutral = makeNeutralFace();
   const current = cloneLandmarks(neutral);
-  moveGroup(current, [...LEFT_EYE, ...RIGHT_EYE], 0, 0.006);
+  moveGroup(current, [...LEFT_EYE_TOP, ...RIGHT_EYE_TOP], 0, 0.012);
+  moveGroup(current, [...LEFT_EYE_BOTTOM, ...RIGHT_EYE_BOTTOM], 0, -0.012);
 
   const eyeClose = computeExerciseSymmetry("eye-close", current, neutral);
   const blink = computeExerciseSymmetry("blink", current, neutral);

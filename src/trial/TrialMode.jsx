@@ -393,7 +393,7 @@ function TrialMode({ prefs = {} }) {
     let frameCount = 0;
     let fpsWindowStart = performance.now();
 
-    const tick = () => {
+    const tick = async () => {
       if (!alive) return;
       const v = videoRef.current;
       if (!v || v.readyState < 2 || v.paused || v.videoWidth === 0) {
@@ -403,7 +403,8 @@ function TrialMode({ prefs = {} }) {
       try {
         const ts = Math.max(lastTs + 1, performance.now());
         lastTs = ts;
-        const result = faceLandmarker.detectForVideo(v, ts);
+        const result = await faceLandmarker.detectForVideo(v, ts);
+        if (!alive) return;
         const rawLm = result.faceLandmarks?.[0] ?? null;
         const bsArr = result.faceBlendshapes?.[0]?.categories ?? null;
         const rawMatrix = firstFacialTransformationMatrix(result);
