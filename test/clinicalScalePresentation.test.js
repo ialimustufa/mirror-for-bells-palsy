@@ -57,6 +57,10 @@ test("clinical scale report rows and printable reports use the validation-aware 
       requiredMovementCount: 5,
       ratio: 1,
     },
+    evidence: {
+      tier: "complete-standard-assessment",
+      label: "Complete standard-assessment evidence",
+    },
     scales: {
       houseBrackmann: { grade: "II", label: "Mild dysfunction" },
       sunnybrook: {
@@ -77,6 +81,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
   const rows = clinicalScaleEstimateRows(clinicalScales);
   assert.match(rows[0], /House-Brackmann estimate/);
   assert.match(rows[1], /Sunnybrook estimate/);
+  assert.match(rows.join(" "), /Evidence tier: Complete standard-assessment evidence/);
 
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({ clinicalFacingScoresAllowed: true }));
   assert.match(supportedRows[0], /House-Brackmann support value/);
@@ -99,6 +104,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
 
   assert.match(html, /Clinical scale estimates/);
   assert.match(html, /House-Brackmann estimate/);
+  assert.match(html, /Evidence tier: Complete standard-assessment evidence/);
   assert.match(html, /These are Mirror estimates only/);
 
   const hiddenHtml = buildSessionReportHtml({

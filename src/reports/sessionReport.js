@@ -71,6 +71,7 @@ function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScaleP
     scales.sunnybrook ? `Sunnybrook ${scaleNoun}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
     scales.eface ? `eFACE-style ${scaleNoun}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
     `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
+    clinicalScales.evidence?.label ? `Evidence tier: ${clinicalScales.evidence.label}.` : null,
   ].filter(Boolean);
 }
 

@@ -868,9 +868,15 @@ Clinical-scale estimates are stored with explicit status and caveats:
 
 - `status: "estimated"` only when the 80% evidence standard is met.
 - `status: "insufficient-data"` when movement coverage or resting metrics are missing.
+- `evidence.tier: "complete-standard-assessment"` when all five standard
+  movements are usable, `"minimum-standard-assessment"` when the local 4/5
+  movement floor is met, or `"insufficient-standard-evidence"` when estimates
+  are blocked.
 - House-Brackmann is a conservative global estimate derived from the Sunnybrook estimate, eye-closure level, resting asymmetry, and coactivation.
 - Sunnybrook estimates the documented rest, voluntary movement, and synkinesis components from Mirror's standard assessment movements.
-- eFACE is represented as an eFACE-style domain estimate from available static, dynamic, and synkinesis proxies; it is not a clinician-entered eFACE form.
+- eFACE is represented as an eFACE-style domain estimate from available static,
+  dynamic, and synkinesis proxies, with proxy scores clamped to 0-100; it is not
+  a clinician-entered eFACE form.
 
 These values are not clinical-facing validated grades while
 `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
@@ -898,7 +904,7 @@ The report includes:
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Resting asymmetry metrics for assessment reports when neutral calibration was available.
-- Clinical-scale estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, or an insufficient-data reason when it is not.
+- Clinical-scale estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, including the complete/minimum evidence tier, or an insufficient-data reason when it is not.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.

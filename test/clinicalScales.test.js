@@ -52,6 +52,8 @@ test("clinical scale estimates map complete assessment evidence into HB, Sunnybr
   });
 
   assert.equal(result.status, "estimated");
+  assert.equal(result.evidence.tier, "complete-standard-assessment");
+  assert.equal(result.evidence.label, "Complete standard-assessment evidence");
   assert.equal(result.coverage.standardMet, true);
   assert.equal(result.coverage.usableMovementCount, 5);
   assert.equal(result.scales.houseBrackmann.grade, "IV");
@@ -62,6 +64,45 @@ test("clinical scale estimates map complete assessment evidence into HB, Sunnybr
   assert.ok(result.scales.eface.totalScore > 65);
   assert.ok(result.scales.eface.totalScore < 75);
   assert.match(result.caveats.join(" "), /not assigned by a clinician/);
+});
+
+test("clinical scale estimates distinguish minimum from complete standard evidence", () => {
+  const result = estimateClinicalScaleGrades({
+    restingMetrics: RESTING_METRICS,
+    scores: [
+      movementScore("eyebrow-raise", 0.95),
+      movementScore("eye-close", 0.8),
+      movementScore("open-smile", 0.7),
+      movementScore("nose-wrinkle", 0.5),
+    ],
+  });
+
+  assert.equal(result.status, "estimated");
+  assert.equal(result.coverage.usableMovementCount, 4);
+  assert.equal(result.coverage.requiredMovementCount, 5);
+  assert.equal(result.evidence.tier, "minimum-standard-assessment");
+  assert.equal(result.evidence.label, "Minimum standard-assessment evidence");
+  assert.deepEqual(result.coverage.missingExerciseIds, ["pucker"]);
+});
+
+test("clinical scale estimates clamp score outputs to clinical score ranges", () => {
+  const result = estimateClinicalScaleGrades({
+    restingMetrics: RESTING_METRICS,
+    scores: [
+      movementScore("eyebrow-raise", 1.4),
+      movementScore("eye-close", 1.3),
+      movementScore("open-smile", 1.25),
+      movementScore("nose-wrinkle", 1.1),
+      movementScore("pucker", 1.2),
+    ],
+  });
+
+  assert.equal(result.status, "estimated");
+  assert.equal(result.scales.sunnybrook.compositeScore <= 100, true);
+  assert.equal(result.scales.eface.dynamicScore, 100);
+  assert.equal(result.scales.eface.totalScore <= 100, true);
+  assert.equal(result.scales.eface.dynamicItems.browElevation.score, 100);
+  assert.equal(result.scales.houseBrackmann.basis.averageMovementPercent, 100);
 });
 
 test("clinical scale estimates fail closed without resting metrics", () => {
@@ -76,5 +117,6 @@ test("clinical scale estimates fail closed without resting metrics", () => {
   });
 
   assert.equal(result.status, "insufficient-data");
+  assert.equal(result.evidence.tier, "insufficient-standard-evidence");
   assert.match(result.reasons.join(" "), /resting asymmetry metrics/);
 });

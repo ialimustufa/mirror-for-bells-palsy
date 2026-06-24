@@ -30,7 +30,7 @@ function clamp(value, min, max) {
 }
 
 function ratioToPercent(value) {
-  return Number.isFinite(value) ? compactNumber(clamp(value, 0, 1.25) * 100, 1) : null;
+  return Number.isFinite(value) ? compactNumber(clamp(value, 0, 1) * 100, 1) : null;
 }
 
 function scoreQualityKey(score) {
@@ -125,6 +125,30 @@ function assessmentCoverage(scores = []) {
     standardMet: usableMovementCount / requiredMovementCount >= MIN_USABLE_ASSESSMENT_COVERAGE_RATIO,
     missingExerciseIds: movementItems.filter((item) => item.missing).map((item) => item.exerciseId),
     unusableExerciseIds: movementItems.filter((item) => !item.usable).map((item) => item.exerciseId),
+  };
+}
+
+function estimateEvidence(coverage, hasRestingMetrics, reasons = []) {
+  const tier = reasons.length
+    ? "insufficient-standard-evidence"
+    : coverage.usableMovementCount === coverage.requiredMovementCount
+      ? "complete-standard-assessment"
+      : "minimum-standard-assessment";
+  const label = tier === "complete-standard-assessment"
+    ? "Complete standard-assessment evidence"
+    : tier === "minimum-standard-assessment"
+      ? "Minimum standard-assessment evidence"
+      : "Insufficient standard-assessment evidence";
+  return {
+    tier,
+    label,
+    usableMovementCoverageRatio: coverage.ratio,
+    requiredMovementCoverageRatio: MIN_USABLE_ASSESSMENT_COVERAGE_RATIO,
+    completeMovementCoverageRatio: 1,
+    usableMovementCount: coverage.usableMovementCount,
+    requiredMovementCount: coverage.requiredMovementCount,
+    restingMetricsAvailable: hasRestingMetrics,
+    limitations: reasons,
   };
 }
 
@@ -315,6 +339,7 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
       missingExerciseIds: coverage.missingExerciseIds,
       unusableExerciseIds: coverage.unusableExerciseIds,
     },
+    evidence: estimateEvidence(coverage, hasRestingMetrics, reasons),
     caveats: [
       "Estimated from Mirror standard-assessment practice data, not assigned by a clinician.",
       "Do not use as a diagnosis, prognosis, treatment decision, or validated clinical endpoint.",

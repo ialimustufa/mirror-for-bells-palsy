@@ -9,7 +9,16 @@ Mirror can now derive optional clinical-scale estimates from a completed standar
 - Sunnybrook Facial Grading System combines rest, voluntary movement, and synkinesis. The one-page Sunnybrook form scores five standard expressions, weights voluntary movement by 4, weights resting symmetry by 5, and subtracts synkinesis from the composite: https://ehandboken.ous-hf.no/api/File/GetFile?entityId=230422&isLastVersion=false
 - Reliability literature supports Sunnybrook as more granular than HB. A 2024 comparison reported moderate HB reliability and high Sunnybrook reliability, while noting that subjective clinician assessment still matters: https://pmc.ncbi.nlm.nih.gov/articles/PMC10895858/
 - Video assessment literature describes Sunnybrook as a regional weighted 0-100 scale and notes that video-based synkinesis/resting components can be less reliable than voluntary movement: https://www.jmir.org/2019/4/e11109/PDF
-- eFACE is a clinician-graded electronic facial paralysis assessment with static, dynamic, and synkinesis domains. Mirror only maps available standard-assessment proxies into an eFACE-style domain estimate; it does not replace the clinician-entered eFACE form.
+- eFACE is a clinician-graded electronic facial paralysis assessment with static,
+  dynamic, and synkinesis domains. The original validation paper describes a
+  clinician-entered digital scale with strong reliability:
+  https://pubmed.ncbi.nlm.nih.gov/26218397/
+- eFACE domain and composite scores are reported on 0-100 scales in validation
+  literature, and facial scales remain subjective enough that standardized
+  lighting, head position, and trained review matter:
+  https://link.springer.com/article/10.1007/s00405-023-08132-4
+  Mirror therefore clamps its eFACE-style proxy outputs to 0-100 and does not
+  replace the clinician-entered eFACE form.
 - Wilson's score interval is used for binomial agreement uncertainty reporting rather than relying on a raw percentage alone: https://www.tandfonline.com/doi/abs/10.1080/01621459.1927.10502953
 - TRIPOD+AI describes transparent reporting for studies that develop or evaluate prediction models, including machine-learning models: https://pubmed.ncbi.nlm.nih.gov/38626948/
 - FDA Good Machine Learning Practice guidance describes lifecycle considerations for AI/ML medical devices: https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles
@@ -25,6 +34,16 @@ Clinical scale estimates require:
 - Usable or strong capture quality for scored movements when capture quality is present.
 
 If the evidence standard is not met, Mirror saves `clinicalScales.status = "insufficient-data"` and does not emit scale values.
+When the 80% floor is met, Mirror also records an evidence tier:
+
+- `complete-standard-assessment` when all five standard movements and resting
+  metrics are available.
+- `minimum-standard-assessment` when exactly the local 80% movement floor is met.
+- `insufficient-standard-evidence` when estimates are blocked.
+
+The tier appears in assessment panels and printable reports so a 4/5 movement
+estimate is not presented with the same evidence strength as a complete 5/5
+assessment.
 
 ## Implemented Estimates
 
@@ -49,6 +68,7 @@ If the evidence standard is not met, Mirror saves `clinicalScales.status = "insu
 - Dynamic score from the five standard movements currently captured by Mirror.
 - Synkinesis score from quiet-region coactivation levels.
 - Total score as the average of available static, dynamic, and synkinesis domain estimates.
+- Static, dynamic, synkinesis, and total proxy scores are clamped to 0-100.
 
 ## Clinical Safety
 

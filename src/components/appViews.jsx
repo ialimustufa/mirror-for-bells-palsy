@@ -1684,6 +1684,7 @@ function ClinicalScaleEstimatePanel({ clinicalScales }) {
       )}
       <div className="mt-3 text-[11px] leading-relaxed opacity-62">
         {coverage ? `${coverage.usableMovementCount}/${coverage.requiredMovementCount} standard movements usable. ` : ""}
+        {clinicalScales.evidence?.label ? `${clinicalScales.evidence.label}. ` : ""}
         {presentation.shortNotice}
       </div>
     </div>
