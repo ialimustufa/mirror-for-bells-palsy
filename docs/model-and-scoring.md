@@ -1052,9 +1052,12 @@ clinical-scale labels must also reference the current clinical-scale estimator
 version; stale or missing estimator-version rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
 "estimated"` with a complete/minimum v3 evidence tier and at least 80% usable
-movement coverage. Valid primary targets count scale by scale; a missing or
-invalid estimate is reported as a missing estimate for that scale rather than
-excluding other valid targets on the row. This report does not make Mirror
+movement coverage. For v3, counted rows must also preserve used/omitted movement
+exercise IDs and `estimateCalculationUsesOnlyUsableMovements: true`; inconsistent
+or missing movement provenance excludes the reviewed row. Valid primary targets
+count scale by scale; a missing or invalid estimate is reported as a missing
+estimate for that scale rather than excluding other valid targets on the row. This
+report does not make Mirror
 estimates clinician-assigned grades; it only documents agreement against
 reviewed target labels for the local validation set.
 

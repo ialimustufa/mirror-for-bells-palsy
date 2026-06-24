@@ -1,5 +1,5 @@
 import { replayFrameSamples } from "./frameSampleReplay.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
 
 const POSITIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["trace", "low", "moderate", "strong"]);
 const NEGATIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["none"]);
@@ -15,6 +15,8 @@ const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
 });
 const PRIMARY_CLINICAL_SCALE_LABELS = Object.freeze(["houseBrackmann", "sunnybrookComposite", "efaceTotal"]);
 const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
+const STANDARD_SCALE_MOVEMENT_IDS = Object.freeze(STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId));
+const STANDARD_SCALE_MOVEMENT_ID_SET = new Set(STANDARD_SCALE_MOVEMENT_IDS);
 const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
   mild: { label: "HB I-II mild/normal", min: 1, max: 2 },
   moderate: { label: "HB III-IV moderate", min: 3, max: 4 },
@@ -237,11 +239,34 @@ function clinicalScaleEstimateVersion(record = {}) {
 
 function clinicalScaleEstimateMetadata(record = {}) {
   const estimate = record.estimate ?? record.clinicalScales ?? {};
+  const evidence = estimate.evidence ?? {};
+  const coverage = estimate.coverage ?? {};
   const sourceSummary = record.sourceSummary ?? {};
+  const usedMovementExerciseIds = listValueWithPresence(firstPresent(
+    evidence.estimatedMovementExerciseIds,
+    evidence.usedMovementExerciseIds,
+    sourceSummary.estimateUsedMovementExerciseIds,
+    record.estimateUsedMovementExerciseIds,
+  ));
+  const omittedMovementExerciseIds = listValueWithPresence(firstPresent(
+    evidence.omittedMovementExerciseIds,
+    sourceSummary.estimateOmittedMovementExerciseIds,
+    record.estimateOmittedMovementExerciseIds,
+  ));
+  const calculationUsesOnlyUsableMovements = booleanValueWithPresence(firstPresent(
+    evidence.calculationUsesOnlyUsableMovements,
+    sourceSummary.estimateCalculationUsesOnlyUsableMovements,
+    record.estimateCalculationUsesOnlyUsableMovements,
+  ));
   return {
-    status: estimate.status ?? null,
-    evidenceTier: estimate.evidence?.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? null,
-    usableMovementCoverageRatio: estimate.coverage?.ratio ?? sourceSummary.usableMovementCoverageRatio ?? null,
+    status: estimate.status ?? record.estimateStatus ?? null,
+    evidenceTier: evidence.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? record.estimateEvidenceTier ?? null,
+    usableMovementCoverageRatio: numberOrNull(firstPresent(coverage.ratio, sourceSummary.usableMovementCoverageRatio, record.estimateUsableMovementCoverageRatio)),
+    usableMovementCount: integerOrNull(coverage.usableMovementCount ?? sourceSummary.usableMovementCount ?? record.estimateUsableMovementCount),
+    requiredMovementCount: integerOrNull(coverage.requiredMovementCount ?? sourceSummary.requiredMovementCount ?? record.estimateRequiredMovementCount),
+    usedMovementExerciseIds,
+    omittedMovementExerciseIds,
+    calculationUsesOnlyUsableMovements,
   };
 }
 
@@ -252,6 +277,83 @@ function estimateVersionCountKey(version) {
 function incrementEstimateVersionCount(counts, version) {
   const key = estimateVersionCountKey(version);
   counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function firstPresent(...values) {
+  return values.find((value) => value != null);
+}
+
+function integerOrNull(value) {
+  const number = Number(value);
+  return Number.isInteger(number) ? number : null;
+}
+
+function numberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function listValueWithPresence(value) {
+  if (Array.isArray(value)) {
+    return {
+      provided: true,
+      values: value.map((item) => String(item ?? "").trim()).filter(Boolean),
+    };
+  }
+  if (typeof value === "string") {
+    return {
+      provided: true,
+      values: value.split("|").map((item) => item.trim()).filter(Boolean),
+    };
+  }
+  return { provided: false, values: [] };
+}
+
+function booleanValueWithPresence(value) {
+  if (typeof value === "boolean") return { provided: true, value };
+  if (typeof value === "string" && value.trim()) {
+    if (/^(true|yes|y|1)$/i.test(value.trim())) return { provided: true, value: true };
+    if (/^(false|no|n|0)$/i.test(value.trim())) return { provided: true, value: false };
+  }
+  return { provided: false, value: null };
+}
+
+function hasDuplicates(values = []) {
+  return new Set(values).size !== values.length;
+}
+
+function estimateMovementProvenanceReasons(metadata = {}) {
+  const reasons = [];
+  const used = metadata.usedMovementExerciseIds?.values ?? [];
+  const omitted = metadata.omittedMovementExerciseIds?.values ?? [];
+  const usedSet = new Set(used);
+  const omittedSet = new Set(omitted);
+  const usableCount = metadata.usableMovementCount;
+  const requiredCount = metadata.requiredMovementCount ?? STANDARD_SCALE_MOVEMENT_IDS.length;
+  if (!metadata.usedMovementExerciseIds?.provided || !metadata.omittedMovementExerciseIds?.provided) {
+    reasons.push("clinical scale estimate movement provenance is missing");
+  }
+  if (!metadata.calculationUsesOnlyUsableMovements?.provided || metadata.calculationUsesOnlyUsableMovements.value !== true) {
+    reasons.push("clinical scale estimate usable-movement calculation flag is missing or false");
+  }
+  const hasUnknownIds = [...used, ...omitted].some((exerciseId) => !STANDARD_SCALE_MOVEMENT_ID_SET.has(exerciseId));
+  const hasOverlap = used.some((exerciseId) => omittedSet.has(exerciseId));
+  const hasAllStandardIds = STANDARD_SCALE_MOVEMENT_IDS.every((exerciseId) => usedSet.has(exerciseId) || omittedSet.has(exerciseId));
+  const hasExpectedUsedCount = usableCount == null || used.length === usableCount;
+  const hasExpectedOmittedCount = usableCount == null || requiredCount == null || omitted.length === Math.max(0, requiredCount - usableCount);
+  if (
+    hasUnknownIds
+    || hasDuplicates(used)
+    || hasDuplicates(omitted)
+    || hasOverlap
+    || !hasAllStandardIds
+    || !hasExpectedUsedCount
+    || !hasExpectedOmittedCount
+    || requiredCount !== STANDARD_SCALE_MOVEMENT_IDS.length
+  ) {
+    reasons.push("clinical scale estimate movement provenance is inconsistent");
+  }
+  return reasons;
 }
 
 function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record), estimate = clinicalScaleEstimate(record), options = {}) {
@@ -281,6 +383,7 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   if (!Number.isFinite(estimateMetadata.usableMovementCoverageRatio) || estimateMetadata.usableMovementCoverageRatio < minUsableMovementCoverageRatio) {
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
   }
+  reasons.push(...estimateMovementProvenanceReasons(estimateMetadata));
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
   } else if (NON_CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
@@ -569,6 +672,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       sunnybrookTolerance,
       efaceTolerance,
       minUsableMovementCoverageRatio,
+      requiresV3MovementProvenance: true,
       caseMix: {
         houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
         minHouseBrackmannSeverityBands,

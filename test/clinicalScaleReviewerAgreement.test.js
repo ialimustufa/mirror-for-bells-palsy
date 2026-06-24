@@ -77,6 +77,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.minAgreementRate, 0.8);
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.standard.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.standard.requiresV3MovementProvenance, true);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);

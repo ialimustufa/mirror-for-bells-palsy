@@ -8,10 +8,11 @@ import {
   extractValidationFrameRecords,
   movementClassFromLabel,
 } from "../src/ml/validationEvaluation.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, STANDARD_SCALE_MOVEMENTS } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
+const STANDARD_SCALE_MOVEMENT_IDS = STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId);
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
@@ -170,6 +171,10 @@ test("threshold calibration recommends bands from reviewed positive and negative
 });
 
 function clinicalRecord(id, estimate, label) {
+  const usableMovementCount = estimate.usableMovementCount ?? 5;
+  const requiredMovementCount = estimate.requiredMovementCount ?? 5;
+  const defaultUsedMovementExerciseIds = STANDARD_SCALE_MOVEMENT_IDS.slice(0, usableMovementCount);
+  const defaultOmittedMovementExerciseIds = STANDARD_SCALE_MOVEMENT_IDS.filter((exerciseId) => !defaultUsedMovementExerciseIds.includes(exerciseId));
   return {
     section: "assessmentClinicalScale",
     record: {
@@ -182,10 +187,13 @@ function clinicalRecord(id, estimate, label) {
         evidence: {
           tier: estimate.evidenceTier ?? "complete-standard-assessment",
           label: estimate.evidenceLabel ?? "Complete standard-assessment evidence",
+          estimatedMovementExerciseIds: estimate.usedMovementExerciseIds ?? defaultUsedMovementExerciseIds,
+          omittedMovementExerciseIds: estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds,
+          calculationUsesOnlyUsableMovements: estimate.calculationUsesOnlyUsableMovements ?? true,
         },
         coverage: {
-          usableMovementCount: estimate.usableMovementCount ?? 5,
-          requiredMovementCount: estimate.requiredMovementCount ?? 5,
+          usableMovementCount,
+          requiredMovementCount,
           ratio: estimate.usableMovementCoverageRatio ?? 1,
         },
         scales: {
@@ -465,6 +473,79 @@ test("clinical scale evaluation excludes labels paired with insufficient estimat
   assert.equal(report.byScale.efaceTotal.labeledCount, 2);
   assert.equal(report.byScale.efaceTotal.missingEstimateCount, 1);
   assert.equal(report.byScale.efaceTotal.agreementRate, 0.5);
+});
+
+test("clinical scale evaluation accepts minimum evidence with exact movement provenance", () => {
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const records = [
+    clinicalRecord("assessment-minimum:clinical-scale", {
+      hb: 3,
+      sunnybrook: 72,
+      eface: 70,
+      evidenceTier: "minimum-standard-assessment",
+      usableMovementCoverageRatio: 0.8,
+      usableMovementCount: 4,
+      requiredMovementCount: 5,
+      usedMovementExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+      omittedMovementExerciseIds: ["pucker"],
+    }, validLabel),
+  ];
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 0);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.standard.requiresV3MovementProvenance, true);
+});
+
+test("clinical scale evaluation excludes labels without v3 movement provenance", () => {
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const missingProvenance = clinicalRecord("assessment-missing-provenance:clinical-scale", {
+    hb: 3,
+    sunnybrook: 72,
+    eface: 70,
+  }, validLabel);
+  delete missingProvenance.record.estimate.evidence.estimatedMovementExerciseIds;
+  delete missingProvenance.record.estimate.evidence.omittedMovementExerciseIds;
+  delete missingProvenance.record.estimate.evidence.calculationUsesOnlyUsableMovements;
+  const inconsistentProvenance = clinicalRecord("assessment-inconsistent-provenance:clinical-scale", {
+    hb: 3,
+    sunnybrook: 72,
+    eface: 70,
+    usableMovementCount: 4,
+    usableMovementCoverageRatio: 0.8,
+    usedMovementExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+    omittedMovementExerciseIds: ["eye-close"],
+  }, validLabel);
+  const records = [
+    clinicalRecord("assessment-current:clinical-scale", { hb: 3, sunnybrook: 72, eface: 70 }, validLabel),
+    missingProvenance,
+    inconsistentProvenance,
+  ];
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate movement provenance is missing"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate usable-movement calculation flag is missing or false"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate movement provenance is inconsistent"], 2);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
 });
 
 test("clinical scale evaluation rejects filled labels that lack clinical reviewer roles", () => {

@@ -33,6 +33,7 @@ function clinicalValidationReport(overrides = {}) {
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+      requiresV3MovementProvenance: true,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -141,11 +142,22 @@ test("clinical scale readiness fails closed without current estimator-version ev
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1,
+      requiresV3MovementProvenance: true,
     },
   }), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
   assert.equal(report.status, "needs-reviewed-clinical-scale-data");
   assert.match(report.blockingReasons.join("\n"), new RegExp(`validation report for estimator v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+});
+
+test("clinical scale readiness fails closed without v3 movement provenance controls", () => {
+  const source = clinicalValidationReport();
+  delete source.standard.requiresV3MovementProvenance;
+
+  const report = assessClinicalScaleReadiness(source, { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.match(report.blockingReasons.join("\n"), /v3 used\/omitted movement input controls/);
 });
 
 test("clinical scale readiness reports confidence standard without enabling clinical-facing scores by itself", () => {

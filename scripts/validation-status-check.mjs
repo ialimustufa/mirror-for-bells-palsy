@@ -191,6 +191,8 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /Estimate evidence control:\s*counted rows require Mirror estimates with status `estimated`/i, artifactPath, "the explicit estimate status control");
   assertTextMatches(text, /complete\/minimum evidence tier/i, artifactPath, "the complete/minimum estimate evidence-tier control");
   assertTextMatches(text, /at least 80% usable movement coverage/i, artifactPath, "the estimate movement coverage control");
+  assertTextMatches(text, /used\/omitted movement IDs/i, artifactPath, "the estimate movement-input provenance control");
+  assertTextMatches(text, /usable-movements-only calculation flag/i, artifactPath, "the usable-movements-only calculation control");
   assertTextMatches(text, /missing or invalid estimates are reported in that scale'?s denominator/i, artifactPath, "the scale-specific missing-estimate denominator control");
   assertTextMatches(text, /valid in-range target for that specific primary scale/i, artifactPath, "the scale-specific primary target validity control");
   assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
@@ -276,6 +278,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     report.standard.minUsableMovementCoverageRatio === DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO,
     `${artifactPath}.standard.minUsableMovementCoverageRatio must be ${DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO}`,
   );
+  assertCondition(report.standard.requiresV3MovementProvenance === true, `${artifactPath}.standard.requiresV3MovementProvenance must be true`);
   assertCondition(report.standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.standard.confidenceInterval.method must be wilson-score`);
   assertCondition(report.standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.standard.confidenceInterval.confidenceLevel must be 0.95`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);

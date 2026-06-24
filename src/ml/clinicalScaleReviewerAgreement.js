@@ -724,6 +724,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       minAgreementWilsonLowerBound,
       minPairedLabels,
       minUsableMovementCoverageRatio,
+      requiresV3MovementProvenance: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,

@@ -111,8 +111,11 @@ Normal, non-blinded label sheets also include read-only estimate value columns.
 Blinded label sheets hide the estimate values, but preserve non-revealing
 provenance columns for `estimateStatus`, `estimateEvidenceTier`,
 `estimateUsableMovementCoverageRatio`, `estimateUsableMovementCount`,
-`estimateRequiredMovementCount`, and `clinicalScaleEstimateVersion` so release
-tooling can prove the row came from qualifying current-version evidence.
+`estimateRequiredMovementCount`, `estimateUsedMovementExerciseIds`,
+`estimateOmittedMovementExerciseIds`,
+`estimateCalculationUsesOnlyUsableMovements`, and
+`clinicalScaleEstimateVersion` so release tooling can prove the row came from
+qualifying current-version evidence with the exact v3 estimator inputs.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -135,9 +138,11 @@ default minimum standard is:
   not remove the valid target from its own denominator.
   The paired Mirror estimate must also have `status: estimated`, a v3
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
-  and at least 80% usable movement coverage. Missing or invalid estimates are
-  reported as missing estimates in that scale's denominator rather than
-  excluding other valid scale labels on the row.
+  at least 80% usable movement coverage, used/omitted movement exercise IDs that
+  match the coverage counts, and
+  `estimateCalculationUsesOnlyUsableMovements: true`. Missing or invalid
+  estimates are reported as missing estimates in that scale's denominator rather
+  than excluding other valid scale labels on the row.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,
   stale-version, missing-version, unblinded, incomplete, and rows with no valid
   primary target are excluded from the readiness denominators and reported as
