@@ -784,6 +784,20 @@ function buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport,
   ]));
 }
 
+function uniqueWithAppendedPath(paths = [], path) {
+  const next = Array.isArray(paths) ? paths.filter((item) => typeof item === "string" && item.length > 0) : [];
+  if (typeof path === "string" && path.length > 0 && !next.includes(path)) next.push(path);
+  return next;
+}
+
+function buildClinicalScaleStatusEvidencePatch(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options = {}) {
+  return {
+    clinicalScaleAgreementReports: uniqueWithAppendedPath(status?.clinicalScaleAgreementReports, clinicalAgreementReport.path),
+    clinicalScaleReviewerAgreementReports: uniqueWithAppendedPath(status?.clinicalScaleReviewerAgreementReports, clinicalReviewerAgreementReport.path),
+    clinicalScaleAvailability: buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options),
+  };
+}
+
 async function readArtifactText(path, options = {}) {
   if (options.readArtifactText) return options.readArtifactText(path);
   try {
@@ -912,6 +926,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
 export {
   buildClinicalScaleAvailabilityEvidence,
+  buildClinicalScaleStatusEvidencePatch,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
   validateStatus,

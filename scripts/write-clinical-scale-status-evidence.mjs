@@ -2,24 +2,31 @@
 import { readFile } from "node:fs/promises";
 import {
   buildClinicalScaleAvailabilityEvidence,
+  buildClinicalScaleStatusEvidencePatch,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
   validateStatus,
 } from "./validation-status-check.mjs";
 
 const USAGE = [
-  "Usage: npm run validation:status-evidence -- <validation-status.json> <clinical-scale-agreement.md|json> <clinical-scale-reviewer-agreement.json> [--enable houseBrackmann,sunnybrook,eface]",
+  "Usage: npm run validation:status-evidence -- <validation-status.json> <clinical-scale-agreement.md|json> <clinical-scale-reviewer-agreement.json> [--enable houseBrackmann,sunnybrook,eface] [--status-patch]",
   "",
   "Without --enable, the command enables only primary scales that meet both report-backed evidence gates.",
-  "The generated JSON is a draft for human review; it does not edit docs/validation-status.json.",
+  "Use --status-patch to also include the clinical and reviewer agreement report path arrays.",
+  "The generated JSON is a draft for human review; it does not edit docs/validation-status.json or bypass the global release gate.",
 ].join("\n");
 
 function parseArgs(args) {
   const positional = [];
   let enabledScaleKeys = null;
+  let statusPatch = false;
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--help" || arg === "-h") return { help: true };
+    if (arg === "--status-patch") {
+      statusPatch = true;
+      continue;
+    }
     if (arg === "--enable") {
       const value = args[index + 1];
       if (!value) throw new Error("--enable requires a comma-separated scale list");
@@ -35,6 +42,7 @@ function parseArgs(args) {
     clinicalAgreementPath: positional[1],
     reviewerAgreementPath: positional[2],
     enabledScaleKeys,
+    statusPatch,
   };
 }
 
@@ -57,10 +65,15 @@ try {
     await readText(args.reviewerAgreementPath),
     args.reviewerAgreementPath,
   );
-  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, reviewerAgreementReport, {
+  const evidenceOptions = {
     enabledScaleKeys: args.enabledScaleKeys,
-  });
-  console.log(JSON.stringify({ clinicalScaleAvailability }, null, 2));
+  };
+  const draft = args.statusPatch
+    ? buildClinicalScaleStatusEvidencePatch(status, clinicalAgreementReport, reviewerAgreementReport, evidenceOptions)
+    : {
+      clinicalScaleAvailability: buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, reviewerAgreementReport, evidenceOptions),
+    };
+  console.log(JSON.stringify(draft, null, 2));
 } catch (error) {
   console.error(error?.message ?? String(error));
   console.error("");

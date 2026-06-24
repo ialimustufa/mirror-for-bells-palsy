@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   buildClinicalScaleAvailabilityEvidence,
+  buildClinicalScaleStatusEvidencePatch,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
   validateStatus,
@@ -792,6 +793,25 @@ test("validation status evidence helper keeps weak scales disabled unless explic
     }),
     /clinical agreement report cannot support every requested enabled primary scale|clinical reviewer agreement report cannot support every requested enabled primary scale/,
   );
+});
+
+test("validation status evidence patch includes report paths and scale summaries", () => {
+  const clinicalAgreementReport = validateClinicalScaleAgreementReportText(passingClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
+  const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(passingClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
+  const patch = buildClinicalScaleStatusEvidencePatch({
+    ...BASE_STATUS,
+    clinicalScaleAgreementReports: ["docs/validation/older-clinical-agreement.md"],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+  }, clinicalAgreementReport, reviewerAgreementReport);
+
+  assert.deepEqual(patch.clinicalScaleAgreementReports, [
+    "docs/validation/older-clinical-agreement.md",
+    CLINICAL_AGREEMENT_REPORT_PATH,
+  ]);
+  assert.deepEqual(patch.clinicalScaleReviewerAgreementReports, [REVIEWER_AGREEMENT_REPORT_PATH]);
+  assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
+  assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalAgreementReport, CLINICAL_AGREEMENT_REPORT_PATH);
+  assert.equal(patch.clinicalScaleAvailability.houseBrackmann.reviewerAgreementReport, REVIEWER_AGREEMENT_REPORT_PATH);
 });
 
 test("validation status artifacts reject per-scale evidence summaries that do not match their reports", async () => {
