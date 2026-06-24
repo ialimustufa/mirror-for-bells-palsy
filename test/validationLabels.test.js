@@ -102,11 +102,11 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
 
   assert.equal(rows[1].rowType, "assessmentClinicalScale");
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
-  assert.equal(rows[1].estimateStatus, "");
-  assert.equal(rows[1].estimateEvidenceTier, "");
-  assert.equal(rows[1].estimateUsableMovementCoverageRatio, "");
-  assert.equal(rows[1].estimateUsableMovementCount, "");
-  assert.equal(rows[1].estimateRequiredMovementCount, "");
+  assert.equal(rows[1].estimateStatus, "estimated");
+  assert.equal(rows[1].estimateEvidenceTier, "complete-standard-assessment");
+  assert.equal(rows[1].estimateUsableMovementCoverageRatio, 1);
+  assert.equal(rows[1].estimateUsableMovementCount, 5);
+  assert.equal(rows[1].estimateRequiredMovementCount, 5);
   assert.equal(rows[1].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "");
   assert.equal(rows[1].estimatedSunnybrookComposite, "");
@@ -117,8 +117,9 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(clinicalRow[index.estimatedHouseBrackmannGrade], "");
   assert.equal(clinicalRow[index.clinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(clinicalRow[index.estimatedSunnybrookComposite], "");
-  assert.equal(clinicalRow[index.estimateEvidenceTier], "");
-  assert.equal(clinicalRow[index.estimateUsableMovementCoverageRatio], "");
+  assert.equal(clinicalRow[index.estimateStatus], "estimated");
+  assert.equal(clinicalRow[index.estimateEvidenceTier], "complete-standard-assessment");
+  assert.equal(clinicalRow[index.estimateUsableMovementCoverageRatio], "1");
   assert.equal(clinicalRow[index.houseBrackmannGrade], "");
   assert.equal(clinicalRow[index.sourceLabelSheetMode], "blinded");
   assert.equal(clinicalRow[index.reviewBlinded], "");

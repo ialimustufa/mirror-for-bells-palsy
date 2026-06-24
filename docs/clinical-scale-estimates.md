@@ -103,11 +103,12 @@ Mirror's current estimates in read-only reference columns for audit, but the
   label came from a blinded sheet and was independently clinician-assigned or
   adjudicated before it is counted by readiness tooling
 
-Normal, non-blinded label sheets also include read-only estimate audit columns
-for `estimateEvidenceTier`, `estimateUsableMovementCoverageRatio`,
-`estimateUsableMovementCount`, and `estimateRequiredMovementCount`. Blinded
-label sheets leave those estimate-derived fields blank, while preserving
-`clinicalScaleEstimateVersion` for provenance.
+Normal, non-blinded label sheets also include read-only estimate value columns.
+Blinded label sheets hide the estimate values, but preserve non-revealing
+provenance columns for `estimateStatus`, `estimateEvidenceTier`,
+`estimateUsableMovementCoverageRatio`, `estimateUsableMovementCount`,
+`estimateRequiredMovementCount`, and `clinicalScaleEstimateVersion` so release
+tooling can prove the row came from qualifying current-version evidence.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -163,10 +164,11 @@ controls before a clinical agreement artifact can support clinical-facing score
 availability.
 Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,
-independent clinician sheets with paired primary-scale labels meeting the same
-reviewed-assessment floor, at least 80% observed reviewer agreement, Wilson
-lower-bound reviewer agreement meeting the configured 80% standard, and no
-reviewer-sheet metadata blockers.
+independent clinician sheets with qualifying complete/minimum estimate evidence,
+at least 80% usable movement coverage, paired primary-scale labels meeting the
+same reviewed-assessment floor, at least 80% observed reviewer agreement,
+Wilson lower-bound reviewer agreement meeting the configured 80% standard, and
+no reviewer-sheet metadata or estimate-evidence blockers.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

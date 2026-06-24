@@ -2,6 +2,7 @@ import { LABEL_COLUMNS, parseCsv } from "./validationLabels.js";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../domain/clinicalScales.js";
 
 const PRIMARY_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
 const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist)\b|\bent\b|\bslp\b/i;
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
@@ -13,6 +14,7 @@ const DEFAULT_REVIEWER_AGREEMENT_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
   minAgreementWilsonLowerBound: 0.8,
   minPairedLabels: 30,
+  minUsableMovementCoverageRatio: 0.8,
   confidenceLevel: 0.95,
 });
 const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
@@ -59,6 +61,12 @@ const REVIEW_SCALE_KEYS = Object.freeze(Object.keys(REVIEW_SCALE_CONFIG));
 const ADJUDICATION_EXTRA_COLUMNS = Object.freeze([
   "reviewerAClinicalScaleEstimateVersion",
   "reviewerBClinicalScaleEstimateVersion",
+  "reviewerAEstimateStatus",
+  "reviewerBEstimateStatus",
+  "reviewerAEstimateEvidenceTier",
+  "reviewerBEstimateEvidenceTier",
+  "reviewerAEstimateUsableMovementCoverageRatio",
+  "reviewerBEstimateUsableMovementCoverageRatio",
   "reviewerAHouseBrackmannGrade",
   "reviewerBHouseBrackmannGrade",
   "reviewerASunnybrookComposite",
@@ -166,6 +174,45 @@ function clinicalScaleEstimateVersion(row = {}) {
   return Number.isInteger(version) ? version : null;
 }
 
+function estimateStatus(row = {}) {
+  return String(row?.estimateStatus ?? "").trim();
+}
+
+function estimateEvidenceTier(row = {}) {
+  return String(row?.estimateEvidenceTier ?? "").trim();
+}
+
+function estimateUsableMovementCoverageRatio(row = {}) {
+  const ratio = Number(row?.estimateUsableMovementCoverageRatio);
+  return Number.isFinite(ratio) ? ratio : null;
+}
+
+function estimateMovementCount(row = {}, key) {
+  const count = Number(row?.[key]);
+  return Number.isInteger(count) ? count : null;
+}
+
+function estimateEvidenceReasons(row = {}, options = {}) {
+  const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio
+    ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
+  const reasons = [];
+  if (estimateStatus(row) !== "estimated") {
+    reasons.push("clinical scale estimate status is not estimated");
+  }
+  if (!VALID_CLINICAL_SCALE_EVIDENCE_TIERS.has(estimateEvidenceTier(row))) {
+    reasons.push("clinical scale estimate evidence tier is missing or insufficient");
+  }
+  const coverageRatio = estimateUsableMovementCoverageRatio(row);
+  if (!Number.isFinite(coverageRatio) || coverageRatio < minUsableMovementCoverageRatio) {
+    reasons.push("clinical scale estimate movement coverage is below the minimum standard");
+  }
+  return reasons;
+}
+
+function estimateEvidenceIssueCount(rowsById, options = {}) {
+  return [...rowsById.values()].filter((row) => estimateEvidenceReasons(row, options).length > 0).length;
+}
+
 function estimateVersionCountKey(version) {
   return version == null ? "missing" : `v${version}`;
 }
@@ -185,13 +232,14 @@ function incrementReasonCount(counts, reason) {
   counts[reason] = (counts[reason] ?? 0) + 1;
 }
 
-function reviewerRowEligibility(row = {}) {
+function reviewerRowEligibility(row = {}, options = {}) {
   const reviewerRole = String(row.reviewerRole ?? "").trim();
   const confidence = String(row.clinicianConfidence ?? "").trim();
   const sourceLabelSheetMode = String(row.sourceLabelSheetMode ?? "").trim();
   const reviewBlinded = String(row.reviewBlinded ?? "").trim();
   const labelSource = String(row.labelSource ?? "").trim();
   const reasons = [];
+  reasons.push(...estimateEvidenceReasons(row, options));
   if (!reviewerRole) {
     reasons.push("missing clinical reviewer role");
   } else if (NON_CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
@@ -224,12 +272,12 @@ function reviewerRowEligibility(row = {}) {
   };
 }
 
-function reviewerSheetEligibility(rowsById, reviewer) {
+function reviewerSheetEligibility(rowsById, reviewer, options = {}) {
   const reasonCounts = {};
   const issues = [];
   let eligibleAssessmentCount = 0;
   for (const [assessmentId, row] of rowsById.entries()) {
-    const eligibility = reviewerRowEligibility(row);
+    const eligibility = reviewerRowEligibility(row, options);
     if (eligibility.eligible) {
       eligibleAssessmentCount += 1;
       continue;
@@ -363,10 +411,32 @@ function estimateVersionSummaryPart(reviewerA, reviewerB) {
   return `Estimator version: reviewer A ${estimateVersionCountKey(aVersion)} vs reviewer B ${estimateVersionCountKey(bVersion)}`;
 }
 
+function estimateEvidenceKey(row = {}) {
+  const coverage = estimateUsableMovementCoverageRatio(row);
+  const usableCount = estimateMovementCount(row, "estimateUsableMovementCount");
+  const requiredCount = estimateMovementCount(row, "estimateRequiredMovementCount");
+  return [
+    estimateStatus(row) || "missing-status",
+    estimateEvidenceTier(row) || "missing-tier",
+    Number.isFinite(coverage) ? coverage.toFixed(4) : "missing-coverage",
+    usableCount == null ? "missing-usable-count" : usableCount,
+    requiredCount == null ? "missing-required-count" : requiredCount,
+  ].join("/");
+}
+
+function estimateEvidenceSummaryPart(reviewerA, reviewerB) {
+  const aEvidence = estimateEvidenceKey(reviewerA);
+  const bEvidence = estimateEvidenceKey(reviewerB);
+  if (aEvidence === bEvidence) return null;
+  return `Estimate evidence: reviewer A ${aEvidence} vs reviewer B ${bEvidence}`;
+}
+
 function disagreementSummaryForAssessment(assessmentId, reviewerA, reviewerB) {
   const parts = [];
   const versionPart = estimateVersionSummaryPart(reviewerA, reviewerB);
   if (versionPart) parts.push(versionPart);
+  const evidencePart = estimateEvidenceSummaryPart(reviewerA, reviewerB);
+  if (evidencePart) parts.push(evidencePart);
   for (const scaleKey of REVIEW_SCALE_KEYS) {
     const config = REVIEW_SCALE_CONFIG[scaleKey];
     const a = scaleValue(scaleKey, reviewerValue(reviewerA, scaleKey));
@@ -392,9 +462,22 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.date = source.date ?? "";
   const reviewerAVersion = clinicalScaleEstimateVersion(reviewerA);
   const reviewerBVersion = clinicalScaleEstimateVersion(reviewerB);
+  const reviewerAEvidence = estimateEvidenceKey(reviewerA);
+  const reviewerBEvidence = estimateEvidenceKey(reviewerB);
   row.clinicalScaleEstimateVersion = reviewerAVersion === reviewerBVersion && reviewerAVersion != null ? reviewerAVersion : "";
+  row.estimateStatus = estimateStatus(reviewerA) === estimateStatus(reviewerB) ? estimateStatus(reviewerA) : "";
+  row.estimateEvidenceTier = estimateEvidenceTier(reviewerA) === estimateEvidenceTier(reviewerB) ? estimateEvidenceTier(reviewerA) : "";
+  row.estimateUsableMovementCoverageRatio = reviewerAEvidence === reviewerBEvidence ? estimateUsableMovementCoverageRatio(reviewerA) ?? "" : "";
+  row.estimateUsableMovementCount = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateUsableMovementCount ?? "" : "";
+  row.estimateRequiredMovementCount = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateRequiredMovementCount ?? "" : "";
   row.reviewerAClinicalScaleEstimateVersion = reviewerAVersion ?? "";
   row.reviewerBClinicalScaleEstimateVersion = reviewerBVersion ?? "";
+  row.reviewerAEstimateStatus = estimateStatus(reviewerA);
+  row.reviewerBEstimateStatus = estimateStatus(reviewerB);
+  row.reviewerAEstimateEvidenceTier = estimateEvidenceTier(reviewerA);
+  row.reviewerBEstimateEvidenceTier = estimateEvidenceTier(reviewerB);
+  row.reviewerAEstimateUsableMovementCoverageRatio = estimateUsableMovementCoverageRatio(reviewerA) ?? "";
+  row.reviewerBEstimateUsableMovementCoverageRatio = estimateUsableMovementCoverageRatio(reviewerB) ?? "";
   row.reviewerAHouseBrackmannGrade = formatHouseBrackmann(reviewerA?.houseBrackmannGrade);
   row.reviewerBHouseBrackmannGrade = formatHouseBrackmann(reviewerB?.houseBrackmannGrade);
   row.reviewerASunnybrookComposite = reviewerA?.sunnybrookComposite ?? "";
@@ -419,6 +502,7 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
 function needsAdjudication(reviewerA, reviewerB) {
   if (!reviewerA || !reviewerB) return true;
   if (clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) return true;
+  if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) return true;
   return REVIEW_SCALE_KEYS.some((scaleKey) => {
     const a = scaleValue(scaleKey, reviewerValue(reviewerA, scaleKey));
     const b = scaleValue(scaleKey, reviewerValue(reviewerB, scaleKey));
@@ -435,12 +519,15 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementRate;
   const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementWilsonLowerBound;
   const minPairedLabels = Math.max(1, Math.round(options.minPairedLabels ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minPairedLabels));
+  const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel;
   const agreementOptions = { minAgreementRate, minAgreementWilsonLowerBound, minPairedLabels, confidenceLevel };
+  const estimateEvidenceOptions = { minUsableMovementCoverageRatio };
   const assessmentIds = [...new Set([...reviewerAById.keys(), ...reviewerBById.keys()])].sort();
   const accumulators = Object.fromEntries(REVIEW_SCALE_KEYS.map((scaleKey) => [scaleKey, createScaleAccumulator(scaleKey)]));
   const adjudicationRows = [];
   const estimateVersionMismatches = [];
+  const estimateEvidenceMismatches = [];
   for (const assessmentId of assessmentIds) {
     const reviewerA = reviewerAById.get(assessmentId) ?? null;
     const reviewerB = reviewerBById.get(assessmentId) ?? null;
@@ -449,6 +536,13 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
         assessmentId,
         reviewerA: estimateVersionCountKey(clinicalScaleEstimateVersion(reviewerA)),
         reviewerB: estimateVersionCountKey(clinicalScaleEstimateVersion(reviewerB)),
+      });
+    }
+    if (reviewerA && reviewerB && estimateEvidenceSummaryPart(reviewerA, reviewerB)) {
+      estimateEvidenceMismatches.push({
+        assessmentId,
+        reviewerA: estimateEvidenceKey(reviewerA),
+        reviewerB: estimateEvidenceKey(reviewerB),
       });
     }
     for (const scaleKey of REVIEW_SCALE_KEYS) {
@@ -460,17 +554,25 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const primaryScaleSummaries = PRIMARY_REVIEW_SCALE_KEYS.map((scaleKey) => byScale[scaleKey]);
   const reviewerAEstimateVersionCounts = estimateVersionCounts(reviewerAById);
   const reviewerBEstimateVersionCounts = estimateVersionCounts(reviewerBById);
-  const reviewerAEligibility = reviewerSheetEligibility(reviewerAById, "reviewerA");
-  const reviewerBEligibility = reviewerSheetEligibility(reviewerBById, "reviewerB");
+  const reviewerAEligibility = reviewerSheetEligibility(reviewerAById, "reviewerA", estimateEvidenceOptions);
+  const reviewerBEligibility = reviewerSheetEligibility(reviewerBById, "reviewerB", estimateEvidenceOptions);
   const reviewerAStaleOrMissingEstimateVersionCount = [...reviewerAById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
   const reviewerBStaleOrMissingEstimateVersionCount = [...reviewerBById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
+  const reviewerAInsufficientEstimateEvidenceCount = estimateEvidenceIssueCount(reviewerAById, estimateEvidenceOptions);
+  const reviewerBInsufficientEstimateEvidenceCount = estimateEvidenceIssueCount(reviewerBById, estimateEvidenceOptions);
   const blockingReasons = [];
   if (!assessmentIds.length) blockingReasons.push("no shared clinical-scale assessment labels found");
   if (reviewerAEligibility.ineligibleAssessmentCount > 0) {
-    blockingReasons.push(`reviewerA: ${reviewerAEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata`);
+    blockingReasons.push(`reviewerA: ${reviewerAEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata/evidence gates`);
   }
   if (reviewerBEligibility.ineligibleAssessmentCount > 0) {
-    blockingReasons.push(`reviewerB: ${reviewerBEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata`);
+    blockingReasons.push(`reviewerB: ${reviewerBEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata/evidence gates`);
+  }
+  if (reviewerAInsufficientEstimateEvidenceCount > 0) {
+    blockingReasons.push(`reviewerA: ${reviewerAInsufficientEstimateEvidenceCount} labels do not meet estimate evidence gates`);
+  }
+  if (reviewerBInsufficientEstimateEvidenceCount > 0) {
+    blockingReasons.push(`reviewerB: ${reviewerBInsufficientEstimateEvidenceCount} labels do not meet estimate evidence gates`);
   }
   if (reviewerAStaleOrMissingEstimateVersionCount > 0) {
     blockingReasons.push(`reviewerA: ${reviewerAStaleOrMissingEstimateVersionCount} labels are missing or not estimator v${requiredClinicalScaleEstimateVersion}`);
@@ -480,6 +582,9 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   }
   if (estimateVersionMismatches.length) {
     blockingReasons.push(`clinicalScaleEstimateVersion: reviewer sheets disagree for ${estimateVersionMismatches.length} assessment labels`);
+  }
+  if (estimateEvidenceMismatches.length) {
+    blockingReasons.push(`estimateEvidence: reviewer sheets disagree for ${estimateEvidenceMismatches.length} assessment labels`);
   }
   for (const scale of primaryScaleSummaries) {
     if (!scale.meetsMinimumStandard) blockingReasons.push(`${scale.scale}: ${scale.blockingReasons.join("; ")}`);
@@ -493,6 +598,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       minAgreementRate,
       minAgreementWilsonLowerBound,
       minPairedLabels,
+      minUsableMovementCoverageRatio,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,
@@ -516,11 +622,15 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerBEstimateVersionCounts,
       reviewerAStaleOrMissingEstimateVersionCount,
       reviewerBStaleOrMissingEstimateVersionCount,
+      reviewerAInsufficientEstimateEvidenceCount,
+      reviewerBInsufficientEstimateEvidenceCount,
       estimateVersionMismatchCount: estimateVersionMismatches.length,
+      estimateEvidenceMismatchCount: estimateEvidenceMismatches.length,
       readyPrimaryScaleCount: primaryScaleSummaries.filter((scale) => scale.meetsMinimumStandard).length,
     },
     byScale,
     estimateVersionMismatches,
+    estimateEvidenceMismatches,
     reviewerSheetIssues: [
       ...reviewerAEligibility.issues,
       ...reviewerBEligibility.issues,

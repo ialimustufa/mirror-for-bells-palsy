@@ -157,9 +157,11 @@ If multiple reviewers label the same assessment:
 - Document the adjudication rule in the readiness report notes.
 - Do not mix raw reviewer rows and adjudicated rows for the same assessment in a
   single readiness dataset.
-- Treat missing, stale, or mismatched `clinicalScaleEstimateVersion` values as
-  adjudication blockers; both raw reviewer sheets and the final adjudicated row
-  must preserve the current estimator version before labels can count.
+- Treat missing, stale, or mismatched `clinicalScaleEstimateVersion` values,
+  estimate status, complete/minimum evidence tier, or 80% usable-movement
+  coverage as adjudication blockers; both raw reviewer sheets and the final
+  adjudicated row must preserve the current qualifying estimate provenance before
+  labels can count.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
   incomplete, or out-of-range reviewer rows as adjudication blockers. They should
   be recollected from a blinded current-version sheet rather than resolved by
@@ -170,10 +172,11 @@ validation gate: House-Brackmann within one grade, Sunnybrook composite within
 10 points, and eFACE totals/domains within 10 points. Each primary reviewer
 agreement row must have at least 30 paired labels, at least 80% observed
 tolerance-based agreement, and a Wilson 95% lower confidence bound of at least
-80%. It also reports reviewer sheet metadata issues before any adjudicated row
-can be merged. The adjudication sheet keeps both raw reviewer values and raw
-estimator versions in audit columns and leaves the mergeable target columns blank
-until a consensus label is entered.
+80%. It also reports reviewer sheet metadata and estimate-evidence issues before
+any adjudicated row can be merged. The adjudication sheet keeps raw reviewer
+values, raw estimator versions, and raw estimate-evidence provenance in audit
+columns and leaves the mergeable target columns blank until a consensus label is
+entered.
 
 ## Required Artifacts Before Enabling Clinical-Facing Scores
 

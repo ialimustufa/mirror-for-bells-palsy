@@ -12,7 +12,7 @@ const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`
 
 function reviewerCsv(rows) {
   return [
-    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -20,6 +20,11 @@ function reviewerCsv(rows) {
       row.sessionId ?? row.assessmentId.replace(":clinical-scale", ""),
       row.sessionTs ?? "",
       row.date ?? "2026-06-24",
+      row.estimateStatus ?? "estimated",
+      row.estimateEvidenceTier ?? "complete-standard-assessment",
+      row.estimateUsableMovementCoverageRatio ?? 1,
+      row.estimateUsableMovementCount ?? 5,
+      row.estimateRequiredMovementCount ?? 5,
       row.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION,
       row.houseBrackmannGrade ?? "",
       row.sunnybrookComposite ?? "",
@@ -64,6 +69,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.requiredClinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(report.standard.minAgreementRate, 0.8);
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
+  assert.equal(report.standard.minUsableMovementCoverageRatio, 0.8);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
@@ -71,8 +77,12 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 0);
   assert.equal(report.summary.reviewerAEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 3);
   assert.equal(report.summary.reviewerBEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 3);
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
+  assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.estimateVersionMismatchCount, 0);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
   assert.deepEqual(report.estimateVersionMismatches, []);
+  assert.deepEqual(report.estimateEvidenceMismatches, []);
   assert.deepEqual(report.reviewerSheetIssues, []);
   assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 2);
   assert.equal(report.byScale.houseBrackmannGrade.exactMatchCount, 1);
@@ -102,6 +112,9 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
 
   assert.equal(report.summary.comparedAssessmentCount, 30);
   assert.equal(report.summary.readyPrimaryScaleCount, 3);
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
+  assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceRate, 1);
   assert.ok(report.byScale.houseBrackmannGrade.withinToleranceConfidenceInterval.lower >= 0.8);
   assert.equal(report.byScale.sunnybrookComposite.meetsMinimumStandard, true);
@@ -126,8 +139,15 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(row[index.assessmentId], "assessment-1:clinical-scale");
   assert.equal(row[index.houseBrackmannGrade], "");
   assert.equal(row[index.clinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
+  assert.equal(row[index.estimateStatus], "estimated");
+  assert.equal(row[index.estimateEvidenceTier], "complete-standard-assessment");
+  assert.equal(row[index.estimateUsableMovementCoverageRatio], "1");
   assert.equal(row[index.reviewerAClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(row[index.reviewerBClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
+  assert.equal(row[index.reviewerAEstimateStatus], "estimated");
+  assert.equal(row[index.reviewerBEstimateStatus], "estimated");
+  assert.equal(row[index.reviewerAEstimateEvidenceTier], "complete-standard-assessment");
+  assert.equal(row[index.reviewerBEstimateEvidenceTier], "complete-standard-assessment");
   assert.equal(row[index.reviewerAHouseBrackmannGrade], "III");
   assert.equal(row[index.reviewerBHouseBrackmannGrade], "IV");
   assert.equal(row[index.reviewerANotes], "A note");
@@ -185,13 +205,53 @@ test("clinical-scale reviewer agreement blocks stale or mismatched estimator pro
   assert.equal(report.summary.reviewerBEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 1);
   assert.equal(report.summary.reviewerAStaleOrMissingEstimateVersionCount, 1);
   assert.equal(report.summary.reviewerBStaleOrMissingEstimateVersionCount, 1);
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
+  assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.estimateVersionMismatchCount, 2);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
   assert.equal(report.estimateVersionMismatches.length, 2);
   assert.match(report.blockingReasons.join("\n"), new RegExp(`reviewerA: 1 labels are missing or not estimator v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(report.blockingReasons.join("\n"), new RegExp(`reviewerB: 1 labels are missing or not estimator v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(report.blockingReasons.join("\n"), /reviewer sheets disagree for 2 assessment labels/);
   assert.match(report.adjudicationRows[0].disagreementSummary, /Estimator version/);
   assert.equal(report.adjudicationRows.find((row) => row.assessmentId === "assessment-1:clinical-scale").clinicalScaleEstimateVersion, "");
+});
+
+test("clinical-scale reviewer agreement blocks insufficient estimate evidence provenance", () => {
+  const reviewerA = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      estimateStatus: "insufficient-data",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+  ]);
+  const reviewerB = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      estimateEvidenceTier: "insufficient-standard-evidence",
+      estimateUsableMovementCoverageRatio: 0.6,
+      estimateUsableMovementCount: 3,
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+  ]);
+
+  const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate status is not estimated"], 1);
+  assert.equal(report.summary.reviewerBIneligibleReasons["clinical scale estimate evidence tier is missing or insufficient"], 1);
+  assert.equal(report.summary.reviewerBIneligibleReasons["clinical scale estimate movement coverage is below the minimum standard"], 1);
+  assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
+  assert.match(report.blockingReasons.join("\n"), /estimateEvidence: reviewer sheets disagree/);
+  assert.match(report.adjudicationRows[0].disagreementSummary, /Estimate evidence/);
 });
 
 test("clinical-scale reviewer agreement blocks unblinded or non-independent reviewer sheets", () => {

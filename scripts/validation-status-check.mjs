@@ -192,6 +192,10 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     Number.isInteger(report.standard.minPairedLabels) && report.standard.minPairedLabels >= DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS,
     `${artifactPath}.standard.minPairedLabels must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
   );
+  assertCondition(
+    report.standard.minUsableMovementCoverageRatio === DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO,
+    `${artifactPath}.standard.minUsableMovementCoverageRatio must be ${DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO}`,
+  );
   assertCondition(report.standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.standard.confidenceInterval.method must be wilson-score`);
   assertCondition(report.standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.standard.confidenceInterval.confidenceLevel must be 0.95`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
@@ -204,7 +208,10 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertNonNegativeInteger(report.summary.reviewerBIneligibleAssessmentCount, `${artifactPath}.summary.reviewerBIneligibleAssessmentCount`);
   assertNonNegativeInteger(report.summary.reviewerAStaleOrMissingEstimateVersionCount, `${artifactPath}.summary.reviewerAStaleOrMissingEstimateVersionCount`);
   assertNonNegativeInteger(report.summary.reviewerBStaleOrMissingEstimateVersionCount, `${artifactPath}.summary.reviewerBStaleOrMissingEstimateVersionCount`);
+  assertNonNegativeInteger(report.summary.reviewerAInsufficientEstimateEvidenceCount, `${artifactPath}.summary.reviewerAInsufficientEstimateEvidenceCount`);
+  assertNonNegativeInteger(report.summary.reviewerBInsufficientEstimateEvidenceCount, `${artifactPath}.summary.reviewerBInsufficientEstimateEvidenceCount`);
   assertNonNegativeInteger(report.summary.estimateVersionMismatchCount, `${artifactPath}.summary.estimateVersionMismatchCount`);
+  assertNonNegativeInteger(report.summary.estimateEvidenceMismatchCount, `${artifactPath}.summary.estimateEvidenceMismatchCount`);
   assertCondition(
     report.summary.requiredClinicalScaleEstimateVersion === CLINICAL_SCALE_ESTIMATE_VERSION,
     `${artifactPath}.summary.requiredClinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
@@ -239,7 +246,10 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     reviewerBIneligibleAssessmentCount: report.summary.reviewerBIneligibleAssessmentCount,
     reviewerAStaleOrMissingEstimateVersionCount: report.summary.reviewerAStaleOrMissingEstimateVersionCount,
     reviewerBStaleOrMissingEstimateVersionCount: report.summary.reviewerBStaleOrMissingEstimateVersionCount,
+    reviewerAInsufficientEstimateEvidenceCount: report.summary.reviewerAInsufficientEstimateEvidenceCount,
+    reviewerBInsufficientEstimateEvidenceCount: report.summary.reviewerBInsufficientEstimateEvidenceCount,
     estimateVersionMismatchCount: report.summary.estimateVersionMismatchCount,
+    estimateEvidenceMismatchCount: report.summary.estimateEvidenceMismatchCount,
     requiredClinicalScaleEstimateVersion: report.summary.requiredClinicalScaleEstimateVersion,
     minimumPrimaryPairedCount: Math.min(...primaryPairedCounts),
     minimumPrimaryAgreementRate: Math.min(...primaryAgreementRates),
@@ -350,14 +360,17 @@ async function validateStatusArtifacts(status, options = {}) {
       && (report.reviewerBIneligibleAssessmentCount ?? 0) === 0
       && (report.reviewerAStaleOrMissingEstimateVersionCount ?? 0) === 0
       && (report.reviewerBStaleOrMissingEstimateVersionCount ?? 0) === 0
+      && (report.reviewerAInsufficientEstimateEvidenceCount ?? 0) === 0
+      && (report.reviewerBInsufficientEstimateEvidenceCount ?? 0) === 0
       && (report.estimateVersionMismatchCount ?? 0) === 0
+      && (report.estimateEvidenceMismatchCount ?? 0) === 0
       && (report.minimumPrimaryPairedCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
       && (report.minimumPrimaryAgreementRate ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementRate
       && (report.minimumPrimaryAgreementWilsonLowerBound ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
     ));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document current-version, blinded independent reviewer sheets with paired primary labels, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no reviewer metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document current-version estimates with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired primary labels, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no reviewer metadata blockers",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

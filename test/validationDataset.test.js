@@ -81,6 +81,8 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.summary.containsLandmarks, true);
   assert.deepEqual(manifest.labelSchema.requiredFields, ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"]);
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateStatus.default, "record.estimate.status");
+  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.fields.estimateUsableMovementCoverageRatio.range, [0, 1]);
   assert.deepEqual(manifest.sections, ["sessionContext", "assessmentClinicalScale", "frameSample"]);
   assert.deepEqual(sessions.map((session) => session.id), ["session-a"]);
   assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["session-a:clinical-scale"]);

@@ -91,6 +91,12 @@ function buildFrameLabelFields() {
 
 function buildAssessmentClinicalLabelFields() {
   return {
+    estimateStatus: { type: "estimated|insufficient-data|string|null", default: "record.estimate.status" },
+    estimateEvidenceTier: { type: "complete-standard-assessment|minimum-standard-assessment|insufficient-standard-evidence|null", default: "record.estimate.evidence.tier" },
+    estimateUsableMovementCoverageRatio: { type: "number|null", range: [0, 1], default: "record.estimate.coverage.ratio" },
+    estimateUsableMovementCount: { type: "integer|null", default: "record.estimate.coverage.usableMovementCount" },
+    estimateRequiredMovementCount: { type: "integer|null", default: "record.estimate.coverage.requiredMovementCount" },
+    clinicalScaleEstimateVersion: { type: "integer|null", default: "record.estimate.version" },
     houseBrackmannGrade: { type: "enum|null", values: HOUSE_BRACKMANN_LABELS, default: null },
     sunnybrookComposite: { type: "number|null", range: [0, 100], default: null },
     efaceTotal: { type: "number|null", range: [0, 100], default: null },

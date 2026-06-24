@@ -64,17 +64,22 @@ checks for:
   copied, rehearsal, non-clinician, uncertain, incomplete, or out-of-range rows
   are excluded and reported separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
-  controls section, current estimator-version evidence, and an eligible blinded
-  independent label count meeting the minimum reviewed-assessment floor.
+  controls section, current estimator-version evidence, complete/minimum
+  estimate evidence-tier controls, the 80% usable-movement coverage floor, and
+  an eligible blinded independent label count meeting the minimum
+  reviewed-assessment floor.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
-  version provenance for each reviewer sheet; stale, missing, or mismatched
-  versions are release blockers until adjudicated from current-version evidence.
+  version and estimate-evidence provenance for each reviewer sheet; stale,
+  missing, mismatched, or below-80%-coverage estimate evidence is a release
+  blocker until recollected from qualifying current-version evidence.
 - Reviewer-agreement reports must also block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
-  reviewer rows before adjudication output can support readiness.
+  reviewer rows, plus rows paired with insufficient estimate status, evidence
+  tier, or usable-movement coverage, before adjudication output can support
+  readiness.
 - Reviewer-agreement reports must also show at least 30 paired primary labels,
   at least 80% observed reviewer agreement, and a 95% Wilson lower bound meeting
   the configured 80% agreement floor for each primary scale.
