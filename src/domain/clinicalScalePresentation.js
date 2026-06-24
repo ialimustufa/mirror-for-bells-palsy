@@ -22,6 +22,14 @@ function nonEmptyStringArray(value) {
   return Array.isArray(value) && value.some((item) => typeof item === "string" && item.length > 0);
 }
 
+function nonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
+}
+
+function stringArrayIncludes(value, item) {
+  return Array.isArray(value) && nonEmptyString(item) && value.includes(item);
+}
+
 function clinicalScaleValidationStandardBlockers(status = DEFAULT_VALIDATION_STATUS) {
   const standard = status?.clinicalScaleMinimumStandard;
   const blockers = [];
@@ -117,8 +125,67 @@ function requestedScaleAvailability(status = DEFAULT_VALIDATION_STATUS, scaleKey
   return false;
 }
 
+function clinicalScaleAvailabilityEvidenceBlockers(status = DEFAULT_VALIDATION_STATUS, scaleKey) {
+  const scaleConfig = status?.clinicalScaleAvailability?.[scaleKey];
+  if (!scaleConfig?.clinicalFacingScoresAllowed) return [];
+  const standard = status?.clinicalScaleMinimumStandard ?? {};
+  const minReviewedAssessments = Number.isInteger(standard.minReviewedAssessments)
+    ? standard.minReviewedAssessments
+    : REQUIRED_MIN_REVIEWED_ASSESSMENTS;
+  const minDistinctClinicalCases = Number.isInteger(standard.minDistinctClinicalCases)
+    ? standard.minDistinctClinicalCases
+    : REQUIRED_MIN_DISTINCT_CLINICAL_CASES;
+  const minAgreementRate = Number.isFinite(Number(standard.minAgreementRate))
+    ? Number(standard.minAgreementRate)
+    : REQUIRED_MIN_AGREEMENT_RATE;
+  const minWilsonLowerBound = Number.isFinite(Number(standard.minAgreementWilsonLowerBound))
+    ? Number(standard.minAgreementWilsonLowerBound)
+    : REQUIRED_MIN_AGREEMENT_WILSON_LOWER_BOUND;
+  const blockers = [];
+  if (!stringArrayIncludes(status?.clinicalScaleAgreementReports, scaleConfig.clinicalAgreementReport)) {
+    blockers.push(`${scaleKey}.clinicalAgreementReport must reference a listed clinical-scale agreement report`);
+  }
+  if (!stringArrayIncludes(status?.clinicalScaleReviewerAgreementReports, scaleConfig.reviewerAgreementReport)) {
+    blockers.push(`${scaleKey}.reviewerAgreementReport must reference a listed reviewer-agreement report`);
+  }
+  if (scaleConfig.clinicalScaleEstimateVersion !== CLINICAL_SCALE_ESTIMATE_VERSION) {
+    blockers.push(`${scaleKey}.clinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`);
+  }
+  if (!numberAtLeast(scaleConfig.reviewedLabelCount, minReviewedAssessments)) {
+    blockers.push(`${scaleKey}.reviewedLabelCount must be at least ${minReviewedAssessments}`);
+  }
+  if (!numberAtLeast(scaleConfig.distinctValidationCaseCount, minDistinctClinicalCases)) {
+    blockers.push(`${scaleKey}.distinctValidationCaseCount must be at least ${minDistinctClinicalCases}`);
+  }
+  if (!numberAtLeast(scaleConfig.observedAgreementRate, minAgreementRate)) {
+    blockers.push(`${scaleKey}.observedAgreementRate must be at least ${minAgreementRate}`);
+  }
+  if (!numberAtLeast(scaleConfig.agreementWilsonLowerBound, minWilsonLowerBound)) {
+    blockers.push(`${scaleKey}.agreementWilsonLowerBound must be at least ${minWilsonLowerBound}`);
+  }
+  if (!numberAtLeast(scaleConfig.reviewerPairedLabelCount, minReviewedAssessments)) {
+    blockers.push(`${scaleKey}.reviewerPairedLabelCount must be at least ${minReviewedAssessments}`);
+  }
+  if (!numberAtLeast(scaleConfig.reviewerDistinctValidationCaseCount, minDistinctClinicalCases)) {
+    blockers.push(`${scaleKey}.reviewerDistinctValidationCaseCount must be at least ${minDistinctClinicalCases}`);
+  }
+  if (!numberAtLeast(scaleConfig.reviewerObservedAgreementRate, minAgreementRate)) {
+    blockers.push(`${scaleKey}.reviewerObservedAgreementRate must be at least ${minAgreementRate}`);
+  }
+  if (!numberAtLeast(scaleConfig.reviewerAgreementWilsonLowerBound, minWilsonLowerBound)) {
+    blockers.push(`${scaleKey}.reviewerAgreementWilsonLowerBound must be at least ${minWilsonLowerBound}`);
+  }
+  return blockers;
+}
+
+function clinicalScaleAvailabilityEvidenceEligible(status = DEFAULT_VALIDATION_STATUS, scaleKey) {
+  return clinicalScaleAvailabilityEvidenceBlockers(status, scaleKey).length === 0;
+}
+
 function clinicalFacingScaleStatusEligible(status = DEFAULT_VALIDATION_STATUS, scaleKey) {
-  return clinicalFacingStatusEligible(status) && requestedScaleAvailability(status, scaleKey);
+  return clinicalFacingStatusEligible(status)
+    && requestedScaleAvailability(status, scaleKey)
+    && clinicalScaleAvailabilityEvidenceEligible(status, scaleKey);
 }
 
 function clinicalScaleAvailabilityPolicy(status = DEFAULT_VALIDATION_STATUS) {
@@ -128,6 +195,8 @@ function clinicalScaleAvailabilityPolicy(status = DEFAULT_VALIDATION_STATUS) {
       {
         clinicalFacingScoresAllowed: clinicalFacingScaleStatusEligible(status, scaleKey),
         requestedClinicalFacingScoresAllowed: requestedScaleAvailability(status, scaleKey),
+        availabilityEvidenceEligible: clinicalScaleAvailabilityEvidenceEligible(status, scaleKey),
+        availabilityEvidenceBlockers: clinicalScaleAvailabilityEvidenceBlockers(status, scaleKey),
       },
     ]),
   );
@@ -210,6 +279,8 @@ export {
   DEFAULT_VALIDATION_STATUS,
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleAvailabilityEvidenceBlockers,
+  clinicalScaleAvailabilityEvidenceEligible,
   clinicalScaleReleaseEvidenceBlockers,
   clinicalScaleReleaseEvidenceEligible,
   clinicalScaleReleaseStatusBlockers,

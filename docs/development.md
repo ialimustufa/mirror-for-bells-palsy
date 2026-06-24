@@ -61,11 +61,12 @@ checks for:
   unless the status is explicitly `clinical-scale-agreement-reviewed`; it also
   fails closed without schema-v1 dated status metadata, reviewed dataset/frame
   coverage, ready exercise coverage, clinical and reviewer agreement report
-  paths, threshold report paths, or if the status file weakens the documented
-  30-assessment, 10-case, 80% observed-agreement, 80% Wilson lower-bound, 80%
-  usable-movement-coverage, Wilson-confidence-interval,
-  current-estimator-version, review-protocol, or House-Brackmann case-mix
-  floors.
+  paths, threshold report paths, per-scale clinical/reviewer agreement evidence
+  summaries for each enabled House-Brackmann/Sunnybrook/eFACE support value, or
+  if the status file weakens the documented 30-assessment, 10-case, 80%
+  observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
+  Wilson-confidence-interval, current-estimator-version, review-protocol, or
+  House-Brackmann case-mix floors.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
   from the current clinical-scale estimator version and a pseudonymous

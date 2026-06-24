@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import validationStatus from "../docs/validation-status.json" with { type: "json" };
 import {
+  clinicalScaleAvailabilityEvidenceBlockers,
+  clinicalScaleAvailabilityEvidenceEligible,
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
   clinicalScaleReleaseEvidenceBlockers,
@@ -44,7 +46,37 @@ function clinicalScaleMinimumStandard(overrides = {}) {
   };
 }
 
-function reviewedClinicalScaleStatus(clinicalScaleAvailability) {
+function enabledScaleEvidence(overrides = {}) {
+  return {
+    clinicalFacingScoresAllowed: true,
+    clinicalAgreementReport: "docs/validation/clinical-scale-agreement-2026-06-24.md",
+    reviewerAgreementReport: "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json",
+    clinicalScaleEstimateVersion: validationStatus.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion,
+    reviewedLabelCount: 30,
+    distinctValidationCaseCount: 30,
+    observedAgreementRate: 1,
+    agreementWilsonLowerBound: 0.887,
+    reviewerPairedLabelCount: 30,
+    reviewerDistinctValidationCaseCount: 30,
+    reviewerObservedAgreementRate: 1,
+    reviewerAgreementWilsonLowerBound: 0.887,
+    ...overrides,
+  };
+}
+
+function disabledScaleAvailability() {
+  return { clinicalFacingScoresAllowed: false };
+}
+
+function clinicalScaleAvailability(overrides = {}) {
+  return {
+    houseBrackmann: enabledScaleEvidence(overrides.houseBrackmann),
+    sunnybrook: enabledScaleEvidence(overrides.sunnybrook),
+    eface: enabledScaleEvidence(overrides.eface),
+  };
+}
+
+function reviewedClinicalScaleStatus(clinicalScaleAvailabilityConfig = clinicalScaleAvailability()) {
   return {
     schemaVersion: 1,
     updatedAt: "2026-06-24",
@@ -59,7 +91,7 @@ function reviewedClinicalScaleStatus(clinicalScaleAvailability) {
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
-    clinicalScaleAvailability,
+    clinicalScaleAvailability: clinicalScaleAvailabilityConfig,
   };
 }
 
@@ -110,11 +142,7 @@ test("clinical scale presentation policy switches copy only with complete releas
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
-    clinicalScaleAvailability: {
-      houseBrackmann: { clinicalFacingScoresAllowed: true },
-      sunnybrook: { clinicalFacingScoresAllowed: true },
-      eface: { clinicalFacingScoresAllowed: true },
-    },
+    clinicalScaleAvailability: clinicalScaleAvailability(),
   };
   const policy = clinicalScalePresentationPolicy(status);
 
@@ -123,18 +151,49 @@ test("clinical scale presentation policy switches copy only with complete releas
   assert.equal(policy.validationReleaseStatusEligible, true);
   assert.equal(policy.validationReleaseEvidenceEligible, true);
   assert.equal(policy.validationStandardEligible, true);
+  assert.equal(policy.scaleAvailability.houseBrackmann.availabilityEvidenceEligible, true);
   assert.equal(policy.badgeLabel, "Validated");
   assert.equal(policy.scaleNoun, "support value");
   assert.match(policy.shortNotice, /validation gate/);
   assert.match(policy.reportNotice, /clinician interpretation/);
 });
 
+test("clinical scale presentation policy fails closed for enabled scales without per-scale evidence", () => {
+  const weakScaleEvidence = [
+    { clinicalAgreementReport: "docs/validation/other-report.md", blocker: /clinicalAgreementReport/ },
+    { reviewerAgreementReport: "docs/validation/other-reviewer-report.json", blocker: /reviewerAgreementReport/ },
+    { clinicalScaleEstimateVersion: validationStatus.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion - 1, blocker: /clinicalScaleEstimateVersion/ },
+    { reviewedLabelCount: 29, blocker: /reviewedLabelCount/ },
+    { distinctValidationCaseCount: 9, blocker: /distinctValidationCaseCount/ },
+    { observedAgreementRate: 0.79, blocker: /observedAgreementRate/ },
+    { agreementWilsonLowerBound: 0.79, blocker: /agreementWilsonLowerBound/ },
+    { reviewerPairedLabelCount: 29, blocker: /reviewerPairedLabelCount/ },
+    { reviewerDistinctValidationCaseCount: 9, blocker: /reviewerDistinctValidationCaseCount/ },
+    { reviewerObservedAgreementRate: 0.79, blocker: /reviewerObservedAgreementRate/ },
+    { reviewerAgreementWilsonLowerBound: 0.79, blocker: /reviewerAgreementWilsonLowerBound/ },
+  ];
+
+  for (const weakEvidence of weakScaleEvidence) {
+    const { blocker, ...override } = weakEvidence;
+    const status = reviewedClinicalScaleStatus(clinicalScaleAvailability({
+      houseBrackmann: override,
+    }));
+    const policy = clinicalScalePresentationPolicy(status);
+
+    assert.equal(clinicalFacingStatusEligible(status), true);
+    assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
+    assert.equal(clinicalScaleAvailabilityEvidenceEligible(status, "houseBrackmann"), false);
+    assert.match(clinicalScaleAvailabilityEvidenceBlockers(status, "houseBrackmann").join("\n"), blocker);
+    assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
+    assert.equal(policy.scaleAvailability.houseBrackmann.availabilityEvidenceEligible, false);
+    assert.match(policy.scaleAvailability.houseBrackmann.availabilityEvidenceBlockers.join("\n"), blocker);
+    assert.equal(policy.scaleAvailability.sunnybrook.clinicalFacingScoresAllowed, true);
+    assert.equal(policy.mode, "mixed-clinical-scale-support");
+  }
+});
+
 test("clinical scale presentation policy fails closed when release evidence is incomplete", () => {
-  const passingStatus = reviewedClinicalScaleStatus({
-    houseBrackmann: { clinicalFacingScoresAllowed: true },
-    sunnybrook: { clinicalFacingScoresAllowed: true },
-    eface: { clinicalFacingScoresAllowed: true },
-  });
+  const passingStatus = reviewedClinicalScaleStatus(clinicalScaleAvailability());
 
   const weakEvidence = [
     { schemaVersion: 2, blocker: /schemaVersion/ },
@@ -169,11 +228,7 @@ test("clinical scale presentation policy fails closed when release evidence is i
 
 test("clinical scale presentation policy fails closed when release status is contradictory", () => {
   const status = {
-    ...reviewedClinicalScaleStatus({
-      houseBrackmann: { clinicalFacingScoresAllowed: true },
-      sunnybrook: { clinicalFacingScoresAllowed: true },
-      eface: { clinicalFacingScoresAllowed: true },
-    }),
+    ...reviewedClinicalScaleStatus(clinicalScaleAvailability()),
     status: "tooling-ready-needs-reviewed-data",
   };
   const policy = clinicalScalePresentationPolicy(status);
@@ -190,11 +245,7 @@ test("clinical scale presentation policy fails closed when release status is con
 });
 
 test("clinical scale presentation policy fails closed when the runtime validation standard is weak", () => {
-  const passingStatus = reviewedClinicalScaleStatus({
-    houseBrackmann: { clinicalFacingScoresAllowed: true },
-    sunnybrook: { clinicalFacingScoresAllowed: true },
-    eface: { clinicalFacingScoresAllowed: true },
-  });
+  const passingStatus = reviewedClinicalScaleStatus(clinicalScaleAvailability());
 
   const weakStandards = [
     { minReviewedAssessments: 29, blocker: /minReviewedAssessments/ },
@@ -271,9 +322,9 @@ test("clinical scale presentation policy can keep individual scales as estimates
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
-      houseBrackmann: { clinicalFacingScoresAllowed: true },
-      sunnybrook: { clinicalFacingScoresAllowed: false },
-      eface: { clinicalFacingScoresAllowed: true },
+      houseBrackmann: enabledScaleEvidence(),
+      sunnybrook: disabledScaleAvailability(),
+      eface: enabledScaleEvidence(),
     },
   };
   const policy = clinicalScalePresentationPolicy(status);
@@ -309,9 +360,9 @@ test("compact clinical scale labels include validation-aware per-scale nouns", (
   assert.equal(compactClinicalScaleValueLabel(scales), "HB II estimate · SB 86 estimate · eFACE 89 estimate");
 
   const mixedPolicy = clinicalScalePresentationPolicy(reviewedClinicalScaleStatus({
-    houseBrackmann: { clinicalFacingScoresAllowed: true },
-    sunnybrook: { clinicalFacingScoresAllowed: false },
-    eface: { clinicalFacingScoresAllowed: true },
+    houseBrackmann: enabledScaleEvidence(),
+    sunnybrook: disabledScaleAvailability(),
+    eface: enabledScaleEvidence(),
   }));
 
   assert.equal(compactClinicalScaleValueLabel(scales, mixedPolicy), "HB II support · SB 86 estimate · eFACE 89 support");
@@ -464,11 +515,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
-    clinicalScaleAvailability: {
-      houseBrackmann: { clinicalFacingScoresAllowed: true },
-      sunnybrook: { clinicalFacingScoresAllowed: true },
-      eface: { clinicalFacingScoresAllowed: true },
-    },
+    clinicalScaleAvailability: clinicalScaleAvailability(),
   }));
   assert.match(supportedRows[0], /House-Brackmann support value/);
 
@@ -487,9 +534,9 @@ test("clinical scale report rows and printable reports use the validation-aware 
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: {
-      houseBrackmann: { clinicalFacingScoresAllowed: true },
-      sunnybrook: { clinicalFacingScoresAllowed: false },
-      eface: { clinicalFacingScoresAllowed: true },
+      houseBrackmann: enabledScaleEvidence(),
+      sunnybrook: disabledScaleAvailability(),
+      eface: enabledScaleEvidence(),
     },
   }));
   assert.match(mixedRows[0], /House-Brackmann support value/);
