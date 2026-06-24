@@ -1,6 +1,6 @@
 import { COMFORT_DOSING } from "../domain/config";
 import { summarizeAssessmentSession } from "../domain/assessment";
-import { STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales";
+import { STANDARD_SCALE_MOVEMENTS, clinicalScaleRestingEvidenceSummary } from "../domain/clinicalScales";
 import { clinicalScalePresentationPolicy, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
@@ -74,11 +74,13 @@ function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScaleP
   }
   const scales = clinicalScales.scales ?? {};
   const omittedMovements = omittedClinicalScaleMovementLabels(clinicalScales);
+  const restingEvidence = clinicalScaleRestingEvidenceSummary(clinicalScales);
   return [
     scales.houseBrackmann ? `House-Brackmann ${scaleNounForClinicalScale(presentation, "houseBrackmann")}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
     scales.sunnybrook ? `Sunnybrook ${scaleNounForClinicalScale(presentation, "sunnybrook")}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
     scales.eface ? `eFACE-style ${scaleNounForClinicalScale(presentation, "eface")}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
     `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
+    restingEvidence ? `Resting evidence: ${restingEvidence.availableCount}/${restingEvidence.requiredCount} required resting metrics available${restingEvidence.complete ? "" : `; missing ${restingEvidence.missingMetricLabels.join(", ")}`}.` : null,
     omittedMovements.length
       ? `Omitted from scale formulas: ${omittedMovements.join(", ")}.`
       : null,

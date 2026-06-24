@@ -207,6 +207,10 @@ test("clinical scale report rows and printable reports use the validation-aware 
     evidence: {
       tier: "complete-standard-assessment",
       label: "Complete standard-assessment evidence",
+      requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+      availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+      missingRestingMetricKeys: [],
+      completeRestingMetrics: true,
     },
     scales: {
       houseBrackmann: { grade: "II", label: "Mild dysfunction" },
@@ -229,6 +233,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(rows[0], /House-Brackmann estimate/);
   assert.match(rows[1], /Sunnybrook estimate/);
   assert.match(rows.join(" "), /Evidence tier: Complete standard-assessment evidence/);
+  assert.match(rows.join(" "), /Resting evidence: 3\/3 required resting metrics available/);
 
   const minimumRows = clinicalScaleEstimateRows({
     ...clinicalScales,
@@ -242,6 +247,10 @@ test("clinical scale report rows and printable reports use the validation-aware 
       tier: "minimum-standard-assessment",
       label: "Minimum standard-assessment evidence",
       omittedMovementExerciseIds: ["pucker"],
+      requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+      availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+      missingRestingMetricKeys: [],
+      completeRestingMetrics: true,
     },
   });
   assert.match(minimumRows.join(" "), /Omitted from scale formulas: Lip pucker/);
@@ -303,6 +312,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(html, /Clinical scale estimates/);
   assert.match(html, /House-Brackmann estimate/);
   assert.match(html, /Evidence tier: Complete standard-assessment evidence/);
+  assert.match(html, /Resting evidence: 3\/3 required resting metrics available/);
   assert.match(html, /These are Mirror estimates only/);
 
   const hiddenHtml = buildSessionReportHtml({

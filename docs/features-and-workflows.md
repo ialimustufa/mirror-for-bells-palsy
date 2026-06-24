@@ -15,7 +15,7 @@ This document collects the product behavior that used to live in the main README
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
 - A standardized assessment mode that saves assessment summaries separately from daily practice sessions.
 - Resting asymmetry metrics for assessment reports, including eye aperture, midface proxy, and mouth-corner position.
-- Optional House-Brackmann, Sunnybrook, and eFACE-style estimates from standard assessments when at least 80% of required evidence is usable.
+- Optional House-Brackmann, Sunnybrook, and eFACE-style estimates from standard assessments when at least 80% of required movement evidence is usable and all required resting metrics are available.
 - Printable session report that can be saved as a PDF for a physiotherapist.
 - Local clinician bundle export with assessment trends, selected report images, journal notes, diagnostics, and replay frame samples when available.
 - Opt-in validation dataset export with frame-sample and assessment clinical-scale label templates for later user, clinician, or developer review.

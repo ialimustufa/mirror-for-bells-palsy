@@ -846,7 +846,7 @@ Each assessment stores a compact summary in `assessments` with:
 - Rest section: whether a neutral calibration review image is available plus compact resting asymmetry metrics.
 - Voluntary movement sections grouped by brow/forehead, eye, midface/nose, and mouth zones.
 - Coactivation risk from quiet-region movement recorded during the assessment.
-- Optional `clinicalScales` estimates for House-Brackmann, Sunnybrook, and eFACE-style domains when at least 80% of standard movements are usable and resting metrics are available.
+- Optional `clinicalScales` estimates for House-Brackmann, Sunnybrook, and eFACE-style domains when at least 80% of standard movements are usable and all required resting metrics are available.
 - Source session timestamp so the original report and images can still be opened.
 
 Clinician bundle exports include consecutive assessment comparisons. These compare

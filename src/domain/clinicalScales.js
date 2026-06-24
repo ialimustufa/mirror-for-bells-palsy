@@ -17,6 +17,7 @@ const REQUIRED_RESTING_METRICS = Object.freeze([
   { key: "oralCommissure", label: "Oral commissure vertical position" },
 ]);
 const REQUIRED_RESTING_METRIC_KEYS = Object.freeze(REQUIRED_RESTING_METRICS.map((metric) => metric.key));
+const REQUIRED_RESTING_METRIC_LABELS = Object.freeze(Object.fromEntries(REQUIRED_RESTING_METRICS.map((metric) => [metric.key, metric.label])));
 
 const HOUSE_BRACKMANN_LABELS = Object.freeze({
   1: "Normal",
@@ -195,6 +196,29 @@ function restingMetricCompleteness(metrics) {
     availableMetricKeys,
     missingMetricKeys,
     missingMetricLabels: missingMetricKeys.map((key) => REQUIRED_RESTING_METRICS.find((metric) => metric.key === key)?.label ?? key),
+  };
+}
+
+function clinicalScaleRestingEvidenceSummary(clinicalScales) {
+  const evidence = clinicalScales?.evidence ?? {};
+  const hasRestingProvenance = Array.isArray(evidence.requiredRestingMetricKeys)
+    || Array.isArray(evidence.availableRestingMetricKeys)
+    || Array.isArray(evidence.missingRestingMetricKeys)
+    || typeof evidence.completeRestingMetrics === "boolean";
+  if (!hasRestingProvenance) return null;
+  const requiredKeys = Array.isArray(evidence.requiredRestingMetricKeys) && evidence.requiredRestingMetricKeys.length
+    ? evidence.requiredRestingMetricKeys
+    : REQUIRED_RESTING_METRIC_KEYS;
+  const availableKeys = Array.isArray(evidence.availableRestingMetricKeys) ? evidence.availableRestingMetricKeys : [];
+  const missingKeys = Array.isArray(evidence.missingRestingMetricKeys) ? evidence.missingRestingMetricKeys : requiredKeys.filter((key) => !availableKeys.includes(key));
+  return {
+    requiredCount: requiredKeys.length,
+    availableCount: availableKeys.length,
+    complete: evidence.completeRestingMetrics === true || (requiredKeys.length > 0 && missingKeys.length === 0 && availableKeys.length >= requiredKeys.length),
+    requiredMetricKeys: requiredKeys,
+    availableMetricKeys: availableKeys,
+    missingMetricKeys: missingKeys,
+    missingMetricLabels: missingKeys.map((key) => REQUIRED_RESTING_METRIC_LABELS[key] ?? key),
   };
 }
 
@@ -426,5 +450,6 @@ export {
   MIN_USABLE_ASSESSMENT_COVERAGE_RATIO,
   REQUIRED_RESTING_METRIC_KEYS,
   STANDARD_SCALE_MOVEMENTS,
+  clinicalScaleRestingEvidenceSummary,
   estimateClinicalScaleGrades,
 };
