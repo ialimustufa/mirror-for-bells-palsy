@@ -250,6 +250,7 @@ function clinicalRecord(id, estimate, label) {
         labelSource: label.labelSource ?? "clinician-assigned",
         reviewerId: label.reviewerId ?? "reviewer-1",
         reviewerRole: label.reviewerRole ?? "clinician",
+        reviewedAt: label.reviewedAt ?? "2026-06-24T10:00:00.000Z",
       },
     },
   };
@@ -451,6 +452,8 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
     clinicalRecord("assessment-dev:clinical-scale", estimate, { ...validLabel, reviewerRole: "developer rehearsal" }),
     clinicalRecord("assessment-uncertain:clinical-scale", estimate, { ...validLabel, clinicianConfidence: "uncertain" }),
     clinicalRecord("assessment-missing-confidence:clinical-scale", estimate, { ...validLabel, clinicianConfidence: "" }),
+    clinicalRecord("assessment-missing-reviewed-at:clinical-scale", estimate, { ...validLabel, reviewedAt: "" }),
+    clinicalRecord("assessment-invalid-reviewed-at:clinical-scale", estimate, { ...validLabel, reviewedAt: "2026-06-24" }),
     clinicalRecord("assessment-missing-primary:clinical-scale", estimate, { hb: "III", sunnybrook: 74, eface: "" }),
     clinicalRecord("assessment-out-of-range:clinical-scale", estimate, { hb: "III", sunnybrook: 140, eface: 72 }),
     clinicalRecord("assessment-all-invalid:clinical-scale", estimate, { hb: "VII", sunnybrook: 140, eface: -4 }),
@@ -469,12 +472,14 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
     minAssessmentsPerSeverityBand: 1,
   });
 
-  assert.equal(report.summary.assessmentClinicalScaleRecords, 10);
+  assert.equal(report.summary.assessmentClinicalScaleRecords, 12);
   assert.equal(report.summary.reviewedAssessmentCount, 3);
-  assert.equal(report.summary.excludedClinicalLabelCount, 7);
+  assert.equal(report.summary.excludedClinicalLabelCount, 9);
   assert.equal(report.summary.excludedClinicalLabelReasons["reviewer role is marked non-clinical or rehearsal"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinician confidence is uncertain"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["missing clinician confidence"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing review timestamp"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["review timestamp must be a UTC ISO timestamp"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["source label sheet was not generated in blinded mode"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["review was not marked blinded to Mirror estimates"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["label source is marked non-independent or copied"], 1);
@@ -489,6 +494,7 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
   assert.equal(report.standard.requiresExplicitClinicalConfidence, true);
+  assert.equal(report.standard.requiresIsoReviewTimestamp, true);
 });
 
 test("clinical scale evaluation excludes stale or missing estimator-version labels", () => {

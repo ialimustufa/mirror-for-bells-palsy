@@ -143,13 +143,14 @@ Mirror's current estimates in read-only reference columns for audit, but the
   explicit high/medium reviewer confidence before it is counted by readiness
   tooling
 
-Validation label schema v8 lists the three primary scale fields as
+Validation label schema v9 lists the three primary scale fields as
 `primaryTargetFields`, not all-or-nothing required fields. A row needs at least
 one valid primary target to count, and each valid target counts only for its own
 scale's denominator after the row passes required metadata gates. The schema
 also requires `validationCaseId`, explicit high/medium `clinicianConfidence`,
 `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`, `reviewerId`, and
-`reviewerRole` for rows intended to count toward readiness.
+`reviewerRole`, plus `reviewedAt` as a UTC ISO timestamp, for rows intended to
+count toward readiness.
 
 Normal, non-blinded label sheets also include read-only estimate value columns.
 Blinded label sheets hide the estimate values, but preserve non-revealing
@@ -203,12 +204,12 @@ default minimum standard is:
   clinician-assigned or adjudicated `labelSource`,
   has the current clinical-scale estimator `version`, has a recognized clinician
   or adjudicated reviewer role, has `clinicianConfidence` explicitly set to
-  `high` or `medium`, and contains a valid target for the primary scale being
-  counted. Missing another primary target does not remove the valid target from
-  its own denominator. The row must also have a stable assessment id that appears
-  only once; duplicate or missing assessment ids are excluded and block release
-  readiness so a single reviewed assessment cannot inflate denominators. It must
-  also have a pseudonymous
+  `high` or `medium`, has `reviewedAt` set to a UTC ISO timestamp, and contains a
+  valid target for the primary scale being counted. Missing another primary
+  target does not remove the valid target from its own denominator. The row must
+  also have a stable assessment id that appears only once; duplicate or missing
+  assessment ids are excluded and block release readiness so a single reviewed
+  assessment cannot inflate denominators. It must also have a pseudonymous
   `validationCaseId`; missing case ids are excluded, and repeated assessments
   from the same case cannot satisfy the distinct-case floor by themselves. It
   must have a pseudonymous `reviewerId`; missing reviewer ids are excluded
@@ -267,7 +268,7 @@ House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
 current clinical-scale estimator version, the 80% usable-movement coverage
 floor, the complete/minimum estimate evidence-tier gate, complete resting-metric
 provenance, and the `sourceLabelSheetMode`/`reviewBlinded`/estimator
-`version`/`labelSource`/`validationCaseId`/`reviewerId` controls before a
+`version`/`labelSource`/`validationCaseId`/`reviewerId`/`reviewedAt` controls before a
 clinical agreement artifact can support clinical-facing score availability.
 Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,

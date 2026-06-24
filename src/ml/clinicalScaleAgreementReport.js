@@ -227,6 +227,7 @@ function referenceStandardControlLines(validation = {}, readiness = {}) {
     "- Independence control: counted labels require clinician-assigned or adjudicated `labelSource` metadata, not Mirror/copied/algorithmic labels.",
     "- Reviewer identity control: counted labels require a pseudonymous `reviewerId`; reviewer-agreement sheets must use distinct reviewer ids to support independent-review evidence.",
     "- Reviewer control: counted labels require a recognized clinical/adjudication role and `clinicianConfidence` set to high or medium; blank, low, or uncertain confidence rows are excluded.",
+    "- Review timestamp control: counted labels require `reviewedAt` as a UTC ISO timestamp.",
     "- Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.",
   ];
 }
@@ -311,6 +312,7 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
       },
       clinicalScaleEstimateVersion: readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? null,
       requiresExplicitClinicalConfidence: validation.standard?.requiresExplicitClinicalConfidence === true,
+      requiresIsoReviewTimestamp: validation.standard?.requiresIsoReviewTimestamp === true,
     },
     summary: {
       assessmentClinicalScaleRecords: validation.summary?.assessmentClinicalScaleRecords ?? readiness.validationSummary?.assessmentClinicalScaleRecords ?? 0,
@@ -351,6 +353,7 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
       pseudonymousReviewerId: true,
       recognizedClinicalReviewerRole: true,
       explicitClinicalConfidence: true,
+      isoReviewTimestamp: true,
     },
     blockingReasons,
     note: "This report packages reviewed agreement evidence for Mirror clinical-scale estimates. It does not convert estimates into clinician-assigned grades and does not provide diagnosis, prognosis, or treatment advice.",
@@ -435,7 +438,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     "- Index estimate: Mirror standard-assessment clinical-scale estimates generated from local practice data.",
     "- Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from `docs/clinical-scale-review-protocol.md`.",
-    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, estimator `version`, estimate evidence tier/coverage/input-provenance controls, `labelSource`, and clinical `reviewerRole` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.",
+    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, `reviewedAt`, estimator `version`, estimate evidence tier/coverage/input-provenance controls, `labelSource`, and clinical `reviewerRole` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.",
     "- Primary performance measures: tolerance-based agreement rate, missing-estimate count, mean absolute delta, and Wilson confidence interval.",
     "- Error review: out-of-tolerance assessment rows listed above for adjudication and scorer review.",
     "- Release control: this report alone cannot enable clinical-facing scores; `docs/validation-status.json` must be reviewed and updated separately.",

@@ -41,6 +41,7 @@ const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngo
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const ACCEPTED_CLINICAL_CONFIDENCE_PATTERN = /\b(high|medium|confident|adequate|sufficient)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
+const ISO_UTC_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const BLINDED_LABEL_SHEET_PATTERN = /^(blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN = /\b(clinician[-\s]?assigned|clinician|independent|adjudicated|consensus|reference[-\s]?standard)\b/i;
@@ -266,6 +267,10 @@ function clinicalValidationCaseId(record = {}) {
 
 function clinicalReviewerId(record = {}) {
   return String(record.label?.reviewerId ?? record.reviewerId ?? record.sourceSummary?.reviewerId ?? "").trim();
+}
+
+function isIsoUtcTimestamp(value) {
+  return typeof value === "string" && ISO_UTC_TIMESTAMP_PATTERN.test(value) && !Number.isNaN(Date.parse(value));
 }
 
 function duplicateClinicalAssessmentIds(records = []) {
@@ -635,6 +640,7 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   const sourceLabelSheetMode = String(label.sourceLabelSheetMode ?? "").trim();
   const reviewBlinded = String(label.reviewBlinded ?? "").trim();
   const labelSource = String(label.labelSource ?? "").trim();
+  const reviewedAt = String(label.reviewedAt ?? "").trim();
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
     ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
   const requiredPrimaryScales = options.requiredPrimaryScales ?? PRIMARY_CLINICAL_SCALE_LABELS;
@@ -690,6 +696,11 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   }
   if (!clinicalReviewerId(record)) {
     reasons.push("missing clinical reviewer id");
+  }
+  if (!reviewedAt) {
+    reasons.push("missing review timestamp");
+  } else if (!isIsoUtcTimestamp(reviewedAt)) {
+    reasons.push("review timestamp must be a UTC ISO timestamp");
   }
   for (const scale of requiredPrimaryScales) {
     if (estimate[scale] == null) reasons.push(`missing valid ${scale} estimate`);
@@ -1044,6 +1055,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       requiresV4RestingMetricProvenance: true,
       requiresV5ScaleInputProvenance: true,
       requiresExplicitClinicalConfidence: true,
+      requiresIsoReviewTimestamp: true,
       caseMix: {
         houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
         minHouseBrackmannSeverityBands,

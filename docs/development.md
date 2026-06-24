@@ -72,10 +72,11 @@ checks for:
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
   from the current clinical-scale estimator version with `clinicianConfidence`
-  explicitly set to `high` or `medium`, plus a pseudonymous `validationCaseId`
-  and `reviewerId`. Valid primary HB, Sunnybrook, and eFACE total targets count
-  scale by scale; stale-version, missing-version, unblinded, copied, rehearsal,
-  non-clinician, blank-confidence, uncertain, incomplete, duplicate-assessment-id,
+  explicitly set to `high` or `medium`, a UTC ISO `reviewedAt` timestamp, plus a
+  pseudonymous `validationCaseId` and `reviewerId`. Valid primary HB, Sunnybrook,
+  and eFACE total targets count scale by scale; stale-version, missing-version,
+  unblinded, copied, rehearsal, non-clinician, blank-confidence, uncertain,
+  missing/invalid-review-timestamp, incomplete, duplicate-assessment-id,
   missing-assessment-id, missing-case-id, missing-reviewer-id, or
   no-valid-primary-target rows are excluded and reported separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
@@ -125,9 +126,9 @@ checks for:
   blinded row identities, hidden estimate-value columns, read-only
   estimate-provenance columns, and current 80% observed/Wilson release standard.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
-  version, pseudonymous `validationCaseId`, pseudonymous `reviewerId`, and
-  estimate-evidence provenance for each reviewer sheet; stale, missing,
-  mismatched, below-80%-coverage, missing movement provenance,
+  version, pseudonymous `validationCaseId`, pseudonymous `reviewerId`, UTC ISO
+  `reviewedAt`, and estimate-evidence provenance for each reviewer sheet; stale,
+  missing, mismatched, below-80%-coverage, missing movement provenance,
   missing/mismatched case ids, missing reviewer ids, overlapping reviewer ids,
   or missing/incomplete scale-input or resting-metric provenance, plus duplicate
   or missing assessment ids, are release blockers until recollected from
@@ -135,9 +136,10 @@ checks for:
 - Reviewer-agreement reports must use
   `mirror-clinical-scale-reviewer-agreement-report` schema v1 and must also
   block unblinded, non-independent,
-  non-clinician, blank-confidence, uncertain, copied, rehearsal, incomplete, or
-  out-of-range reviewer rows, plus rows paired with insufficient estimate status,
-  evidence tier, usable-movement coverage, used/omitted movement provenance, or
+  non-clinician, blank-confidence, uncertain, missing/invalid-review-timestamp,
+  copied, rehearsal, incomplete, or out-of-range reviewer rows, plus rows paired
+  with insufficient estimate status, evidence tier, usable-movement coverage,
+  used/omitted movement provenance, or
   scale-input/resting-metric provenance, before adjudication output can support
   readiness. Reviewer observed agreement rates must match the within-tolerance
   paired-label counts, and reviewer Wilson bounds must match those counts. The

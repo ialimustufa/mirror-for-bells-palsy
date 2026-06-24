@@ -79,7 +79,7 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.summary.assessmentClinicalScaleRecords, 1);
   assert.deepEqual(manifest.summary.exercises, ["eye-close"]);
   assert.equal(manifest.summary.containsLandmarks, true);
-  assert.equal(manifest.labelSchema.version, 8);
+  assert.equal(manifest.labelSchema.version, 9);
   assert.deepEqual(manifest.labelSchema.requiredFields, ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"]);
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, [
     "validationCaseId",
@@ -89,6 +89,7 @@ test("validation dataset exports labeled frame sample templates", async () => {
     "labelSource",
     "reviewerId",
     "reviewerRole",
+    "reviewedAt",
   ]);
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.primaryTargetFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
   assert.equal(manifest.labelSchema.assessmentClinicalScale.minimumValidPrimaryTargetsForCounting, 1);
@@ -118,6 +119,7 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.reviewBlinded.type, "yes|no|boolean|string|null");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.labelSource.type, "clinician-assigned|adjudicated-consensus|string|null");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.reviewerId.type, "pseudonymous-string|null");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.reviewedAt.type, "iso-date-time|null");
   assert.deepEqual(manifest.sections, ["sessionContext", "assessmentClinicalScale", "frameSample"]);
   assert.deepEqual(sessions.map((session) => session.id), ["session-a"]);
   assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["session-a:clinical-scale"]);
@@ -149,6 +151,7 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(clinicalScaleAssessments[0].label.reviewBlinded, null);
   assert.equal(clinicalScaleAssessments[0].label.labelSource, null);
   assert.equal(clinicalScaleAssessments[0].label.reviewerId, null);
+  assert.equal(clinicalScaleAssessments[0].label.reviewedAt, null);
   assert.deepEqual(samples.map((sample) => sample.id), ["sample-calibrate", "sample-hold"]);
   assert.equal(samples[1].label.intendedMovement, "eye-close");
   assert.equal(samples[1].label.affectedSide, "left");

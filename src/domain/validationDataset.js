@@ -2,7 +2,7 @@ import { summarizeAssessmentSession } from "./assessment";
 
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 8;
+const VALIDATION_LABEL_SCHEMA_VERSION = 9;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
@@ -20,6 +20,7 @@ const ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS = [
   "labelSource",
   "reviewerId",
   "reviewerRole",
+  "reviewedAt",
 ];
 
 function recordArray(value) {

@@ -283,6 +283,7 @@ Created: ${manifest.createdAt}
 - Use a pseudonymous \`validationCaseId\` for each participant/case and a pseudonymous \`reviewerId\` for the reviewer or adjudication panel.
 - Use \`labelSource\` values such as \`clinician-assigned\` or \`adjudicated-consensus\`; copied, automated, self-reported, demo, test, or rehearsal labels do not count toward release readiness.
 - Set \`clinicianConfidence\` to \`high\` or \`medium\` only when the reviewer is confident enough for the row to count. Leave uncertain rows marked \`uncertain\` or blank; those rows are excluded from release counts.
+- Set \`reviewedAt\` to the UTC ISO timestamp when the reviewer assigned the label. Rows without a valid review timestamp are excluded from release counts.
 
 ## Target Fields
 

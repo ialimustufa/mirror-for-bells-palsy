@@ -1008,10 +1008,10 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
   flag plus used and omitted movement exercise IDs. It lists
   `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
   target fields rather than required fields because valid targets count
-  scale-by-scale. Label schema v8 requires review metadata for rows intended to
+  scale-by-scale. Label schema v9 requires review metadata for rows intended to
   count: `validationCaseId`, explicit high/medium `clinicianConfidence`,
   `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`, `reviewerId`, and
-  `reviewerRole`.
+  `reviewerRole`, plus `reviewedAt` as a UTC ISO timestamp.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
@@ -1083,7 +1083,8 @@ with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
 version and must set clinician confidence to high or medium; stale, missing
 estimator-version, blank-confidence, low-confidence, or uncertain-confidence
-rows are excluded and reported. This
+rows, plus rows without a UTC ISO `reviewedAt` timestamp, are excluded and
+reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
 "estimated"` with a complete/minimum v5 evidence tier and at least 80% usable
 movement coverage. For v5, counted rows must also preserve used/omitted movement

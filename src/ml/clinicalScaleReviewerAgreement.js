@@ -24,6 +24,7 @@ const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngo
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const ACCEPTED_CLINICAL_CONFIDENCE_PATTERN = /\b(high|medium|confident|adequate|sufficient)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
+const ISO_UTC_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const BLINDED_LABEL_SHEET_PATTERN = /^(blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN = /\b(clinician[-\s]?assigned|clinician|independent|reference[-\s]?standard)\b/i;
@@ -261,6 +262,10 @@ function validationCaseId(row = {}) {
 
 function reviewerId(row = {}) {
   return String(row?.reviewerId ?? "").trim();
+}
+
+function isIsoUtcTimestamp(value) {
+  return typeof value === "string" && ISO_UTC_TIMESTAMP_PATTERN.test(value) && !Number.isNaN(Date.parse(value));
 }
 
 function estimateMovementCount(row = {}, key) {
@@ -548,6 +553,7 @@ function reviewerRowEligibility(row = {}, options = {}) {
   const sourceLabelSheetMode = String(row.sourceLabelSheetMode ?? "").trim();
   const reviewBlinded = String(row.reviewBlinded ?? "").trim();
   const labelSource = String(row.labelSource ?? "").trim();
+  const reviewedAt = String(row.reviewedAt ?? "").trim();
   const requiredPrimaryScaleKeys = options.requiredPrimaryScaleKeys ?? PRIMARY_REVIEW_SCALE_KEYS;
   const reasons = [];
   reasons.push(...estimateEvidenceReasons(row, options));
@@ -583,6 +589,11 @@ function reviewerRowEligibility(row = {}, options = {}) {
   }
   if (!reviewerId(row)) {
     reasons.push("missing reviewer id");
+  }
+  if (!reviewedAt) {
+    reasons.push("missing review timestamp");
+  } else if (!isIsoUtcTimestamp(reviewedAt)) {
+    reasons.push("review timestamp must be a UTC ISO timestamp");
   }
   for (const scaleKey of requiredPrimaryScaleKeys) {
     if (scaleValue(scaleKey, row[scaleKey]) == null) reasons.push(`missing valid ${scaleKey} label`);
@@ -1296,6 +1307,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       requiresHouseBrackmannRequiredInput: true,
       requiresV5ScaleInputProvenance: true,
       requiresExplicitClinicalConfidence: true,
+      requiresIsoReviewTimestamp: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,
