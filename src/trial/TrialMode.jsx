@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Camera, CameraOff, RefreshCw, Loader2, AlertCircle, ArrowLeft } from "lucide-react";
+import { Camera, CameraOff, RefreshCw, Loader2, AlertCircle, ArrowLeft, X as CloseIcon } from "lucide-react";
 
 // Brand glyphs aren't shipped by lucide-react v1 (dropped for trademark reasons), so
 // inline the three we need. Single-path SVGs, currentColor so the button styles win.
@@ -43,6 +43,54 @@ import {
   smoothFacialTransformationMatrix,
   smoothLandmarks,
 } from "../ml/faceMetrics";
+
+const OPENAI_SUPPORT_URL = "https://developers.openai.com/?utm_source=mirror-for-bells-palsy&utm_medium=referral&utm_campaign=try-page&utm_content=openai-credit";
+const RENDER_SUPPORT_URL = "https://render.com/?utm_source=mirror-for-bells-palsy&utm_medium=referral&utm_campaign=try-page&utm_content=render-credit";
+
+function SupportCreditText({ className = "" }) {
+  return (
+    <p className={className}>
+      Supported by{" "}
+      <a href={OPENAI_SUPPORT_URL} target="_blank" rel="noreferrer" className="font-semibold underline decoration-stone-400 underline-offset-4 hover:text-stone-900">
+        OpenAI
+      </a>{" "}
+      with $600 in credits and{" "}
+      <a href={RENDER_SUPPORT_URL} target="_blank" rel="noreferrer" className="font-semibold underline decoration-stone-400 underline-offset-4 hover:text-stone-900">
+        Render
+      </a>{" "}
+      with $250 in credits.
+    </p>
+  );
+}
+
+function SupportedByCard({ className = "" }) {
+  return (
+    <section className={className} style={{ background: "rgba(31,27,22,0.04)", border: "1px solid rgba(31,27,22,0.08)" }}>
+      <div className="text-[11px] uppercase tracking-[0.18em] text-stone-500 mb-2">Supported by</div>
+      <SupportCreditText className="text-sm text-stone-700 leading-relaxed" />
+    </section>
+  );
+}
+
+function DismissibleSupportHeader({ onDismiss }) {
+  return (
+    <section className="mb-5 lg:mb-6 rounded-2xl px-4 py-3 lg:px-5 flex items-start gap-3" style={{ background: "#FFFFFF", border: "1px solid rgba(31,27,22,0.08)", boxShadow: "0 14px 40px rgba(31,27,22,0.06)" }}>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] uppercase tracking-[0.18em] text-stone-500 mb-1">Supported by</div>
+        <SupportCreditText className="text-sm text-stone-700 leading-relaxed" />
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+        style={{ background: "rgba(31,27,22,0.06)", color: "#57534E" }}
+        aria-label="Dismiss supported by notice"
+      >
+        <CloseIcon className="w-4 h-4" />
+      </button>
+    </section>
+  );
+}
 
 // Blendshapes we surface in the muscle-activity panel. Each row carries a `cap` — the
 // approximate maximum value MediaPipe emits for that blendshape during a real-world
@@ -287,6 +335,7 @@ function drawActivationGlow(canvas, video, lm, bsMap) {
 
 function TrialMode({ prefs = {} }) {
   const [cameraOn, setCameraOn] = useState(true);
+  const [showSupportHeader, setShowSupportHeader] = useState(true);
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const [calibrationStatus, setCalibrationStatus] = useState("Center your face to begin");
   const [calibrated, setCalibrated] = useState(false);
@@ -469,6 +518,8 @@ function TrialMode({ prefs = {} }) {
       </div>
 
       <div className="relative max-w-7xl mx-auto px-5 lg:px-8 py-6 lg:py-8">
+        {showSupportHeader && <DismissibleSupportHeader onDismiss={() => setShowSupportHeader(false)} />}
+
         <header className="flex items-center justify-between mb-6 lg:mb-8">
           <div className="flex items-center gap-3">
             <button onClick={goHome} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: "#1F1B16", color: "#F4EFE6" }} aria-label="Back to app">
@@ -569,6 +620,7 @@ function TrialMode({ prefs = {} }) {
           </section>
 
           <MadeByFooter className="mt-4" />
+          <SupportedByCard className="mt-4 rounded-2xl p-5 lg:p-6" />
         </footer>
       </div>
     </div>

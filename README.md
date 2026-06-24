@@ -59,6 +59,8 @@ Mirror is free for personal, non-commercial use. Commercial use requires prior w
 
 ## Thanks
 
+Supported by [OpenAI](https://developers.openai.com/?utm_source=mirror-for-bells-palsy&utm_medium=referral&utm_campaign=readme&utm_content=openai-credit) with $600 in credits and [Render](https://render.com/?utm_source=mirror-for-bells-palsy&utm_medium=referral&utm_campaign=readme&utm_content=render-credit) with $250 in credits.
+
 Huge thanks to **Vaibhav (VB) Srivastav** from OpenAI for 6 months of ChatGPT Pro (worth ~$600). It directly funded the usage of Codex 5.5 that went into shipping this.
 
 ## Built With
