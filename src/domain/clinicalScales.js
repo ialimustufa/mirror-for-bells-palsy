@@ -1,4 +1,4 @@
-const CLINICAL_SCALE_ESTIMATE_VERSION = 3;
+const CLINICAL_SCALE_ESTIMATE_VERSION = 4;
 const MIN_USABLE_ASSESSMENT_COVERAGE_RATIO = 0.8;
 
 const STANDARD_SCALE_MOVEMENTS = Object.freeze([
@@ -11,6 +11,12 @@ const STANDARD_SCALE_MOVEMENTS = Object.freeze([
 
 const QUALITY_USABLE_KEYS = new Set(["strong", "usable"]);
 const COACTIVATION_RANK = { low: 0, medium: 1, high: 2 };
+const REQUIRED_RESTING_METRICS = Object.freeze([
+  { key: "palpebralFissure", label: "Palpebral fissure" },
+  { key: "nasolabialMidface", label: "Nasolabial/midface proxy" },
+  { key: "oralCommissure", label: "Oral commissure vertical position" },
+]);
+const REQUIRED_RESTING_METRIC_KEYS = Object.freeze(REQUIRED_RESTING_METRICS.map((metric) => metric.key));
 
 const HOUSE_BRACKMANN_LABELS = Object.freeze({
   1: "Normal",
@@ -128,7 +134,7 @@ function assessmentCoverage(scores = []) {
   };
 }
 
-function estimateEvidence(coverage, hasRestingMetrics, reasons = []) {
+function estimateEvidence(coverage, restingCompleteness, reasons = []) {
   const estimatedMovementExerciseIds = coverage.movementItems
     .filter((item) => item.usable)
     .map((item) => item.exerciseId);
@@ -153,7 +159,12 @@ function estimateEvidence(coverage, hasRestingMetrics, reasons = []) {
     estimatedMovementExerciseIds,
     omittedMovementExerciseIds: coverage.unusableExerciseIds,
     calculationUsesOnlyUsableMovements: true,
-    restingMetricsAvailable: hasRestingMetrics,
+    restingMetricsAvailable: restingCompleteness.availableMetricKeys.length > 0,
+    completeRestingMetrics: restingCompleteness.complete,
+    requiredRestingMetricKeys: REQUIRED_RESTING_METRIC_KEYS,
+    availableRestingMetricKeys: restingCompleteness.availableMetricKeys,
+    missingRestingMetricKeys: restingCompleteness.missingMetricKeys,
+    calculationUsesCompleteRestingMetrics: restingCompleteness.complete,
     limitations: reasons,
   };
 }
@@ -169,6 +180,22 @@ function restingMetric(metrics, key) {
 
 function metricAsymmetry(metric) {
   return Number.isFinite(metric?.asymmetryRatio) ? Math.max(0, metric.asymmetryRatio) : null;
+}
+
+function restingMetricCompleteness(metrics) {
+  const availableMetricKeys = REQUIRED_RESTING_METRICS
+    .filter(({ key }) => Number.isFinite(metricAsymmetry(restingMetric(metrics, key))))
+    .map(({ key }) => key);
+  const availableSet = new Set(availableMetricKeys);
+  const missingMetricKeys = REQUIRED_RESTING_METRICS
+    .filter(({ key }) => !availableSet.has(key))
+    .map(({ key }) => key);
+  return {
+    complete: missingMetricKeys.length === 0,
+    availableMetricKeys,
+    missingMetricKeys,
+    missingMetricLabels: missingMetricKeys.map((key) => REQUIRED_RESTING_METRICS.find((metric) => metric.key === key)?.label ?? key),
+  };
 }
 
 function restingLevel(metric, mildThreshold, severeThreshold, severeScore = 1) {
@@ -346,17 +373,18 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
   const scores = Array.isArray(session.scores) ? session.scores : [];
   const coverage = assessmentCoverage(scores);
   const restingMetrics = restingMetricsFrom(session, assessment);
-  const hasRestingMetrics = Boolean(restingMetrics);
+  const restingCompleteness = restingMetricCompleteness(restingMetrics);
   const reasons = [
     coverage.standardMet ? null : "requires at least 80% usable standard-assessment movement coverage",
-    hasRestingMetrics ? null : "requires resting asymmetry metrics from neutral calibration",
+    restingCompleteness.complete ? null : `requires complete resting asymmetry metrics from neutral calibration${restingCompleteness.missingMetricLabels.length ? `; missing ${restingCompleteness.missingMetricLabels.join(", ")}` : ""}`,
   ].filter(Boolean);
   const base = {
     version: CLINICAL_SCALE_ESTIMATE_VERSION,
     status: reasons.length ? "insufficient-data" : "estimated",
     minimumStandard: {
       usableMovementCoverageRatio: MIN_USABLE_ASSESSMENT_COVERAGE_RATIO,
-      requiresRestingMetrics: true,
+      requiresCompleteRestingMetrics: true,
+      requiredRestingMetricKeys: REQUIRED_RESTING_METRIC_KEYS,
       clinicianReviewedValidationRequiredForClinicalUse: true,
     },
     coverage: {
@@ -368,7 +396,7 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
       missingExerciseIds: coverage.missingExerciseIds,
       unusableExerciseIds: coverage.unusableExerciseIds,
     },
-    evidence: estimateEvidence(coverage, hasRestingMetrics, reasons),
+    evidence: estimateEvidence(coverage, restingCompleteness, reasons),
     caveats: [
       "Estimated from Mirror standard-assessment practice data, not assigned by a clinician.",
       "Do not use as a diagnosis, prognosis, treatment decision, or validated clinical endpoint.",
@@ -396,6 +424,7 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
 export {
   CLINICAL_SCALE_ESTIMATE_VERSION,
   MIN_USABLE_ASSESSMENT_COVERAGE_RATIO,
+  REQUIRED_RESTING_METRIC_KEYS,
   STANDARD_SCALE_MOVEMENTS,
   estimateClinicalScaleGrades,
 };

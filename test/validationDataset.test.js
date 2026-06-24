@@ -86,6 +86,10 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateUsedMovementExerciseIds.default, "record.estimate.evidence.estimatedMovementExerciseIds");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateOmittedMovementExerciseIds.default, "record.estimate.evidence.omittedMovementExerciseIds");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateCalculationUsesOnlyUsableMovements.default, "record.estimate.evidence.calculationUsesOnlyUsableMovements");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateRequiredRestingMetricKeys.default, "record.estimate.evidence.requiredRestingMetricKeys");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateAvailableRestingMetricKeys.default, "record.estimate.evidence.availableRestingMetricKeys");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateMissingRestingMetricKeys.default, "record.estimate.evidence.missingRestingMetricKeys");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateCalculationUsesCompleteRestingMetrics.default, "record.estimate.evidence.calculationUsesCompleteRestingMetrics");
   assert.deepEqual(manifest.sections, ["sessionContext", "assessmentClinicalScale", "frameSample"]);
   assert.deepEqual(sessions.map((session) => session.id), ["session-a"]);
   assert.deepEqual(clinicalScaleAssessments.map((assessment) => assessment.id), ["session-a:clinical-scale"]);
@@ -96,6 +100,10 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateUsedMovementExerciseIds, []);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateOmittedMovementExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
   assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateCalculationUsesOnlyUsableMovements, true);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateRequiredRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateAvailableRestingMetricKeys, []);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateMissingRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateCalculationUsesCompleteRestingMetrics, false);
   assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
   assert.deepEqual(samples.map((sample) => sample.id), ["sample-calibrate", "sample-hold"]);
   assert.equal(samples[1].label.intendedMovement, "eye-close");
@@ -170,6 +178,10 @@ test("validation dataset exports clinical-scale assessment rows without frame sa
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateUsedMovementExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateOmittedMovementExerciseIds, []);
   assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateCalculationUsesOnlyUsableMovements, true);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateRequiredRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateAvailableRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateMissingRestingMetricKeys, []);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateCalculationUsesCompleteRestingMetrics, true);
   assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
   assert.equal(samples.length, 0);
 

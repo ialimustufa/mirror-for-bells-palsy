@@ -9,10 +9,11 @@ import { mergeValidationLabels, parseCsv } from "../src/ml/validationLabels.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
+const REQUIRED_RESTING_METRIC_KEYS = "palpebralFissure|nasolabialMidface|oralCommissure";
 
 function reviewerCsv(rows) {
   return [
-    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -28,6 +29,10 @@ function reviewerCsv(rows) {
       row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker",
       row.estimateOmittedMovementExerciseIds ?? "",
       row.estimateCalculationUsesOnlyUsableMovements ?? "true",
+      row.estimateRequiredRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
+      row.estimateAvailableRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
+      row.estimateMissingRestingMetricKeys ?? "",
+      row.estimateCalculationUsesCompleteRestingMetrics ?? "true",
       row.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION,
       row.houseBrackmannGrade ?? "",
       row.sunnybrookComposite ?? "",
@@ -111,6 +116,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.standard.minUsableMovementCoverageRatio, 0.8);
   assert.equal(report.standard.requiresV3MovementProvenance, true);
+  assert.equal(report.standard.requiresV4RestingMetricProvenance, true);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
@@ -367,6 +373,42 @@ test("clinical-scale reviewer agreement blocks reviewer sheets without movement 
   assert.equal(report.summary.excludedReviewerPairReasons["reviewer B: clinical scale estimate movement provenance is missing"], 1);
   assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 0);
   assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
+});
+
+test("clinical-scale reviewer agreement blocks incomplete resting-metric provenance", () => {
+  const reviewerA = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      estimateAvailableRestingMetricKeys: "palpebralFissure|oralCommissure",
+      estimateMissingRestingMetricKeys: "nasolabialMidface",
+      estimateCalculationUsesCompleteRestingMetrics: "false",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+  ]);
+  const reviewerB = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+  ]);
+
+  const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.reviewerAEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerBEligibleAssessmentCount, 1);
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate complete-resting-metrics flag is missing or false"], 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate resting-metric provenance is inconsistent"], 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer A: clinical scale estimate resting-metric provenance is inconsistent"], 1);
+  assert.match(report.adjudicationRows[0].disagreementSummary, /Estimate evidence/);
 });
 
 test("clinical-scale reviewer agreement blocks mismatched omitted movement provenance", () => {

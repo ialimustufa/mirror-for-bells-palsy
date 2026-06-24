@@ -866,11 +866,12 @@ landmarks are not stored as part of the assessment summary.
 
 Clinical-scale estimates are stored with explicit status and caveats:
 
-- `version: 3` for the current estimator. Reviewed v1/v2 clinical-scale labels
-  are stale after the v3 usable-movement-only formula change and cannot support
-  the clinical-facing release gate.
+- `version: 4` for the current estimator. Reviewed v1/v2/v3 clinical-scale
+  labels are stale after the v4 complete-resting-metrics evidence-gate change
+  and cannot support the clinical-facing release gate.
 - `status: "estimated"` only when the 80% evidence standard is met.
-- `status: "insufficient-data"` when movement coverage or resting metrics are missing.
+- `status: "insufficient-data"` when movement coverage or complete resting
+  metrics are missing.
 - `evidence.tier: "complete-standard-assessment"` when all five standard
   movements are usable, `"minimum-standard-assessment"` when the local 4/5
   movement floor is met, or `"insufficient-standard-evidence"` when estimates
@@ -886,6 +887,8 @@ Clinical-scale estimates are stored with explicit status and caveats:
 - Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
   Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
   treat missing or weak-capture movement rows as zero movement.
+- v4 estimates also record required, available, and missing resting metric keys
+  and require `estimateCalculationUsesCompleteRestingMetrics: true`.
 
 These values are not clinical-facing validated grades while
 `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
@@ -1055,10 +1058,12 @@ with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
 version; stale or missing estimator-version rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
-"estimated"` with a complete/minimum v3 evidence tier and at least 80% usable
-movement coverage. For v3, counted rows must also preserve used/omitted movement
-exercise IDs and `estimateCalculationUsesOnlyUsableMovements: true`; inconsistent
-or missing movement provenance excludes the reviewed row. Valid primary targets
+"estimated"` with a complete/minimum v4 evidence tier and at least 80% usable
+movement coverage. For v4, counted rows must also preserve used/omitted movement
+exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`, required,
+available, and missing resting metric keys, and
+`estimateCalculationUsesCompleteRestingMetrics: true`; inconsistent or missing
+movement or resting-metric provenance excludes the reviewed row. Valid primary targets
 count scale by scale; a missing or invalid estimate is reported as a missing
 estimate for that scale rather than excluding other valid targets on the row. This
 report does not make Mirror
@@ -1159,14 +1164,16 @@ House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
 observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
 coverage, current estimator-version evidence, the 80% usable-movement coverage
 floor, complete/minimum estimate evidence-tier controls, explicit
-reference-standard controls, and release-control text. When all three primary
+movement and resting-metric provenance controls, explicit reference-standard
+controls, and release-control text. When all three primary
 scales are enabled, the report status must also be the passing
 confidence-standard status. Clinical reviewer-agreement report paths must point
 to JSON
 `mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
 eligible reviewer sheets, complete/minimum estimate evidence and 80%
-usable-movement coverage provenance, no excluded reviewer-pair, metadata, or
-estimate-evidence blockers, at least 30 eligible paired labels on every enabled
+usable-movement coverage provenance, complete resting-metric provenance, no
+excluded reviewer-pair, metadata, or estimate-evidence blockers, at least 30
+eligible paired labels on every enabled
 primary scale, at least 80% observed reviewer agreement, and Wilson lower-bound
 reviewer agreement meeting the configured 80% standard before clinical-facing
 support can be enabled for that scale.

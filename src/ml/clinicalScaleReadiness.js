@@ -115,7 +115,10 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
     commonBlockingReasons.push(`clinicalScaleEstimateVersion: needs validation report for estimator v${thresholds.clinicalScaleEstimateVersion}`);
   }
   if (clinicalValidation.standard?.requiresV3MovementProvenance !== true) {
-    commonBlockingReasons.push("estimateMovementProvenance: needs validation report with v3 used/omitted movement input controls");
+    commonBlockingReasons.push("estimateMovementProvenance: needs validation report with used/omitted movement input controls");
+  }
+  if (clinicalValidation.standard?.requiresV4RestingMetricProvenance !== true) {
+    commonBlockingReasons.push("estimateRestingMetricProvenance: needs validation report with v4 complete resting-metric input controls");
   }
   if (!clinicalValidation.caseMix) {
     commonBlockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");

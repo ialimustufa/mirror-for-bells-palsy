@@ -44,6 +44,10 @@ function sampleRecords() {
             estimatedMovementExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
             omittedMovementExerciseIds: ["pucker"],
             calculationUsesOnlyUsableMovements: true,
+            requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+            availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+            missingRestingMetricKeys: [],
+            calculationUsesCompleteRestingMetrics: true,
           },
           coverage: {
             usableMovementCount: 4,
@@ -89,6 +93,10 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].estimateUsedMovementExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(rows[1].estimateOmittedMovementExerciseIds, "pucker");
   assert.equal(rows[1].estimateCalculationUsesOnlyUsableMovements, "true");
+  assert.equal(rows[1].estimateRequiredRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
+  assert.equal(rows[1].estimateAvailableRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
+  assert.equal(rows[1].estimateMissingRestingMetricKeys, "");
+  assert.equal(rows[1].estimateCalculationUsesCompleteRestingMetrics, "true");
   assert.equal(rows[1].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(rows[1].sourceLabelSheetMode, "unblinded");
   assert.equal(rows[1].reviewBlinded, "");
@@ -116,6 +124,10 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].estimateUsedMovementExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(rows[1].estimateOmittedMovementExerciseIds, "pucker");
   assert.equal(rows[1].estimateCalculationUsesOnlyUsableMovements, "true");
+  assert.equal(rows[1].estimateRequiredRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
+  assert.equal(rows[1].estimateAvailableRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
+  assert.equal(rows[1].estimateMissingRestingMetricKeys, "");
+  assert.equal(rows[1].estimateCalculationUsesCompleteRestingMetrics, "true");
   assert.equal(rows[1].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "");
   assert.equal(rows[1].estimatedSunnybrookComposite, "");
@@ -132,6 +144,10 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(clinicalRow[index.estimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(clinicalRow[index.estimateOmittedMovementExerciseIds], "pucker");
   assert.equal(clinicalRow[index.estimateCalculationUsesOnlyUsableMovements], "true");
+  assert.equal(clinicalRow[index.estimateRequiredRestingMetricKeys], "palpebralFissure|nasolabialMidface|oralCommissure");
+  assert.equal(clinicalRow[index.estimateAvailableRestingMetricKeys], "palpebralFissure|nasolabialMidface|oralCommissure");
+  assert.equal(clinicalRow[index.estimateMissingRestingMetricKeys], "");
+  assert.equal(clinicalRow[index.estimateCalculationUsesCompleteRestingMetrics], "true");
   assert.equal(clinicalRow[index.houseBrackmannGrade], "");
   assert.equal(clinicalRow[index.sourceLabelSheetMode], "blinded");
   assert.equal(clinicalRow[index.reviewBlinded], "");

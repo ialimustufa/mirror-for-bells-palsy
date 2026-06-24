@@ -54,6 +54,11 @@ test("clinical scale estimates map complete assessment evidence into HB, Sunnybr
   assert.equal(result.status, "estimated");
   assert.equal(result.evidence.tier, "complete-standard-assessment");
   assert.equal(result.evidence.label, "Complete standard-assessment evidence");
+  assert.equal(result.evidence.completeRestingMetrics, true);
+  assert.deepEqual(result.evidence.requiredRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+  assert.deepEqual(result.evidence.availableRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+  assert.deepEqual(result.evidence.missingRestingMetricKeys, []);
+  assert.equal(result.evidence.calculationUsesCompleteRestingMetrics, true);
   assert.equal(result.coverage.standardMet, true);
   assert.equal(result.coverage.usableMovementCount, 5);
   assert.equal(result.scales.houseBrackmann.grade, "IV");
@@ -146,5 +151,34 @@ test("clinical scale estimates fail closed without resting metrics", () => {
 
   assert.equal(result.status, "insufficient-data");
   assert.equal(result.evidence.tier, "insufficient-standard-evidence");
-  assert.match(result.reasons.join(" "), /resting asymmetry metrics/);
+  assert.match(result.reasons.join(" "), /complete resting asymmetry metrics/);
+  assert.equal(result.evidence.completeRestingMetrics, false);
+  assert.deepEqual(result.evidence.missingRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
+});
+
+test("clinical scale estimates fail closed with partial resting metrics", () => {
+  const result = estimateClinicalScaleGrades({
+    restingMetrics: {
+      version: 1,
+      metrics: {
+        palpebralFissure: RESTING_METRICS.metrics.palpebralFissure,
+        oralCommissure: RESTING_METRICS.metrics.oralCommissure,
+      },
+    },
+    scores: [
+      movementScore("eyebrow-raise", 1),
+      movementScore("eye-close", 1),
+      movementScore("open-smile", 1),
+      movementScore("nose-wrinkle", 1),
+      movementScore("pucker", 1),
+    ],
+  });
+
+  assert.equal(result.status, "insufficient-data");
+  assert.equal(result.coverage.standardMet, true);
+  assert.equal(result.evidence.completeRestingMetrics, false);
+  assert.deepEqual(result.evidence.availableRestingMetricKeys, ["palpebralFissure", "oralCommissure"]);
+  assert.deepEqual(result.evidence.missingRestingMetricKeys, ["nasolabialMidface"]);
+  assert.match(result.reasons.join(" "), /Nasolabial\/midface proxy/);
+  assert.equal(result.scales, null);
 });

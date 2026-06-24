@@ -1,10 +1,11 @@
 import { LABEL_COLUMNS, parseCsv } from "./validationLabels.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, REQUIRED_RESTING_METRIC_KEYS, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
 
 const PRIMARY_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
 const STANDARD_SCALE_MOVEMENT_IDS = Object.freeze(STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId));
 const STANDARD_SCALE_MOVEMENT_ID_SET = new Set(STANDARD_SCALE_MOVEMENT_IDS);
+const REQUIRED_RESTING_METRIC_KEY_SET = new Set(REQUIRED_RESTING_METRIC_KEYS);
 const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist)\b|\bent\b|\bslp\b/i;
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
@@ -75,6 +76,14 @@ const ADJUDICATION_EXTRA_COLUMNS = Object.freeze([
   "reviewerBEstimateOmittedMovementExerciseIds",
   "reviewerAEstimateCalculationUsesOnlyUsableMovements",
   "reviewerBEstimateCalculationUsesOnlyUsableMovements",
+  "reviewerAEstimateRequiredRestingMetricKeys",
+  "reviewerBEstimateRequiredRestingMetricKeys",
+  "reviewerAEstimateAvailableRestingMetricKeys",
+  "reviewerBEstimateAvailableRestingMetricKeys",
+  "reviewerAEstimateMissingRestingMetricKeys",
+  "reviewerBEstimateMissingRestingMetricKeys",
+  "reviewerAEstimateCalculationUsesCompleteRestingMetrics",
+  "reviewerBEstimateCalculationUsesCompleteRestingMetrics",
   "reviewerAHouseBrackmannGrade",
   "reviewerBHouseBrackmannGrade",
   "reviewerASunnybrookComposite",
@@ -216,6 +225,13 @@ function estimateMovementIdList(row = {}, key) {
     .filter(Boolean);
 }
 
+function estimateRestingMetricKeyList(row = {}, key) {
+  return normalizedEstimateEvidenceText(row, key)
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function estimateBooleanValue(row = {}, key) {
   const text = normalizedEstimateEvidenceText(row, key);
   if (/^(true|yes|y|1)$/i.test(text)) return true;
@@ -270,6 +286,44 @@ function estimateMovementProvenanceReasons(row = {}) {
   return reasons;
 }
 
+function estimateRestingMetricProvenanceReasons(row = {}) {
+  const reasons = [];
+  const required = estimateRestingMetricKeyList(row, "estimateRequiredRestingMetricKeys");
+  const available = estimateRestingMetricKeyList(row, "estimateAvailableRestingMetricKeys");
+  const missing = estimateRestingMetricKeyList(row, "estimateMissingRestingMetricKeys");
+  const requiredSet = new Set(required);
+  const availableSet = new Set(available);
+  const calculationUsesCompleteRestingMetrics = estimateBooleanValue(row, "estimateCalculationUsesCompleteRestingMetrics");
+  if (
+    !estimateEvidenceColumnPresent(row, "estimateRequiredRestingMetricKeys")
+    || !estimateEvidenceColumnPresent(row, "estimateAvailableRestingMetricKeys")
+    || !estimateEvidenceColumnPresent(row, "estimateMissingRestingMetricKeys")
+  ) {
+    reasons.push("clinical scale estimate resting-metric provenance is missing");
+  }
+  if (
+    !estimateEvidenceColumnPresent(row, "estimateCalculationUsesCompleteRestingMetrics")
+    || calculationUsesCompleteRestingMetrics !== true
+  ) {
+    reasons.push("clinical scale estimate complete-resting-metrics flag is missing or false");
+  }
+  const hasUnknownKeys = [...required, ...available, ...missing].some((key) => !REQUIRED_RESTING_METRIC_KEY_SET.has(key));
+  const hasExpectedRequiredKeys = REQUIRED_RESTING_METRIC_KEYS.every((key) => requiredSet.has(key)) && required.length === REQUIRED_RESTING_METRIC_KEYS.length;
+  const hasAllRequiredAvailable = REQUIRED_RESTING_METRIC_KEYS.every((key) => availableSet.has(key)) && available.length === REQUIRED_RESTING_METRIC_KEYS.length;
+  if (
+    hasUnknownKeys
+    || hasDuplicates(required)
+    || hasDuplicates(available)
+    || hasDuplicates(missing)
+    || !hasExpectedRequiredKeys
+    || !hasAllRequiredAvailable
+    || missing.length !== 0
+  ) {
+    reasons.push("clinical scale estimate resting-metric provenance is inconsistent");
+  }
+  return reasons;
+}
+
 function estimateEvidenceReasons(row = {}, options = {}) {
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio
     ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
@@ -285,6 +339,7 @@ function estimateEvidenceReasons(row = {}, options = {}) {
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
   }
   reasons.push(...estimateMovementProvenanceReasons(row));
+  reasons.push(...estimateRestingMetricProvenanceReasons(row));
   return reasons;
 }
 
@@ -464,6 +519,10 @@ function reviewerRowsByAssessmentId(csvText = "") {
     next.__estimateUsedMovementExerciseIdsColumnPresent = indexByHeader.estimateUsedMovementExerciseIds != null;
     next.__estimateOmittedMovementExerciseIdsColumnPresent = indexByHeader.estimateOmittedMovementExerciseIds != null;
     next.__estimateCalculationUsesOnlyUsableMovementsColumnPresent = indexByHeader.estimateCalculationUsesOnlyUsableMovements != null;
+    next.__estimateRequiredRestingMetricKeysColumnPresent = indexByHeader.estimateRequiredRestingMetricKeys != null;
+    next.__estimateAvailableRestingMetricKeysColumnPresent = indexByHeader.estimateAvailableRestingMetricKeys != null;
+    next.__estimateMissingRestingMetricKeysColumnPresent = indexByHeader.estimateMissingRestingMetricKeys != null;
+    next.__estimateCalculationUsesCompleteRestingMetricsColumnPresent = indexByHeader.estimateCalculationUsesCompleteRestingMetrics != null;
     out.set(assessmentId, next);
   }
   return out;
@@ -576,6 +635,10 @@ function estimateEvidenceKey(row = {}) {
   const usedMovementIds = normalizedEstimateEvidenceText(row, "estimateUsedMovementExerciseIds");
   const omittedMovementIds = normalizedEstimateEvidenceText(row, "estimateOmittedMovementExerciseIds");
   const calculationUsesOnlyUsableMovements = normalizedEstimateEvidenceText(row, "estimateCalculationUsesOnlyUsableMovements");
+  const requiredRestingMetricKeys = normalizedEstimateEvidenceText(row, "estimateRequiredRestingMetricKeys");
+  const availableRestingMetricKeys = normalizedEstimateEvidenceText(row, "estimateAvailableRestingMetricKeys");
+  const missingRestingMetricKeys = normalizedEstimateEvidenceText(row, "estimateMissingRestingMetricKeys");
+  const calculationUsesCompleteRestingMetrics = normalizedEstimateEvidenceText(row, "estimateCalculationUsesCompleteRestingMetrics");
   return [
     estimateStatus(row) || "missing-status",
     estimateEvidenceTier(row) || "missing-tier",
@@ -585,6 +648,10 @@ function estimateEvidenceKey(row = {}) {
     usedMovementIds || "missing-used-movements",
     omittedMovementIds || "missing-omitted-movements",
     calculationUsesOnlyUsableMovements || "missing-calculation-input-filter",
+    requiredRestingMetricKeys || "missing-required-resting-metrics",
+    availableRestingMetricKeys || "missing-available-resting-metrics",
+    missingRestingMetricKeys || "no-missing-resting-metrics",
+    calculationUsesCompleteRestingMetrics || "missing-complete-resting-metrics-flag",
   ].join("/");
 }
 
@@ -637,6 +704,10 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.estimateUsedMovementExerciseIds = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateUsedMovementExerciseIds ?? "" : "";
   row.estimateOmittedMovementExerciseIds = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateOmittedMovementExerciseIds ?? "" : "";
   row.estimateCalculationUsesOnlyUsableMovements = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateCalculationUsesOnlyUsableMovements ?? "" : "";
+  row.estimateRequiredRestingMetricKeys = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateRequiredRestingMetricKeys ?? "" : "";
+  row.estimateAvailableRestingMetricKeys = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateAvailableRestingMetricKeys ?? "" : "";
+  row.estimateMissingRestingMetricKeys = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateMissingRestingMetricKeys ?? "" : "";
+  row.estimateCalculationUsesCompleteRestingMetrics = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateCalculationUsesCompleteRestingMetrics ?? "" : "";
   row.reviewerAClinicalScaleEstimateVersion = reviewerAVersion ?? "";
   row.reviewerBClinicalScaleEstimateVersion = reviewerBVersion ?? "";
   row.reviewerAEstimateStatus = estimateStatus(reviewerA);
@@ -651,6 +722,14 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.reviewerBEstimateOmittedMovementExerciseIds = reviewerB?.estimateOmittedMovementExerciseIds ?? "";
   row.reviewerAEstimateCalculationUsesOnlyUsableMovements = reviewerA?.estimateCalculationUsesOnlyUsableMovements ?? "";
   row.reviewerBEstimateCalculationUsesOnlyUsableMovements = reviewerB?.estimateCalculationUsesOnlyUsableMovements ?? "";
+  row.reviewerAEstimateRequiredRestingMetricKeys = reviewerA?.estimateRequiredRestingMetricKeys ?? "";
+  row.reviewerBEstimateRequiredRestingMetricKeys = reviewerB?.estimateRequiredRestingMetricKeys ?? "";
+  row.reviewerAEstimateAvailableRestingMetricKeys = reviewerA?.estimateAvailableRestingMetricKeys ?? "";
+  row.reviewerBEstimateAvailableRestingMetricKeys = reviewerB?.estimateAvailableRestingMetricKeys ?? "";
+  row.reviewerAEstimateMissingRestingMetricKeys = reviewerA?.estimateMissingRestingMetricKeys ?? "";
+  row.reviewerBEstimateMissingRestingMetricKeys = reviewerB?.estimateMissingRestingMetricKeys ?? "";
+  row.reviewerAEstimateCalculationUsesCompleteRestingMetrics = reviewerA?.estimateCalculationUsesCompleteRestingMetrics ?? "";
+  row.reviewerBEstimateCalculationUsesCompleteRestingMetrics = reviewerB?.estimateCalculationUsesCompleteRestingMetrics ?? "";
   row.reviewerAHouseBrackmannGrade = formatHouseBrackmann(reviewerA?.houseBrackmannGrade);
   row.reviewerBHouseBrackmannGrade = formatHouseBrackmann(reviewerB?.houseBrackmannGrade);
   row.reviewerASunnybrookComposite = reviewerA?.sunnybrookComposite ?? "";
@@ -797,6 +876,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       minPairedLabels,
       minUsableMovementCoverageRatio,
       requiresV3MovementProvenance: true,
+      requiresV4RestingMetricProvenance: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,

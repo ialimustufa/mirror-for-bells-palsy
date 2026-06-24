@@ -170,11 +170,13 @@ If multiple reviewers label the same assessment:
   estimate status, complete/minimum evidence tier, or 80% usable-movement
   coverage as adjudication blockers. Used and omitted movement exercise IDs must
   also be present and match between reviewer sheets, because a 4/5 estimate with
-  a different omitted movement is a different estimator input. Old reviewer
-  sheets without the v3 movement-provenance columns should be recollected from a
-  current blinded sheet. Both raw reviewer sheets and the final adjudicated row
-  must preserve the current qualifying estimate provenance before labels can
-  count.
+  a different omitted movement is a different estimator input. Required,
+  available, and missing resting metric keys must also prove complete rest input
+  coverage, with the complete-resting-metrics calculation flag set. Old reviewer
+  sheets without the v4 movement and resting-metric provenance columns should be
+  recollected from a current blinded sheet. Both raw reviewer sheets and the
+  final adjudicated row must preserve the current qualifying estimate provenance
+  before labels can count.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
   incomplete, or out-of-range reviewer rows as adjudication blockers. They should
   be recollected from a blinded current-version sheet rather than resolved by

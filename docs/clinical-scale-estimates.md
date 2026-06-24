@@ -30,7 +30,8 @@ Mirror can now derive optional clinical-scale estimates from a completed standar
 Clinical scale estimates require:
 
 - At least 80% usable standard-assessment movement coverage.
-- Resting asymmetry metrics from neutral calibration.
+- Complete resting asymmetry metrics from neutral calibration: palpebral
+  fissure, nasolabial/midface proxy, and oral commissure vertical position.
 - Usable or strong capture quality for scored movements when capture quality is present.
 
 If the evidence standard is not met, Mirror saves `clinicalScales.status = "insufficient-data"` and does not emit scale values.
@@ -45,13 +46,15 @@ The tier appears in assessment panels and printable reports so a 4/5 movement
 estimate is not presented with the same evidence strength as a complete 5/5
 assessment.
 
-The current clinical-scale estimator is v3. v3 records evidence tiers, clamps
-eFACE-style proxy scores to the 0-100 range, and excludes missing or weak-capture
-movements from the scale formulas. Minimum-standard 4/5 estimates report omitted
-movement IDs in `evidence.omittedMovementExerciseIds` and normalize
-Sunnybrook voluntary/synkinesis totals from usable movements only. Validation
-labels generated from older v1 or v2 estimates are stale and do not count toward
-the release agreement gate.
+The current clinical-scale estimator is v4. v4 records evidence tiers, clamps
+eFACE-style proxy scores to the 0-100 range, excludes missing or weak-capture
+movements from the scale formulas, and fails closed unless all required
+resting/static metrics are present. Minimum-standard 4/5 estimates report omitted
+movement IDs in `evidence.omittedMovementExerciseIds`, normalize Sunnybrook
+voluntary/synkinesis totals from usable movements only, and preserve
+required/available/missing resting metric keys in the evidence record. Validation
+labels generated from older v1, v2, or v3 estimates are stale and do not count
+toward the release agreement gate.
 
 ## Implemented Estimates
 
@@ -113,9 +116,12 @@ provenance columns for `estimateStatus`, `estimateEvidenceTier`,
 `estimateUsableMovementCoverageRatio`, `estimateUsableMovementCount`,
 `estimateRequiredMovementCount`, `estimateUsedMovementExerciseIds`,
 `estimateOmittedMovementExerciseIds`,
-`estimateCalculationUsesOnlyUsableMovements`, and
+`estimateCalculationUsesOnlyUsableMovements`,
+`estimateRequiredRestingMetricKeys`, `estimateAvailableRestingMetricKeys`,
+`estimateMissingRestingMetricKeys`,
+`estimateCalculationUsesCompleteRestingMetrics`, and
 `clinicalScaleEstimateVersion` so release tooling can prove the row came from
-qualifying current-version evidence with the exact v3 estimator inputs.
+qualifying current-version evidence with the exact v4 estimator inputs.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -136,11 +142,14 @@ default minimum standard is:
   or adjudicated reviewer role, is not marked uncertain, and contains a valid
   target for the primary scale being counted. Missing another primary target does
   not remove the valid target from its own denominator.
-  The paired Mirror estimate must also have `status: estimated`, a v3
+  The paired Mirror estimate must also have `status: estimated`, a v4
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
   at least 80% usable movement coverage, used/omitted movement exercise IDs that
   match the coverage counts, and
-  `estimateCalculationUsesOnlyUsableMovements: true`. Missing or invalid
+  `estimateCalculationUsesOnlyUsableMovements: true`. It must also preserve
+  required/available/missing resting metric keys proving all required rest
+  metrics were available, with
+  `estimateCalculationUsesCompleteRestingMetrics: true`. Missing or invalid
   estimates are reported as missing estimates in that scale's denominator rather
   than excluding other valid scale labels on the row.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,
@@ -171,10 +180,10 @@ release status artifact checker requires the report
 to document the eligible blinded independent label count, all three
 House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
 current clinical-scale estimator version, the 80% usable-movement coverage
-floor, the complete/minimum estimate evidence-tier gate, and the
-`sourceLabelSheetMode`/`reviewBlinded`/estimator `version`/`labelSource`
-controls before a clinical agreement artifact can support clinical-facing score
-availability.
+floor, the complete/minimum estimate evidence-tier gate, complete resting-metric
+provenance, and the `sourceLabelSheetMode`/`reviewBlinded`/estimator
+`version`/`labelSource` controls before a clinical agreement artifact can
+support clinical-facing score availability.
 Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,
 independent clinician sheets with qualifying complete/minimum estimate evidence,
@@ -182,7 +191,9 @@ at least 80% usable movement coverage, paired labels for every enabled primary
 scale meeting the same reviewed-assessment floor, at least 80% observed reviewer
 agreement, Wilson lower-bound reviewer agreement meeting the configured 80%
 standard, and no excluded reviewer-pair, reviewer-sheet metadata, or
-estimate-evidence blockers. A disabled primary scale can remain an estimate
+estimate-evidence blockers. The estimate-evidence blockers include missing or
+inconsistent movement provenance and missing or incomplete resting-metric
+provenance. A disabled primary scale can remain an estimate
 while an enabled scale is released as support, but the enabled scale still needs
 its own passing clinical-agreement row and reviewer-agreement row.
 

@@ -67,21 +67,22 @@ checks for:
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
-  used/omitted movement input provenance, plus an eligible blinded independent
-  label count meeting the minimum reviewed-assessment floor.
+  used/omitted movement input provenance plus complete resting-metric
+  provenance, plus an eligible blinded independent label count meeting the
+  minimum reviewed-assessment floor.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version and estimate-evidence provenance for each reviewer sheet; stale,
-  missing, mismatched, below-80%-coverage, or missing-v3-movement-provenance
-  estimate evidence is a release blocker until recollected from qualifying
-  current-version evidence.
+  missing, mismatched, below-80%-coverage, missing movement provenance, or
+  missing/incomplete resting-metric provenance is a release blocker until
+  recollected from qualifying current-version evidence.
 - Reviewer-agreement reports must also block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
   reviewer rows, plus rows paired with insufficient estimate status, evidence
-  tier, usable-movement coverage, or used/omitted movement provenance, before
-  adjudication output can support readiness.
+  tier, usable-movement coverage, used/omitted movement provenance, or
+  resting-metric provenance, before adjudication output can support readiness.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, at least 80% observed

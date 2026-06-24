@@ -1,5 +1,5 @@
 import { replayFrameSamples } from "./frameSampleReplay.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, REQUIRED_RESTING_METRIC_KEYS, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
 
 const POSITIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["trace", "low", "moderate", "strong"]);
 const NEGATIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["none"]);
@@ -17,6 +17,7 @@ const PRIMARY_CLINICAL_SCALE_LABELS = Object.freeze(["houseBrackmann", "sunnybro
 const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
 const STANDARD_SCALE_MOVEMENT_IDS = Object.freeze(STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId));
 const STANDARD_SCALE_MOVEMENT_ID_SET = new Set(STANDARD_SCALE_MOVEMENT_IDS);
+const REQUIRED_RESTING_METRIC_KEY_SET = new Set(REQUIRED_RESTING_METRIC_KEYS);
 const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
   mild: { label: "HB I-II mild/normal", min: 1, max: 2 },
   moderate: { label: "HB III-IV moderate", min: 3, max: 4 },
@@ -258,6 +259,26 @@ function clinicalScaleEstimateMetadata(record = {}) {
     sourceSummary.estimateCalculationUsesOnlyUsableMovements,
     record.estimateCalculationUsesOnlyUsableMovements,
   ));
+  const requiredRestingMetricKeys = listValueWithPresence(firstPresent(
+    evidence.requiredRestingMetricKeys,
+    sourceSummary.estimateRequiredRestingMetricKeys,
+    record.estimateRequiredRestingMetricKeys,
+  ));
+  const availableRestingMetricKeys = listValueWithPresence(firstPresent(
+    evidence.availableRestingMetricKeys,
+    sourceSummary.estimateAvailableRestingMetricKeys,
+    record.estimateAvailableRestingMetricKeys,
+  ));
+  const missingRestingMetricKeys = listValueWithPresence(firstPresent(
+    evidence.missingRestingMetricKeys,
+    sourceSummary.estimateMissingRestingMetricKeys,
+    record.estimateMissingRestingMetricKeys,
+  ));
+  const calculationUsesCompleteRestingMetrics = booleanValueWithPresence(firstPresent(
+    evidence.calculationUsesCompleteRestingMetrics,
+    sourceSummary.estimateCalculationUsesCompleteRestingMetrics,
+    record.estimateCalculationUsesCompleteRestingMetrics,
+  ));
   return {
     status: estimate.status ?? record.estimateStatus ?? null,
     evidenceTier: evidence.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? record.estimateEvidenceTier ?? null,
@@ -267,6 +288,10 @@ function clinicalScaleEstimateMetadata(record = {}) {
     usedMovementExerciseIds,
     omittedMovementExerciseIds,
     calculationUsesOnlyUsableMovements,
+    requiredRestingMetricKeys,
+    availableRestingMetricKeys,
+    missingRestingMetricKeys,
+    calculationUsesCompleteRestingMetrics,
   };
 }
 
@@ -356,6 +381,40 @@ function estimateMovementProvenanceReasons(metadata = {}) {
   return reasons;
 }
 
+function estimateRestingMetricProvenanceReasons(metadata = {}) {
+  const reasons = [];
+  const required = metadata.requiredRestingMetricKeys?.values ?? [];
+  const available = metadata.availableRestingMetricKeys?.values ?? [];
+  const missing = metadata.missingRestingMetricKeys?.values ?? [];
+  if (
+    !metadata.requiredRestingMetricKeys?.provided
+    || !metadata.availableRestingMetricKeys?.provided
+    || !metadata.missingRestingMetricKeys?.provided
+  ) {
+    reasons.push("clinical scale estimate resting-metric provenance is missing");
+  }
+  if (!metadata.calculationUsesCompleteRestingMetrics?.provided || metadata.calculationUsesCompleteRestingMetrics.value !== true) {
+    reasons.push("clinical scale estimate complete-resting-metrics flag is missing or false");
+  }
+  const requiredSet = new Set(required);
+  const availableSet = new Set(available);
+  const hasUnknownKeys = [...required, ...available, ...missing].some((key) => !REQUIRED_RESTING_METRIC_KEY_SET.has(key));
+  const hasExpectedRequiredKeys = REQUIRED_RESTING_METRIC_KEYS.every((key) => requiredSet.has(key)) && required.length === REQUIRED_RESTING_METRIC_KEYS.length;
+  const hasAllRequiredAvailable = REQUIRED_RESTING_METRIC_KEYS.every((key) => availableSet.has(key)) && available.length === REQUIRED_RESTING_METRIC_KEYS.length;
+  if (
+    hasUnknownKeys
+    || hasDuplicates(required)
+    || hasDuplicates(available)
+    || hasDuplicates(missing)
+    || !hasExpectedRequiredKeys
+    || !hasAllRequiredAvailable
+    || missing.length !== 0
+  ) {
+    reasons.push("clinical scale estimate resting-metric provenance is inconsistent");
+  }
+  return reasons;
+}
+
 function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record), estimate = clinicalScaleEstimate(record), options = {}) {
   const label = record.label ?? {};
   const reviewerRole = String(label.reviewerRole ?? "").trim();
@@ -384,6 +443,7 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
   }
   reasons.push(...estimateMovementProvenanceReasons(estimateMetadata));
+  reasons.push(...estimateRestingMetricProvenanceReasons(estimateMetadata));
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
   } else if (NON_CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
@@ -673,6 +733,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       efaceTolerance,
       minUsableMovementCoverageRatio,
       requiresV3MovementProvenance: true,
+      requiresV4RestingMetricProvenance: true,
       caseMix: {
         houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
         minHouseBrackmannSeverityBands,

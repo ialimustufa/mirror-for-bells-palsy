@@ -13,6 +13,7 @@ import { CLINICAL_SCALE_ESTIMATE_VERSION, STANDARD_SCALE_MOVEMENTS } from "../sr
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
 const STANDARD_SCALE_MOVEMENT_IDS = STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId);
+const REQUIRED_RESTING_METRIC_KEYS = ["palpebralFissure", "nasolabialMidface", "oralCommissure"];
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
@@ -190,6 +191,10 @@ function clinicalRecord(id, estimate, label) {
           estimatedMovementExerciseIds: estimate.usedMovementExerciseIds ?? defaultUsedMovementExerciseIds,
           omittedMovementExerciseIds: estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds,
           calculationUsesOnlyUsableMovements: estimate.calculationUsesOnlyUsableMovements ?? true,
+          requiredRestingMetricKeys: estimate.requiredRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
+          availableRestingMetricKeys: estimate.availableRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
+          missingRestingMetricKeys: estimate.missingRestingMetricKeys ?? [],
+          calculationUsesCompleteRestingMetrics: estimate.calculationUsesCompleteRestingMetrics ?? true,
         },
         coverage: {
           usableMovementCount,
@@ -506,7 +511,7 @@ test("clinical scale evaluation accepts minimum evidence with exact movement pro
   assert.equal(report.standard.requiresV3MovementProvenance, true);
 });
 
-test("clinical scale evaluation excludes labels without v3 movement provenance", () => {
+test("clinical scale evaluation excludes labels without movement provenance", () => {
   const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
   const missingProvenance = clinicalRecord("assessment-missing-provenance:clinical-scale", {
     hb: 3,
@@ -546,6 +551,49 @@ test("clinical scale evaluation excludes labels without v3 movement provenance",
   assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate movement provenance is inconsistent"], 2);
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+});
+
+test("clinical scale evaluation excludes labels without complete resting-metric provenance", () => {
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const missingProvenance = clinicalRecord("assessment-missing-rest-provenance:clinical-scale", {
+    hb: 3,
+    sunnybrook: 72,
+    eface: 70,
+  }, validLabel);
+  delete missingProvenance.record.estimate.evidence.requiredRestingMetricKeys;
+  delete missingProvenance.record.estimate.evidence.availableRestingMetricKeys;
+  delete missingProvenance.record.estimate.evidence.missingRestingMetricKeys;
+  delete missingProvenance.record.estimate.evidence.calculationUsesCompleteRestingMetrics;
+  const partialRestingProvenance = clinicalRecord("assessment-partial-rest-provenance:clinical-scale", {
+    hb: 3,
+    sunnybrook: 72,
+    eface: 70,
+    availableRestingMetricKeys: ["palpebralFissure", "oralCommissure"],
+    missingRestingMetricKeys: ["nasolabialMidface"],
+    calculationUsesCompleteRestingMetrics: false,
+  }, validLabel);
+  const records = [
+    clinicalRecord("assessment-current:clinical-scale", { hb: 3, sunnybrook: 72, eface: 70 }, validLabel),
+    missingProvenance,
+    partialRestingProvenance,
+  ];
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate resting-metric provenance is missing"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate complete-resting-metrics flag is missing or false"], 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate resting-metric provenance is inconsistent"], 2);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.standard.requiresV4RestingMetricProvenance, true);
 });
 
 test("clinical scale evaluation rejects filled labels that lack clinical reviewer roles", () => {

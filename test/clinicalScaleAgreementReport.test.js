@@ -40,6 +40,7 @@ function validationReport(overrides = {}) {
       },
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       requiresV3MovementProvenance: true,
+      requiresV4RestingMetricProvenance: true,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -83,7 +84,8 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
   assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, /Minimum usable movement coverage: 80\.0%/);
-  assert.match(markdown, /Estimator input provenance: counted v3 rows preserve used\/omitted movement IDs/);
+  assert.match(markdown, /Estimator input provenance: counted v4 rows preserve used\/omitted movement IDs/);
+  assert.match(markdown, /required\/available\/missing resting metric keys/);
   assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
   assert.match(markdown, /eFACE total \| within 10 points/);
