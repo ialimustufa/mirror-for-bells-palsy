@@ -193,6 +193,7 @@ function clinicalRecord(id, estimate, label) {
         efaceDynamic: label.efaceDynamic ?? label.eface,
         efaceSynkinesis: label.efaceSynkinesis ?? label.eface,
         clinicianConfidence: label.clinicianConfidence ?? "",
+        sourceLabelSheetMode: label.sourceLabelSheetMode ?? "blinded",
         reviewBlinded: label.reviewBlinded ?? "yes",
         labelSource: label.labelSource ?? "clinician-assigned",
         reviewerRole: label.reviewerRole ?? "clinician",
@@ -254,6 +255,7 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
     clinicalRecord("assessment-missing-primary:clinical-scale", estimate, { hb: "III", sunnybrook: 74, eface: "" }),
     clinicalRecord("assessment-out-of-range:clinical-scale", estimate, { hb: "III", sunnybrook: 140, eface: 72 }),
     clinicalRecord("assessment-all-invalid:clinical-scale", estimate, { hb: "VII", sunnybrook: 140, eface: -4 }),
+    clinicalRecord("assessment-unblinded-sheet:clinical-scale", estimate, { ...validLabel, sourceLabelSheetMode: "unblinded" }),
     clinicalRecord("assessment-unblinded:clinical-scale", estimate, { ...validLabel, reviewBlinded: "no" }),
     clinicalRecord("assessment-copied:clinical-scale", estimate, { ...validLabel, labelSource: "copied from Mirror estimate" }),
     clinicalRecord("assessment-adjudicated:clinical-scale", estimate, { ...validLabel, reviewerRole: "adjudicated clinician consensus" }),
@@ -264,11 +266,12 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
     minReviewedAssessments: 1,
   });
 
-  assert.equal(report.summary.assessmentClinicalScaleRecords, 8);
+  assert.equal(report.summary.assessmentClinicalScaleRecords, 9);
   assert.equal(report.summary.reviewedAssessmentCount, 1);
-  assert.equal(report.summary.excludedClinicalLabelCount, 7);
+  assert.equal(report.summary.excludedClinicalLabelCount, 8);
   assert.equal(report.summary.excludedClinicalLabelReasons["reviewer role is marked non-clinical or rehearsal"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["clinician confidence is uncertain"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["source label sheet was not generated in blinded mode"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["review was not marked blinded to Mirror estimates"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["label source is marked non-independent or copied"], 1);
   assert.equal(report.summary.excludedClinicalLabelReasons["missing valid houseBrackmann label"], 1);
@@ -303,6 +306,7 @@ test("clinical scale evaluation rejects filled labels that lack clinical reviewe
 test("clinical scale evaluation rejects labels without blinded independent source metadata", () => {
   const records = clinicalAgreementRecords(30, 30).map((line) => {
     const labelWithoutReviewMetadata = { ...line.record.label };
+    delete labelWithoutReviewMetadata.sourceLabelSheetMode;
     delete labelWithoutReviewMetadata.reviewBlinded;
     delete labelWithoutReviewMetadata.labelSource;
     return {
@@ -318,6 +322,7 @@ test("clinical scale evaluation rejects labels without blinded independent sourc
 
   assert.equal(report.summary.reviewedAssessmentCount, 0);
   assert.equal(report.summary.excludedClinicalLabelCount, 30);
+  assert.equal(report.summary.excludedClinicalLabelReasons["source label sheet was not generated in blinded mode"], 30);
   assert.equal(report.summary.excludedClinicalLabelReasons["review was not marked blinded to Mirror estimates"], 30);
   assert.equal(report.summary.excludedClinicalLabelReasons["missing independent clinical label source"], 30);
   assert.equal(report.summary.readyForClinicalFacingScoring, false);

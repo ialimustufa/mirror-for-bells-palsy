@@ -89,6 +89,7 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   row[index.sunnybrookComposite] = "74";
   row[index.efaceTotal] = "70";
   row[index.clinicianConfidence] = "high";
+  row[index.sourceLabelSheetMode] = "blinded";
   row[index.reviewBlinded] = "yes";
   row[index.labelSource] = "adjudicated-consensus";
   row[index.reviewerRole] = "clinician";
@@ -109,6 +110,7 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(merged.records[1].record.label.houseBrackmannGrade, "III");
   assert.equal(merged.records[1].record.label.sunnybrookComposite, "74");
   assert.equal(merged.records[1].record.label.efaceTotal, "70");
+  assert.equal(merged.records[1].record.label.sourceLabelSheetMode, "blinded");
   assert.equal(merged.records[1].record.label.reviewBlinded, "yes");
   assert.equal(merged.records[1].record.label.labelSource, "adjudicated-consensus");
   assert.equal(merged.records[1].record.label.notes, "adjudicated consensus");

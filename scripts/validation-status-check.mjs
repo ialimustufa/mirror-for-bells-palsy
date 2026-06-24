@@ -54,7 +54,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /Reference standard:\s*blinded clinician-assigned/i, artifactPath, "the blinded clinician reference-standard statement");
   assertTextMatches(text, /## Reference Standard Controls/i, artifactPath, "the reference-standard controls section");
   assertTextMatches(text, /Eligible blinded independent clinical labels:\s*\d+/i, artifactPath, "eligible blinded independent clinical label count");
-  assertTextMatches(text, /Blinding control:\s*counted labels require `reviewBlinded`/i, artifactPath, "the explicit blinded-review control");
+  assertTextMatches(text, /Blinding control:\s*counted labels require `sourceLabelSheetMode:\s*blinded` and `reviewBlinded`/i, artifactPath, "the explicit blinded-review control");
   assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
   assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role/i, artifactPath, "the explicit reviewer-role control");
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");

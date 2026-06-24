@@ -70,9 +70,10 @@ Mirror's current estimates in read-only reference columns for audit, but the
 - `sunnybrookComposite`
 - `efaceTotal`
 - Optional `efaceStatic`, `efaceDynamic`, and `efaceSynkinesis` domain scores
-- `reviewBlinded`, `labelSource`, `reviewerRole`, `clinicianConfidence`, and
-  `reviewedAt` metadata used to prove that a target label was independently
-  clinician-assigned or adjudicated before it is counted by readiness tooling
+- `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`, `reviewerRole`,
+  `clinicianConfidence`, and `reviewedAt` metadata used to prove that a target
+  label came from a blinded sheet and was independently clinician-assigned or
+  adjudicated before it is counted by readiness tooling
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -81,8 +82,9 @@ default minimum standard is:
 - Sunnybrook composite: at least 80% within 10 points.
 - eFACE total: at least 80% within 10 points.
 - At least 30 reviewed assessment labels before any primary scale can pass.
-- Reviewed labels only count when the row is explicitly marked blinded to Mirror
-  estimates, has an independent clinician-assigned or adjudicated `labelSource`,
+- Reviewed labels only count when the row preserves `sourceLabelSheetMode:
+  blinded`, is explicitly marked blinded to Mirror estimates, has an independent
+  clinician-assigned or adjudicated `labelSource`,
   has a recognized clinician or adjudicated reviewer role, is not marked
   uncertain, and contains valid primary HB, Sunnybrook, and eFACE total labels.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,
@@ -105,8 +107,8 @@ table, Wilson intervals, missing estimate counts, reference-standard control
 statements, blocking reasons, and mismatch samples that a release reviewer needs
 before any validation-status update. The release status artifact checker requires
 the report to document the eligible blinded independent label count and the
-`reviewBlinded`/`labelSource` controls before a clinical agreement artifact can
-support clinical-facing score availability.
+`sourceLabelSheetMode`/`reviewBlinded`/`labelSource` controls before a clinical
+agreement artifact can support clinical-facing score availability.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

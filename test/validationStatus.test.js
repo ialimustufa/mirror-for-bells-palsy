@@ -45,7 +45,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Reference Standard Controls
 
 - Eligible blinded independent clinical labels: ${reviewedCount}
-- Blinding control: counted labels require \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
+- Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
 - Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.
@@ -53,7 +53,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`reviewBlinded\`, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }

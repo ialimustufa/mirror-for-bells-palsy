@@ -66,10 +66,10 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Excluded clinical-label rows: 0/);
   assert.match(markdown, /Reference Standard Controls/);
   assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
-  assert.match(markdown, /Blinding control: counted labels require `reviewBlinded`/);
+  assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
   assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role/);
-  assert.match(markdown, /Reference standard controls: `reviewBlinded`, `labelSource`, clinical `reviewerRole`/);
+  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`, clinical `reviewerRole`/);
   assert.match(markdown, /human-reviewed release decision/);
   assert.match(markdown, /TRIPOD\+AI/);
   assert.match(markdown, /STARD 2015/);
