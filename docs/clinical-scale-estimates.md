@@ -278,19 +278,20 @@ availability.
 Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,
 independent clinician sheets with qualifying complete/minimum estimate evidence,
-at least 80% usable movement coverage, paired labels for every enabled primary
-scale meeting the same reviewed-assessment floor, at least 10 distinct
-pseudonymous validation cases, exactly one pseudonymous reviewer id in each raw
-reviewer sheet with no reviewer-id overlap between sheets, at least 80%
-observed reviewer agreement, Wilson lower-bound reviewer agreement meeting the
-configured 80% standard, House-Brackmann reviewer case mix with HB I-II, HB
-III-IV, and HB V-VI each represented by enough same-band eligible reviewer
-pairs, and no excluded reviewer-pair, reviewer-sheet metadata, or
-estimate-evidence blockers. The estimate-evidence blockers include missing or
-inconsistent movement provenance and missing or incomplete resting-metric
-provenance. A disabled primary scale can remain an estimate
-while an enabled scale is released as support, but the enabled scale still needs
-its own passing clinical-agreement row and reviewer-agreement row.
+the same `sourceDatasetSha256` as the clinical agreement and passed review
+package verification reports, at least 80% usable movement coverage, paired
+labels for every enabled primary scale meeting the same reviewed-assessment
+floor, at least 10 distinct pseudonymous validation cases, exactly one
+pseudonymous reviewer id in each raw reviewer sheet with no reviewer-id overlap
+between sheets, at least 80% observed reviewer agreement, Wilson lower-bound
+reviewer agreement meeting the configured 80% standard, House-Brackmann reviewer
+case mix with HB I-II, HB III-IV, and HB V-VI each represented by enough
+same-band eligible reviewer pairs, and no excluded reviewer-pair,
+reviewer-sheet metadata, or estimate-evidence blockers. The estimate-evidence
+blockers include missing or inconsistent movement provenance and missing or
+incomplete resting-metric provenance. A disabled primary scale can remain an
+estimate while an enabled scale is released as support, but the enabled scale
+still needs its own passing clinical-agreement row and reviewer-agreement row.
 The runtime presentation policy fails closed if the machine-readable status file
 weakens the documented minimum standard, even when the high-level release
 booleans and artifact paths are present.

@@ -1040,7 +1040,7 @@ Run:
 ```bash
 npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
-npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv
+npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv --source-dataset validation-dataset.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
@@ -1259,27 +1259,29 @@ and threshold calibration artifact must include a UTC ISO `generatedAt`
 timestamp that is not later than the validation status `updatedAt` date.
 Clinical reviewer-agreement report paths must point to JSON
 `mirror-clinical-scale-reviewer-agreement-report` schema-v1 artifacts with
-current-version eligible reviewer sheets, within-tolerance rates that match the
-reported paired-label counts and Wilson score intervals, complete/minimum estimate evidence and 80%
-usable-movement coverage provenance, scale-specific input provenance, complete
-resting-metric provenance, no excluded reviewer-pair, metadata, or
-estimate-evidence blockers, zero incomplete scale-specific estimate-input skips
-for every enabled primary scale, at least 30 eligible paired labels on every
-enabled primary scale, at least 10 distinct pseudonymous validation cases, at
-least 80% observed reviewer agreement, distinct pseudonymous reviewer ids for
-the raw reviewer sheets, and Wilson lower-bound reviewer agreement meeting the
-configured 80% standard, plus House-Brackmann same-band reviewer severity
-coverage, before clinical-facing support can be enabled for that scale.
+current-version eligible reviewer sheets, `sourceDatasetSha256` matching the
+clinical agreement report and listed passed review package verification report,
+within-tolerance rates that match the reported paired-label counts and Wilson
+score intervals, complete/minimum estimate evidence and 80% usable-movement
+coverage provenance, scale-specific input provenance, complete resting-metric
+provenance, no excluded reviewer-pair, metadata, or estimate-evidence blockers,
+zero incomplete scale-specific estimate-input skips for every enabled primary
+scale, at least 30 eligible paired labels on every enabled primary scale, at
+least 10 distinct pseudonymous validation cases, at least 80% observed reviewer
+agreement, distinct pseudonymous reviewer ids for the raw reviewer sheets, and
+Wilson lower-bound reviewer agreement meeting the configured 80% standard, plus
+House-Brackmann same-band reviewer severity coverage, before clinical-facing
+support can be enabled for that scale.
 Clinical review package verification report paths must point to JSON
 `mirror-clinical-scale-review-package-verification` schema-v1 artifacts with
 `status: passed`, a source dataset SHA-256 match, blinded-manifest controls,
 stable row identities, hidden estimate-value columns, unchanged
 estimate-provenance columns, no verification errors, and at least the configured
 minimum reviewed clinical-scale assessment rows before clinical-facing support
-can be enabled. Clinical agreement reports used for enabled scales must carry
-`sourceDatasetSha256`, and that value must match one of the listed passed review
-package verification reports so release evidence traces back to the blinded
-source dataset package.
+can be enabled. Clinical agreement and reviewer-agreement reports used for
+enabled scales must carry `sourceDatasetSha256`, and those values must match one
+of the listed passed review package verification reports so release evidence
+traces back to the blinded source dataset package.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

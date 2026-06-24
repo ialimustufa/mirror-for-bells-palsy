@@ -10,6 +10,7 @@ import { mergeValidationLabels, parseCsv } from "../src/ml/validationLabels.js";
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
 const REQUIRED_RESTING_METRIC_KEYS = "palpebralFissure|nasolabialMidface|oralCommissure";
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
 
 function reviewerCsv(rows, reviewerId = "reviewer-a") {
   return [
@@ -160,10 +161,12 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
     generatedAt: "2026-06-24T12:00:00.000Z",
     reviewerA: "clinician-a",
     reviewerB: "clinician-b",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
   });
 
   assert.equal(report.kind, "mirror-clinical-scale-reviewer-agreement-report");
   assert.equal(report.schemaVersion, 1);
+  assert.equal(report.sourceDatasetSha256, SOURCE_DATASET_SHA256);
   assert.equal(report.summary.reviewerAAssessmentCount, 3);
   assert.equal(report.summary.reviewerBAssessmentCount, 3);
   assert.equal(report.summary.comparedAssessmentCount, 4);
@@ -184,6 +187,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
   assert.equal(report.standard.requiresExplicitClinicalConfidence, true);
   assert.equal(report.standard.requiresIsoReviewTimestamp, true);
+  assert.equal(report.standard.requiresSourceDatasetSha256, true);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.standard.minHouseBrackmannSeverityBands, 3);
   assert.equal(report.standard.minAssessmentsPerSeverityBand, 3);

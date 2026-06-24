@@ -25,6 +25,7 @@ const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engi
 const ACCEPTED_CLINICAL_CONFIDENCE_PATTERN = /\b(high|medium|confident|adequate|sufficient)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
 const ISO_UTC_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
 const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const BLINDED_LABEL_SHEET_PATTERN = /^(blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN = /\b(clinician[-\s]?assigned|clinician|independent|reference[-\s]?standard)\b/i;
@@ -214,6 +215,15 @@ function compactRate(numerator, denominator) {
 
 function compactNumber(value, digits = 2) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function sourceDatasetSha256FromOptions(options = {}) {
+  const value = String(options.sourceDatasetSha256 ?? "").trim();
+  if (!value) return null;
+  if (!SHA256_HEX_PATTERN.test(value)) {
+    throw new Error("sourceDatasetSha256 must be a SHA-256 hex string");
+  }
+  return value.toLowerCase();
 }
 
 function zScoreForConfidenceLevel(confidenceLevel) {
@@ -1147,6 +1157,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const minAssessmentsPerSeverityBand = Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAssessmentsPerSeverityBand));
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel;
+  const sourceDatasetSha256 = sourceDatasetSha256FromOptions(options);
   const agreementOptions = {
     minAgreementRate,
     minAgreementWilsonLowerBound,
@@ -1292,6 +1303,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     kind: "mirror-clinical-scale-reviewer-agreement-report",
     schemaVersion: 1,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
+    sourceDatasetSha256,
     reviewerA: options.reviewerA ?? "reviewer-a",
     reviewerB: options.reviewerB ?? "reviewer-b",
     standard: {
@@ -1308,6 +1320,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       requiresV5ScaleInputProvenance: true,
       requiresExplicitClinicalConfidence: true,
       requiresIsoReviewTimestamp: true,
+      requiresSourceDatasetSha256: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,

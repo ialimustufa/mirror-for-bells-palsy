@@ -244,7 +244,7 @@ the rule that only real blinded clinician-reviewed rows can satisfy readiness.
 If multiple reviewers label the same assessment:
 
 - Keep each raw reviewer sheet outside the production dataset until adjudication.
-- Run `npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv`
+- Run `npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv --source-dataset validation-dataset.jsonl`
   to compare reviewer labels and create an adjudication queue.
 - Resolve disagreements in a separate adjudicated sheet.
 - Document the adjudication rule in the readiness report notes.
@@ -322,13 +322,15 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   `npm run validation:clinical-readiness` with `sourceDatasetSha256` preserved
   from the reviewed validation dataset.
 - A clinical-scale reviewer-agreement report from
-  `npm run validation:reviewer-agreement` showing current-version, blinded,
-  independent clinician sheets with at least 30 paired labels on every enabled
-  primary scale, at least 10 distinct pseudonymous validation cases, distinct
-  pseudonymous reviewer ids for the two reviewer sheets, and at least 80%
-  observed and Wilson lower-bound reviewer agreement on every enabled primary
-  scale, House-Brackmann reviewer case mix across all three severity bands, with
-  no reviewer-sheet metadata blockers.
+  `npm run validation:reviewer-agreement` run with `--source-dataset`, showing
+  current-version, blinded, independent clinician sheets with the same
+  `sourceDatasetSha256` as the clinical agreement report and listed passed
+  clinical review package verification report, at least 30 paired labels on
+  every enabled primary scale, at least 10 distinct pseudonymous validation
+  cases, distinct pseudonymous reviewer ids for the two reviewer sheets, and at
+  least 80% observed and Wilson lower-bound reviewer agreement on every enabled
+  primary scale, House-Brackmann reviewer case mix across all three severity
+  bands, with no reviewer-sheet metadata blockers.
 - A clinical review package verification report showing the returned blinded
   sheet still matched the original source dataset hash, row identities, hidden
   estimate-value columns, unchanged estimate-provenance columns, and the current

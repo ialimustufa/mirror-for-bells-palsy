@@ -348,6 +348,7 @@ function passingClinicalReviewerAgreementReport({
   primaryPairedCount = 30,
   blockingReasons = [],
   withinToleranceRate = 1,
+  sourceDatasetSha256 = SOURCE_DATASET_SHA256,
 } = {}) {
   const withinToleranceCount = Math.round(primaryPairedCount * withinToleranceRate);
   const wilsonInterval = testWilsonScoreInterval(withinToleranceCount, primaryPairedCount);
@@ -357,6 +358,7 @@ function passingClinicalReviewerAgreementReport({
     kind: "mirror-clinical-scale-reviewer-agreement-report",
     schemaVersion: 1,
     generatedAt: "2026-06-24T00:00:00.000Z",
+    sourceDatasetSha256,
     reviewerA: "clinician-a",
     reviewerB: "clinician-b",
     standard: {
@@ -373,6 +375,7 @@ function passingClinicalReviewerAgreementReport({
       requiresV5ScaleInputProvenance: true,
       requiresExplicitClinicalConfidence: true,
       requiresIsoReviewTimestamp: true,
+      requiresSourceDatasetSha256: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel: 0.95,
@@ -924,6 +927,24 @@ test("validation status rejects reviewer agreement rates that do not match count
   );
 });
 
+test("validation status rejects reviewer agreement reports without source hash controls", () => {
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  delete reviewerReport.sourceDatasetSha256;
+
+  assert.throws(
+    () => validateClinicalScaleReviewerAgreementReportText(JSON.stringify(reviewerReport), REVIEWER_AGREEMENT_REPORT_PATH),
+    /sourceDatasetSha256/,
+  );
+
+  const reportWithoutStandardControl = JSON.parse(passingClinicalReviewerAgreementReport());
+  delete reportWithoutStandardControl.standard.requiresSourceDatasetSha256;
+
+  assert.throws(
+    () => validateClinicalScaleReviewerAgreementReportText(JSON.stringify(reportWithoutStandardControl), REVIEWER_AGREEMENT_REPORT_PATH),
+    /standard\.requiresSourceDatasetSha256/,
+  );
+});
+
 test("validation status rejects structured clinical agreement Wilson bounds that do not match counts", () => {
   const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport());
   structuredReport.primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound = 0.8;
@@ -1254,6 +1275,36 @@ test("validation status artifacts reject clinical agreement reports without a ma
       }),
     }),
     /sourceDatasetSha256 must match a listed passed clinical review package verification report/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with a mismatched source hash", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [CLINICAL_AGREEMENT_REPORT_PATH]: passingClinicalAgreementReport(),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport({ sourceDatasetSha256: "b".repeat(64) }),
+        [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]: passingClinicalReviewPackageVerificationReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /reviewerAgreementReport sourceDatasetSha256 must match the clinical agreement report/,
   );
 });
 

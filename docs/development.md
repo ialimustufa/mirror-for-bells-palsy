@@ -12,7 +12,7 @@ npm run replay:frames -- backup.jsonl
 npm run validate:dataset -- validation-dataset.jsonl
 npm run validation:label-sheet -- validation-dataset.jsonl labels.csv
 npm run validation:label-sheet -- validation-dataset.jsonl blinded-labels.csv --blinded
-npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv
+npm run validation:reviewer-agreement -- reviewer-a.csv reviewer-b.csv adjudication.csv --source-dataset validation-dataset.jsonl
 npm run validation:merge-labels -- validation-dataset.jsonl labels.csv reviewed-dataset.jsonl
 npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-report.json
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
@@ -148,7 +148,8 @@ checks for:
   readiness. Reviewer observed agreement rates must match the within-tolerance
   paired-label counts, and reviewer Wilson bounds must match those counts. The
   report must include a UTC ISO `generatedAt` timestamp no later than the status
-  `updatedAt` date.
+  `updatedAt` date, plus `sourceDatasetSha256` matching the clinical agreement
+  report and listed clinical review package verification report.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, zero incomplete

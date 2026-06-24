@@ -702,6 +702,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertCondition(report?.kind === "mirror-clinical-scale-reviewer-agreement-report", `${artifactPath} must be a mirror-clinical-scale-reviewer-agreement-report`);
   assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
   assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
+  assertSha256(report.sourceDatasetSha256, `${artifactPath}.sourceDatasetSha256`);
   assertCondition(report.standard && typeof report.standard === "object", `${artifactPath} must include a reviewer agreement standard object`);
   assertCondition(report.standard.minAgreementRate === 0.8, `${artifactPath}.standard.minAgreementRate must be 0.8`);
   assertCondition(
@@ -734,6 +735,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertCondition(report.standard.requiresV5ScaleInputProvenance === true, `${artifactPath}.standard.requiresV5ScaleInputProvenance must be true`);
   assertCondition(report.standard.requiresExplicitClinicalConfidence === true, `${artifactPath}.standard.requiresExplicitClinicalConfidence must be true`);
   assertCondition(report.standard.requiresIsoReviewTimestamp === true, `${artifactPath}.standard.requiresIsoReviewTimestamp must be true`);
+  assertCondition(report.standard.requiresSourceDatasetSha256 === true, `${artifactPath}.standard.requiresSourceDatasetSha256 must be true`);
   assertCondition(report.standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.standard.confidenceInterval.method must be wilson-score`);
   assertCondition(report.standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.standard.confidenceInterval.confidenceLevel must be 0.95`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
@@ -830,6 +832,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   return {
     path: artifactPath,
     generatedAt: report.generatedAt,
+    sourceDatasetSha256: report.sourceDatasetSha256.toLowerCase(),
     reviewerAAssessmentCount: report.summary.reviewerAAssessmentCount,
     reviewerBAssessmentCount: report.summary.reviewerBAssessmentCount,
     comparedAssessmentCount: report.summary.comparedAssessmentCount,
@@ -993,6 +996,10 @@ function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementRepo
     assertCondition(
       verifiedReviewPackageForClinicalAgreement(clinicalReport, clinicalScaleReviewPackageVerificationReports),
       `${fieldPrefix}.clinicalAgreementReport sourceDatasetSha256 must match a listed passed clinical review package verification report`,
+    );
+    assertCondition(
+      reviewerReport.sourceDatasetSha256 === clinicalReport.sourceDatasetSha256,
+      `${fieldPrefix}.reviewerAgreementReport sourceDatasetSha256 must match the clinical agreement report`,
     );
     assertCondition(scale.clinicalScaleEstimateVersion === clinicalReport.clinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the clinical agreement report`);
     assertCondition(scale.clinicalScaleEstimateVersion === reviewerReport.requiredClinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the reviewer agreement report`);
