@@ -336,10 +336,16 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   sheet still matched the original source dataset hash, row identities, hidden
   estimate-value columns, unchanged estimate-provenance columns, and the current
   80% observed/Wilson release standard before labels were merged. This report
-  must be listed in `clinicalScaleReviewPackageVerificationReports`.
+  must be listed in `clinicalScaleReviewPackageVerificationReports`, and its
+  source hash must be listed in
+  `clinicalScaleReviewPackageVerificationSourceDatasetSha256s`.
 - A clinical-scale agreement report from `npm run validation:clinical-report`
   whose `sourceDatasetSha256` matches a listed passed clinical review package
-  verification report.
+  verification report and is listed in
+  `clinicalScaleAgreementSourceDatasetSha256s`.
+- A clinical-scale reviewer-agreement report whose `sourceDatasetSha256` matches
+  the same source package and is listed in
+  `clinicalScaleReviewerAgreementSourceDatasetSha256s`.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
@@ -357,7 +363,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   Every enabled scale must also carry a status-file evidence summary that names
   the clinical agreement report, names the reviewer-agreement report, names the
   matching clinical review package verification report, repeats
-  `sourceDatasetSha256`, records the current estimator version, and repeats the
+  `sourceDatasetSha256`, records the current estimator version, lists that hash
+  in all three clinical evidence source-hash arrays, and repeats the
   report-backed label counts, distinct-case counts, observed agreement rates,
   and Wilson lower bounds for both clinician-label agreement and reviewer
   agreement.

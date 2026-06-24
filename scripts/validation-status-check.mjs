@@ -73,6 +73,12 @@ function assertSha256Array(value, field) {
   }
 }
 
+function sha256ArrayIncludes(value, item) {
+  return Array.isArray(value)
+    && typeof item === "string"
+    && value.some((hash) => String(hash ?? "").toLowerCase() === item.toLowerCase());
+}
+
 function assertIsoTimestamp(value, field) {
   assertCondition(typeof value === "string" && ISO_TIMESTAMP_RE.test(value), `${field} must be a UTC ISO timestamp`);
   assertCondition(!Number.isNaN(Date.parse(value)), `${field} must be a valid UTC ISO timestamp`);
@@ -184,6 +190,18 @@ function assertClinicalScaleAvailabilityEvidence(status, scaleKey, scale) {
     `${fieldPrefix}.reviewerAgreementReport must reference a listed clinical scale reviewer agreement report`,
   );
   assertSha256(scale.sourceDatasetSha256, `${fieldPrefix}.sourceDatasetSha256`);
+  assertCondition(
+    sha256ArrayIncludes(status.clinicalScaleAgreementSourceDatasetSha256s, scale.sourceDatasetSha256),
+    `${fieldPrefix}.sourceDatasetSha256 must be listed in clinicalScaleAgreementSourceDatasetSha256s`,
+  );
+  assertCondition(
+    sha256ArrayIncludes(status.clinicalScaleReviewerAgreementSourceDatasetSha256s, scale.sourceDatasetSha256),
+    `${fieldPrefix}.sourceDatasetSha256 must be listed in clinicalScaleReviewerAgreementSourceDatasetSha256s`,
+  );
+  assertCondition(
+    sha256ArrayIncludes(status.clinicalScaleReviewPackageVerificationSourceDatasetSha256s, scale.sourceDatasetSha256),
+    `${fieldPrefix}.sourceDatasetSha256 must be listed in clinicalScaleReviewPackageVerificationSourceDatasetSha256s`,
+  );
   assertCondition(
     status.clinicalScaleReviewPackageVerificationReports.includes(scale.clinicalReviewPackageVerificationReport),
     `${fieldPrefix}.clinicalReviewPackageVerificationReport must reference a listed clinical review package verification report`,
@@ -1134,6 +1152,9 @@ function buildClinicalScaleStatusEvidencePatch(status, clinicalAgreementReport, 
     clinicalScaleAgreementReports: uniqueWithAppendedPath(status?.clinicalScaleAgreementReports, clinicalAgreementReport.path),
     clinicalScaleReviewerAgreementReports: uniqueWithAppendedPath(status?.clinicalScaleReviewerAgreementReports, clinicalReviewerAgreementReport.path),
     clinicalScaleReviewPackageVerificationReports: uniqueWithAppendedPath(status?.clinicalScaleReviewPackageVerificationReports, clinicalReviewPackageVerificationReport?.path),
+    clinicalScaleAgreementSourceDatasetSha256s: uniqueWithAppendedPath(status?.clinicalScaleAgreementSourceDatasetSha256s, clinicalAgreementReport.sourceDatasetSha256),
+    clinicalScaleReviewerAgreementSourceDatasetSha256s: uniqueWithAppendedPath(status?.clinicalScaleReviewerAgreementSourceDatasetSha256s, clinicalReviewerAgreementReport.sourceDatasetSha256),
+    clinicalScaleReviewPackageVerificationSourceDatasetSha256s: uniqueWithAppendedPath(status?.clinicalScaleReviewPackageVerificationSourceDatasetSha256s, clinicalReviewPackageVerificationReport?.sourceDatasetSha256),
     clinicalScaleAvailability: buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options),
   };
 }
@@ -1161,6 +1182,9 @@ function validateStatus(status) {
   assertStringArray(status.clinicalScaleAgreementReports, "clinicalScaleAgreementReports");
   assertStringArray(status.clinicalScaleReviewerAgreementReports, "clinicalScaleReviewerAgreementReports");
   assertStringArray(status.clinicalScaleReviewPackageVerificationReports, "clinicalScaleReviewPackageVerificationReports");
+  assertSha256Array(status.clinicalScaleAgreementSourceDatasetSha256s, "clinicalScaleAgreementSourceDatasetSha256s");
+  assertSha256Array(status.clinicalScaleReviewerAgreementSourceDatasetSha256s, "clinicalScaleReviewerAgreementSourceDatasetSha256s");
+  assertSha256Array(status.clinicalScaleReviewPackageVerificationSourceDatasetSha256s, "clinicalScaleReviewPackageVerificationSourceDatasetSha256s");
   assertStringArray(status.thresholdCalibrationReports, "thresholdCalibrationReports");
   assertSha256Array(status.thresholdCalibrationSourceDatasetSha256s, "thresholdCalibrationSourceDatasetSha256s");
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
@@ -1210,6 +1234,9 @@ function validateStatus(status) {
     assertCondition(status.clinicalScaleAgreementReports.length > 0, "clinical-facing scores require clinical scale agreement reports");
     assertCondition(status.clinicalScaleReviewerAgreementReports.length > 0, "clinical-facing scores require clinical scale reviewer agreement reports");
     assertCondition(status.clinicalScaleReviewPackageVerificationReports.length > 0, "clinical-facing scores require clinical review package verification reports");
+    assertCondition(status.clinicalScaleAgreementSourceDatasetSha256s.length > 0, "clinical-facing scores require clinical scale agreement source dataset hashes");
+    assertCondition(status.clinicalScaleReviewerAgreementSourceDatasetSha256s.length > 0, "clinical-facing scores require clinical scale reviewer agreement source dataset hashes");
+    assertCondition(status.clinicalScaleReviewPackageVerificationSourceDatasetSha256s.length > 0, "clinical-facing scores require clinical review package verification source dataset hashes");
     assertCondition(status.thresholdCalibrationSourceDatasetSha256s.length > 0, "clinical-facing scores require threshold calibration source dataset hashes");
   }
   return status;

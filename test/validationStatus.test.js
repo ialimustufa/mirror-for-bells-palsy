@@ -41,6 +41,14 @@ function enabledScaleEvidence(overrides = {}) {
   };
 }
 
+function clinicalSourceHashTraceability(sourceDatasetSha256 = SOURCE_DATASET_SHA256) {
+  return {
+    clinicalScaleAgreementSourceDatasetSha256s: [sourceDatasetSha256],
+    clinicalScaleReviewerAgreementSourceDatasetSha256s: [sourceDatasetSha256],
+    clinicalScaleReviewPackageVerificationSourceDatasetSha256s: [sourceDatasetSha256],
+  };
+}
+
 const DISABLED_CLINICAL_SCALE_AVAILABILITY = {
   houseBrackmann: { clinicalFacingScoresAllowed: false },
   sunnybrook: { clinicalFacingScoresAllowed: false },
@@ -83,6 +91,7 @@ const BASE_STATUS = {
   clinicalScaleAgreementReports: [],
   clinicalScaleReviewerAgreementReports: [],
   clinicalScaleReviewPackageVerificationReports: [],
+  ...clinicalSourceHashTraceability(),
   thresholdCalibrationReports: [],
   thresholdCalibrationSourceDatasetSha256s: [],
   productionThresholdConstantsCalibrated: false,
@@ -635,6 +644,61 @@ test("validation status rejects enabled per-scale availability without evidence 
           ...HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
           houseBrackmann: enabledScaleEvidence(override),
         },
+      }),
+      blocker,
+    );
+  }
+});
+
+test("validation status rejects enabled per-scale availability without source hash traceability", () => {
+  const passingStatus = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+  };
+  const weakTraceability = [
+    {
+      override: { clinicalScaleAgreementSourceDatasetSha256s: [] },
+      blocker: /clinicalScaleAgreementSourceDatasetSha256s/,
+    },
+    {
+      override: { clinicalScaleReviewerAgreementSourceDatasetSha256s: [] },
+      blocker: /clinicalScaleReviewerAgreementSourceDatasetSha256s/,
+    },
+    {
+      override: { clinicalScaleReviewPackageVerificationSourceDatasetSha256s: [] },
+      blocker: /clinicalScaleReviewPackageVerificationSourceDatasetSha256s/,
+    },
+    {
+      override: { clinicalScaleAgreementSourceDatasetSha256s: ["b".repeat(64)] },
+      blocker: /clinicalScaleAgreementSourceDatasetSha256s/,
+    },
+    {
+      override: { clinicalScaleReviewerAgreementSourceDatasetSha256s: ["b".repeat(64)] },
+      blocker: /clinicalScaleReviewerAgreementSourceDatasetSha256s/,
+    },
+    {
+      override: { clinicalScaleReviewPackageVerificationSourceDatasetSha256s: ["b".repeat(64)] },
+      blocker: /clinicalScaleReviewPackageVerificationSourceDatasetSha256s/,
+    },
+  ];
+
+  for (const { override, blocker } of weakTraceability) {
+    assert.throws(
+      () => validateStatus({
+        ...passingStatus,
+        ...override,
       }),
       blocker,
     );
@@ -1418,6 +1482,9 @@ test("validation status evidence patch includes report paths and scale summaries
   ]);
   assert.deepEqual(patch.clinicalScaleReviewerAgreementReports, [REVIEWER_AGREEMENT_REPORT_PATH]);
   assert.deepEqual(patch.clinicalScaleReviewPackageVerificationReports, [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]);
+  assert.deepEqual(patch.clinicalScaleAgreementSourceDatasetSha256s, [SOURCE_DATASET_SHA256]);
+  assert.deepEqual(patch.clinicalScaleReviewerAgreementSourceDatasetSha256s, [SOURCE_DATASET_SHA256]);
+  assert.deepEqual(patch.clinicalScaleReviewPackageVerificationSourceDatasetSha256s, [SOURCE_DATASET_SHA256]);
   assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
   assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalAgreementReport, CLINICAL_AGREEMENT_REPORT_PATH);
   assert.equal(patch.clinicalScaleAvailability.houseBrackmann.reviewerAgreementReport, REVIEWER_AGREEMENT_REPORT_PATH);
@@ -1443,7 +1510,11 @@ test("validation status artifacts reject per-scale evidence summaries that do no
     clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
   };
   const mismatchedEvidence = [
-    { override: { sourceDatasetSha256: "b".repeat(64) }, blocker: /houseBrackmann\.sourceDatasetSha256 must match the clinical agreement report/ },
+    {
+      override: { sourceDatasetSha256: "b".repeat(64) },
+      statusOverride: clinicalSourceHashTraceability("b".repeat(64)),
+      blocker: /houseBrackmann\.sourceDatasetSha256 must match the clinical agreement report/,
+    },
     { override: { clinicalReviewPackageVerificationReport: "docs/validation/other-review-package.json" }, blocker: /houseBrackmann\.clinicalReviewPackageVerificationReport/ },
     { override: { reviewedLabelCount: 31 }, blocker: /houseBrackmann\.reviewedLabelCount/ },
     { override: { distinctValidationCaseCount: 31 }, blocker: /houseBrackmann\.distinctValidationCaseCount/ },
@@ -1455,10 +1526,11 @@ test("validation status artifacts reject per-scale evidence summaries that do no
     { override: { reviewerAgreementWilsonLowerBound: 0.888 }, blocker: /houseBrackmann\.reviewerAgreementWilsonLowerBound/ },
   ];
 
-  for (const { override, blocker } of mismatchedEvidence) {
+  for (const { override, statusOverride = {}, blocker } of mismatchedEvidence) {
     await assert.rejects(
       () => validateStatusArtifacts({
         ...passingStatus,
+        ...statusOverride,
         clinicalScaleAvailability: {
           ...HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
           houseBrackmann: enabledScaleEvidence(override),

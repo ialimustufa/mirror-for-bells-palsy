@@ -1218,7 +1218,9 @@ counts, reviewed clinical-scale assessment coverage, calibration reports,
 clinical agreement reports, reviewer-agreement reports, calibrated thresholds,
 ready exercise coverage, schema-v1 dated status metadata, the explicit
 `clinicalFacingScoresAllowed` flag, and the explicit
-`clinical-scale-agreement-reviewed` status value. For every enabled scale in
+`clinical-scale-agreement-reviewed` status value. It also requires the status
+file to list clinical evidence source hashes for agreement, reviewer-agreement,
+and package-verification artifacts. For every enabled scale in
 `clinicalScaleAvailability`, the runtime also requires a per-scale evidence
 summary pointing to the listed clinical agreement, reviewer-agreement, and
 clinical review package verification reports, repeating `sourceDatasetSha256`,
@@ -1231,8 +1233,9 @@ entering unsupported counts, rates, Wilson lower bounds, or report paths. `npm
 run validation:status-evidence` can generate a draft of that status block from
 the clinical agreement, reviewer-agreement, and review-package verification
 artifacts; with `--status-patch`, it also drafts the matching clinical,
-reviewer, and package-verification report path arrays. The release decision
-remains a human-reviewed status file update. It also audits the machine-readable
+reviewer, and package-verification report path arrays and their matching
+source-hash arrays. The release decision remains a human-reviewed status file
+update. It also audits the machine-readable
 minimum standard before using clinical-facing wording: the
 30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
 Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence
@@ -1292,7 +1295,11 @@ minimum reviewed clinical-scale assessment rows before clinical-facing support
 can be enabled. Clinical agreement and reviewer-agreement reports used for
 enabled scales must carry `sourceDatasetSha256`, and those values must match one
 of the listed passed review package verification reports so release evidence
-traces back to the blinded source dataset package.
+traces back to the blinded source dataset package. The status file must list the
+same source hashes in `clinicalScaleAgreementSourceDatasetSha256s`,
+`clinicalScaleReviewerAgreementSourceDatasetSha256s`, and
+`clinicalScaleReviewPackageVerificationSourceDatasetSha256s`; an enabled scale
+whose hash is missing from any of those lists remains in estimate mode.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` schema-v1 artifacts with
 `sourceDatasetSha256` and ready-exercise coverage that matches the status claim.

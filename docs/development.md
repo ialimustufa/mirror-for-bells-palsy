@@ -61,13 +61,13 @@ checks for:
 - Medical disclaimer and non-diagnostic wording.
 - Privacy/local-first wording for browser data, clinician bundle, and validation exports.
 - Current validation status and remaining release risks in the roadmap.
-- `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, and whether clinical-facing scores are allowed. Referenced calibration and clinical-scale agreement artifacts are also checked for the expected report markers.
+- `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, whether clinical-facing scores are allowed, and which source-dataset hashes support clinical agreement, reviewer-agreement, package-verification, and threshold-calibration evidence. Referenced calibration and clinical-scale agreement artifacts are also checked for the expected report markers.
 - Runtime clinical-scale presentation policy, which reads `docs/validation-status.json`
   before app panels or reports can use clinical-facing wording and fails closed
   unless the status is explicitly `clinical-scale-agreement-reviewed`; it also
   fails closed without schema-v1 dated status metadata, reviewed dataset/frame
   coverage, ready exercise coverage, clinical and reviewer agreement report
-  paths, threshold report paths and matching
+  paths, clinical evidence source-hash lists, threshold report paths and matching
   `thresholdCalibrationSourceDatasetSha256s`, per-scale clinical/reviewer
   agreement evidence summaries for each enabled House-Brackmann/Sunnybrook/eFACE
   support value, or
@@ -109,22 +109,28 @@ checks for:
   ISO `generatedAt` timestamp for auditability, and the status `updatedAt` date
   must not precede any referenced artifact generation date. Agreement artifacts
   must also include `sourceDatasetSha256` so status validation can tie the
-  reviewed labels back to a listed passed review-package verification report.
+  reviewed labels back to a listed passed review-package verification report,
+  and clinical-facing status must list those hashes in
+  `clinicalScaleAgreementSourceDatasetSha256s`,
+  `clinicalScaleReviewerAgreementSourceDatasetSha256s`, and
+  `clinicalScaleReviewPackageVerificationSourceDatasetSha256s`.
   Threshold calibration reports must use `mirror-threshold-calibration-report`
   schema v1, include `sourceDatasetSha256`, and calibrated status must list
   matching hashes in
   `thresholdCalibrationSourceDatasetSha256s`.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` and review-package verification JSON
-  artifacts in `clinicalScaleReviewPackageVerificationReports` before
+  artifacts in `clinicalScaleReviewPackageVerificationReports`, plus matching
+  source hashes in the three clinical-scale evidence hash arrays, before
   clinical-facing clinical-scale support can be enabled.
 - `npm run validation:status-evidence` can draft the per-scale
   `clinicalScaleAvailability` evidence block from a clinical agreement report
   reviewer-agreement report, and matching review-package verification report.
   With `--status-patch`, it also drafts the corresponding
   `clinicalScaleAgreementReports`, `clinicalScaleReviewerAgreementReports`, and
-  `clinicalScaleReviewPackageVerificationReports` arrays so report paths and
-  per-scale evidence stay together. A reviewer still has to choose which eligible scales
+  `clinicalScaleReviewPackageVerificationReports` arrays and their matching
+  source-hash arrays so report paths, source hashes, and per-scale evidence stay
+  together. A reviewer still has to choose which eligible scales
   to enable, add the reviewed package verification reports, and copy the
   reviewed fields into `docs/validation-status.json`; the helper does not edit
   the status file or bypass the clinical release gate.
@@ -161,8 +167,9 @@ checks for:
   report must include a UTC ISO `generatedAt` timestamp no later than the status
   `updatedAt` date, plus `sourceDatasetSha256` matching the clinical agreement
   report and listed clinical review package verification report. Enabled
-  per-scale status entries must also repeat that `sourceDatasetSha256` and name
-  the matching `clinicalReviewPackageVerificationReport` path.
+  per-scale status entries must also repeat that `sourceDatasetSha256`, name
+  the matching `clinicalReviewPackageVerificationReport` path, and use a hash
+  listed in each clinical-scale evidence hash array.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, zero incomplete

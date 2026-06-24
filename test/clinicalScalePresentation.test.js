@@ -81,6 +81,14 @@ function clinicalScaleAvailability(overrides = {}) {
   };
 }
 
+function clinicalSourceHashTraceability(sourceDatasetSha256 = SOURCE_DATASET_SHA256) {
+  return {
+    clinicalScaleAgreementSourceDatasetSha256s: [sourceDatasetSha256],
+    clinicalScaleReviewerAgreementSourceDatasetSha256s: [sourceDatasetSha256],
+    clinicalScaleReviewPackageVerificationSourceDatasetSha256s: [sourceDatasetSha256],
+  };
+}
+
 function reviewedClinicalScaleStatus(clinicalScaleAvailabilityConfig = clinicalScaleAvailability()) {
   return {
     schemaVersion: 1,
@@ -94,6 +102,7 @@ function reviewedClinicalScaleStatus(clinicalScaleAvailabilityConfig = clinicalS
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    ...clinicalSourceHashTraceability(),
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
@@ -147,6 +156,7 @@ test("clinical scale presentation policy switches copy only with complete releas
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    ...clinicalSourceHashTraceability(),
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
@@ -216,6 +226,9 @@ test("clinical scale presentation policy fails closed when release evidence is i
     { clinicalScaleAgreementReports: [], blocker: /clinicalScaleAgreementReports/ },
     { clinicalScaleReviewerAgreementReports: [], blocker: /clinicalScaleReviewerAgreementReports/ },
     { clinicalScaleReviewPackageVerificationReports: [], blocker: /clinicalScaleReviewPackageVerificationReports/ },
+    { clinicalScaleAgreementSourceDatasetSha256s: [], blocker: /clinicalScaleAgreementSourceDatasetSha256s/ },
+    { clinicalScaleReviewerAgreementSourceDatasetSha256s: [], blocker: /clinicalScaleReviewerAgreementSourceDatasetSha256s/ },
+    { clinicalScaleReviewPackageVerificationSourceDatasetSha256s: [], blocker: /clinicalScaleReviewPackageVerificationSourceDatasetSha256s/ },
     { thresholdCalibrationReports: [], blocker: /thresholdCalibrationReports/ },
     { thresholdCalibrationSourceDatasetSha256s: [], blocker: /thresholdCalibrationSourceDatasetSha256s/ },
   ];
@@ -236,6 +249,39 @@ test("clinical scale presentation policy fails closed when release evidence is i
     assert.equal(policy.mode, "mirror-estimate");
     assert.equal(policy.anyClinicalScaleSupportAllowed, false);
     assert.equal(policy.badgeLabel, "Estimate");
+  }
+});
+
+test("clinical scale presentation policy fails closed when enabled scale source hashes are not listed", () => {
+  const weakTraceability = [
+    {
+      statusOverride: { clinicalScaleAgreementSourceDatasetSha256s: ["b".repeat(64)] },
+      blocker: /clinicalScaleAgreementSourceDatasetSha256s/,
+    },
+    {
+      statusOverride: { clinicalScaleReviewerAgreementSourceDatasetSha256s: ["b".repeat(64)] },
+      blocker: /clinicalScaleReviewerAgreementSourceDatasetSha256s/,
+    },
+    {
+      statusOverride: { clinicalScaleReviewPackageVerificationSourceDatasetSha256s: ["b".repeat(64)] },
+      blocker: /clinicalScaleReviewPackageVerificationSourceDatasetSha256s/,
+    },
+  ];
+
+  for (const { statusOverride, blocker } of weakTraceability) {
+    const status = {
+      ...reviewedClinicalScaleStatus(clinicalScaleAvailability()),
+      ...statusOverride,
+    };
+    const policy = clinicalScalePresentationPolicy(status);
+
+    assert.equal(clinicalFacingStatusEligible(status), true);
+    assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
+    assert.equal(clinicalScaleAvailabilityEvidenceEligible(status, "houseBrackmann"), false);
+    assert.match(clinicalScaleAvailabilityEvidenceBlockers(status, "houseBrackmann").join("\n"), blocker);
+    assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
+    assert.equal(policy.scaleAvailability.houseBrackmann.availabilityEvidenceEligible, false);
+    assert.match(policy.scaleAvailability.houseBrackmann.availabilityEvidenceBlockers.join("\n"), blocker);
   }
 });
 
@@ -308,6 +354,7 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    ...clinicalSourceHashTraceability(),
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
@@ -337,6 +384,7 @@ test("clinical scale presentation policy can keep individual scales as estimates
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    ...clinicalSourceHashTraceability(),
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
@@ -533,6 +581,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    ...clinicalSourceHashTraceability(),
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
@@ -553,6 +602,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    ...clinicalSourceHashTraceability(),
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,

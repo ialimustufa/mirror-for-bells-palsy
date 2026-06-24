@@ -35,6 +35,12 @@ function stringArrayIncludes(value, item) {
   return Array.isArray(value) && nonEmptyString(item) && value.includes(item);
 }
 
+function sha256ArrayIncludes(value, item) {
+  return Array.isArray(value)
+    && typeof item === "string"
+    && value.some((hash) => String(hash ?? "").toLowerCase() === item.toLowerCase());
+}
+
 function clinicalScaleValidationStandardBlockers(status = DEFAULT_VALIDATION_STATUS) {
   const standard = status?.clinicalScaleMinimumStandard;
   const blockers = [];
@@ -116,6 +122,9 @@ function clinicalScaleReleaseEvidenceBlockers(status = DEFAULT_VALIDATION_STATUS
   if (!nonEmptyStringArray(status?.clinicalScaleAgreementReports)) blockers.push("clinicalScaleAgreementReports must list at least one report");
   if (!nonEmptyStringArray(status?.clinicalScaleReviewerAgreementReports)) blockers.push("clinicalScaleReviewerAgreementReports must list at least one report");
   if (!nonEmptyStringArray(status?.clinicalScaleReviewPackageVerificationReports)) blockers.push("clinicalScaleReviewPackageVerificationReports must list at least one report");
+  if (!nonEmptySha256Array(status?.clinicalScaleAgreementSourceDatasetSha256s)) blockers.push("clinicalScaleAgreementSourceDatasetSha256s must list at least one source dataset hash");
+  if (!nonEmptySha256Array(status?.clinicalScaleReviewerAgreementSourceDatasetSha256s)) blockers.push("clinicalScaleReviewerAgreementSourceDatasetSha256s must list at least one source dataset hash");
+  if (!nonEmptySha256Array(status?.clinicalScaleReviewPackageVerificationSourceDatasetSha256s)) blockers.push("clinicalScaleReviewPackageVerificationSourceDatasetSha256s must list at least one source dataset hash");
   if (!nonEmptyStringArray(status?.thresholdCalibrationReports)) blockers.push("thresholdCalibrationReports must list at least one report");
   if (!nonEmptySha256Array(status?.thresholdCalibrationSourceDatasetSha256s)) blockers.push("thresholdCalibrationSourceDatasetSha256s must list at least one source dataset hash");
   return blockers;
@@ -166,6 +175,15 @@ function clinicalScaleAvailabilityEvidenceBlockers(status = DEFAULT_VALIDATION_S
   }
   if (!SHA256_HEX_RE.test(String(scaleConfig.sourceDatasetSha256 ?? ""))) {
     blockers.push(`${scaleKey}.sourceDatasetSha256 must be a SHA-256 hex string`);
+  }
+  if (!sha256ArrayIncludes(status?.clinicalScaleAgreementSourceDatasetSha256s, scaleConfig.sourceDatasetSha256)) {
+    blockers.push(`${scaleKey}.sourceDatasetSha256 must be listed in clinicalScaleAgreementSourceDatasetSha256s`);
+  }
+  if (!sha256ArrayIncludes(status?.clinicalScaleReviewerAgreementSourceDatasetSha256s, scaleConfig.sourceDatasetSha256)) {
+    blockers.push(`${scaleKey}.sourceDatasetSha256 must be listed in clinicalScaleReviewerAgreementSourceDatasetSha256s`);
+  }
+  if (!sha256ArrayIncludes(status?.clinicalScaleReviewPackageVerificationSourceDatasetSha256s, scaleConfig.sourceDatasetSha256)) {
+    blockers.push(`${scaleKey}.sourceDatasetSha256 must be listed in clinicalScaleReviewPackageVerificationSourceDatasetSha256s`);
   }
   if (!stringArrayIncludes(status?.clinicalScaleReviewPackageVerificationReports, scaleConfig.clinicalReviewPackageVerificationReport)) {
     blockers.push(`${scaleKey}.clinicalReviewPackageVerificationReport must reference a listed clinical review package verification report`);
