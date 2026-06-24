@@ -37,6 +37,18 @@ current clinical-scale estimator version, blinded sheet row counts, and the
 later readiness evidence can prove which dataset and blinded sheet the reviewer
 received. The package does not enable clinical-facing scores by itself.
 
+After labels are returned, verify that the sheet still matches the package
+manifest before merging:
+
+```bash
+npm run validation:verify-clinical-review-package -- validation-dataset.jsonl clinical-review-package review-package-verification.json
+```
+
+The verifier checks the source dataset hash, manifest schema, blinded-sheet row
+identity, hidden Mirror estimate values, unchanged estimate-provenance columns,
+and current 80% observed/Wilson release standard. Reviewer-entered target and
+metadata fields may change; audit-critical package fields must not.
+
 For ad hoc review, a blinded label sheet can also be generated directly:
 
 ```bash
@@ -143,22 +155,26 @@ evidence.
 3. Assign target labels from the blinded sheet and the review materials. Keep
    the review package manifest with the returned labels so the source dataset
    hash and package metadata remain available for audit.
-4. Merge the labels back into a reviewed JSONL dataset.
-5. Run:
+4. Verify the returned package against the original validation dataset before
+   merging labels.
+5. Merge the labels back into a reviewed JSONL dataset.
+6. Run:
 
 ```bash
+npm run validation:verify-clinical-review-package -- validation-dataset.jsonl clinical-review-package review-package-verification.json
+npm run validation:merge-labels -- validation-dataset.jsonl clinical-review-package/blinded-labels.csv reviewed-dataset.jsonl
 npm run validate:dataset -- reviewed-dataset.jsonl validation-report.json
 npm run validation:clinical-readiness -- validation-report.json clinical-readiness-report.json
 ```
 
-6. Inspect the clinical readiness report. The full all-primary status requires
+7. Inspect the clinical readiness report. The full all-primary status requires
    all primary scales to meet the configured observed agreement and Wilson
    lower-bound standard. Scale-specific availability recommendations may identify
    one primary scale that is evidence-eligible while another remains estimate-only.
    The agreement sample plan shows how many additional perfect eligible labels
    would be needed for a failing scale to clear the observed and Wilson gates;
    use it for planning only, not as replacement evidence.
-7. Only after human review of the dataset, label process, and readiness report
+8. Only after human review of the dataset, label process, and readiness report
    should `docs/validation-status.json` be updated.
 
 ## Minimum Standard
@@ -303,6 +319,10 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   observed and Wilson lower-bound reviewer agreement on every enabled primary
   scale, House-Brackmann reviewer case mix across all three severity bands, with
   no reviewer-sheet metadata blockers.
+- A clinical review package verification report showing the returned blinded
+  sheet still matched the original source dataset hash, row identities, hidden
+  estimate-value columns, unchanged estimate-provenance columns, and the current
+  80% observed/Wilson release standard before labels were merged.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable

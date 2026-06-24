@@ -9,10 +9,12 @@ import {
   DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD,
   HOUSE_BRACKMANN_SEVERITY_BANDS,
 } from "./validationEvaluation.js";
-import { LABEL_COLUMNS, createValidationLabelCsv, validationLabelRows } from "./validationLabels.js";
+import { LABEL_COLUMNS, createValidationLabelCsv, parseCsv, validationLabelRows } from "./validationLabels.js";
 
 const CLINICAL_REVIEW_PACKAGE_KIND = "mirror-clinical-scale-review-package";
 const CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION = 1;
+const CLINICAL_REVIEW_PACKAGE_VERIFICATION_KIND = "mirror-clinical-scale-review-package-verification";
+const CLINICAL_REVIEW_PACKAGE_VERIFICATION_SCHEMA_VERSION = 1;
 const BLINDED_LABEL_SHEET_FILE = "blinded-labels.csv";
 const REVIEWER_INSTRUCTIONS_FILE = "reviewer-instructions.md";
 const MANIFEST_FILE = "manifest.json";
@@ -38,6 +40,45 @@ const REQUIRED_REVIEW_METADATA_FIELDS = Object.freeze([
   "reviewerRole",
   "clinicianConfidence",
   "reviewedAt",
+]);
+
+const ESTIMATE_VALUE_COLUMNS = Object.freeze([
+  "estimatedHouseBrackmannGrade",
+  "estimatedHouseBrackmannNumericGrade",
+  "estimatedSunnybrookComposite",
+  "estimatedEfaceTotal",
+  "estimatedEfaceStatic",
+  "estimatedEfaceDynamic",
+  "estimatedEfaceSynkinesis",
+]);
+
+const FRAME_REVIEW_MUTABLE_COLUMNS = new Set([
+  "intendedMovement",
+  "affectedSide",
+  "quality",
+  "visibleMovementLevel",
+  "coactivationNotes",
+  "reviewerId",
+  "reviewerRole",
+  "reviewedAt",
+  "notes",
+]);
+
+const ASSESSMENT_REVIEW_MUTABLE_COLUMNS = new Set([
+  "validationCaseId",
+  "houseBrackmannGrade",
+  "sunnybrookComposite",
+  "efaceTotal",
+  "efaceStatic",
+  "efaceDynamic",
+  "efaceSynkinesis",
+  "clinicianConfidence",
+  "reviewBlinded",
+  "labelSource",
+  "reviewerId",
+  "reviewerRole",
+  "reviewedAt",
+  "notes",
 ]);
 
 function recordArray(value) {
@@ -90,6 +131,57 @@ function defaultPackageId(createdAt) {
 
 function assertCondition(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function addError(errors, condition, message) {
+  if (!condition) errors.push(message);
+}
+
+function compactValue(value) {
+  return value == null ? "" : String(value);
+}
+
+function rowKey(row = {}) {
+  const rowType = compactValue(row.rowType).trim();
+  if (rowType === "assessmentClinicalScale") return `${rowType}:${compactValue(row.assessmentId).trim()}`;
+  if (rowType === "frameSample") return `${rowType}:${compactValue(row.sampleId).trim()}`;
+  return `${rowType}:`;
+}
+
+function mutableColumnsForRowType(rowType) {
+  if (rowType === "assessmentClinicalScale") return ASSESSMENT_REVIEW_MUTABLE_COLUMNS;
+  if (rowType === "frameSample") return FRAME_REVIEW_MUTABLE_COLUMNS;
+  return new Set();
+}
+
+function csvObjects(csvText = "", errors = []) {
+  const rows = parseCsv(csvText).filter((row) => row.some((cell) => compactValue(cell).trim()));
+  if (!rows.length) {
+    errors.push("label sheet CSV is empty");
+    return [];
+  }
+  const header = rows[0];
+  addError(errors, header.length === LABEL_COLUMNS.length, `label sheet header must have ${LABEL_COLUMNS.length} columns`);
+  for (let index = 0; index < LABEL_COLUMNS.length; index += 1) {
+    addError(errors, header[index] === LABEL_COLUMNS[index], `label sheet column ${index + 1} must be ${LABEL_COLUMNS[index]}`);
+  }
+  const indexByHeader = Object.fromEntries(header.map((column, index) => [column, index]));
+  return rows.slice(1).map((row) => Object.fromEntries(LABEL_COLUMNS.map((column) => [column, row[indexByHeader[column]] ?? ""])));
+}
+
+function rowsByKey(rows = [], errors = [], label = "rows") {
+  const byKey = new Map();
+  for (const row of rows) {
+    const key = rowKey(row);
+    addError(errors, !key.endsWith(":"), `${label} contain a row without a stable id`);
+    if (byKey.has(key)) errors.push(`${label} contain duplicate ${key}`);
+    byKey.set(key, row);
+  }
+  return byKey;
+}
+
+function countRowsByType(rows = [], rowType) {
+  return rows.filter((row) => row.rowType === rowType).length;
 }
 
 function buildClinicalReviewManifest(records = [], options = {}) {
@@ -222,13 +314,117 @@ function buildClinicalReviewPackage(records = [], options = {}) {
   };
 }
 
+function verifyClinicalReviewPackage(records = [], manifest = {}, labelSheetCsv = "", options = {}) {
+  const errors = [];
+  const sourceDatasetSha256 = compactValue(options.sourceDatasetSha256).trim();
+  let expectedManifest = null;
+  if (/^[a-f0-9]{64}$/i.test(sourceDatasetSha256)) {
+    try {
+      expectedManifest = buildClinicalReviewManifest(records, {
+        createdAt: manifest?.createdAt ?? options.generatedAt ?? new Date().toISOString(),
+        packageId: manifest?.packageId ?? "clinical-review-package",
+        sourceDatasetPath: manifest?.sourceDataset?.path ?? null,
+        sourceDatasetSha256,
+      });
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
+  const expectedRows = validationLabelRows(records, { includeEstimateColumns: false });
+  const actualRows = csvObjects(labelSheetCsv, errors);
+  const expectedByKey = rowsByKey(expectedRows, errors, "expected label sheet rows");
+  const actualByKey = rowsByKey(actualRows, errors, "actual label sheet rows");
+
+  addError(errors, manifest?.kind === CLINICAL_REVIEW_PACKAGE_KIND, `manifest kind must be ${CLINICAL_REVIEW_PACKAGE_KIND}`);
+  addError(errors, manifest?.schemaVersion === CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION, `manifest schemaVersion must be ${CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION}`);
+  addError(errors, /^[a-f0-9]{64}$/i.test(sourceDatasetSha256), "sourceDatasetSha256 must be a SHA-256 hex string");
+  addError(errors, manifest?.sourceDataset?.sha256 === sourceDatasetSha256, "manifest sourceDataset.sha256 must match the validation dataset SHA-256");
+  addError(errors, manifest?.labelSheet?.blinded === true, "manifest labelSheet.blinded must be true");
+  addError(errors, manifest?.labelSheet?.includeEstimateValueColumns === false, "manifest labelSheet.includeEstimateValueColumns must be false");
+  addError(errors, manifest?.labelSheet?.sourceLabelSheetMode === "blinded", "manifest labelSheet.sourceLabelSheetMode must be blinded");
+  addError(errors, manifest?.controls?.reviewerMustNotSeeMirrorEstimateValuesBeforePrimaryTargetAssignment === true, "manifest must require blinded primary target assignment");
+  addError(errors, manifest?.controls?.sourceDatasetHashRequiredForReleaseAudit === true, "manifest must require source dataset hash audit");
+
+  if (expectedManifest) {
+    addError(errors, manifest?.sourceDataset?.kind === expectedManifest.sourceDataset.kind, "manifest sourceDataset.kind must match the dataset");
+    addError(errors, manifest?.sourceDataset?.appId === expectedManifest.sourceDataset.appId, "manifest sourceDataset.appId must match the dataset");
+    addError(errors, manifest?.sourceDataset?.version === expectedManifest.sourceDataset.version, "manifest sourceDataset.version must match the dataset");
+    addError(errors, manifest?.sourceDataset?.exportedAt === expectedManifest.sourceDataset.exportedAt, "manifest sourceDataset.exportedAt must match the dataset");
+    addError(errors, manifest?.labelSheet?.labelSchemaVersion === expectedManifest.labelSheet.labelSchemaVersion, "manifest label schema version must match the dataset");
+    addError(errors, manifest?.labelSheet?.rowCount === expectedManifest.labelSheet.rowCount, "manifest label row count must match the blinded sheet");
+    addError(errors, manifest?.labelSheet?.frameSampleRows === expectedManifest.labelSheet.frameSampleRows, "manifest frame sample row count must match the dataset");
+    addError(errors, manifest?.labelSheet?.assessmentClinicalScaleRows === expectedManifest.labelSheet.assessmentClinicalScaleRows, "manifest clinical-scale row count must match the dataset");
+    addError(errors, manifest?.labelSheet?.columnCount === expectedManifest.labelSheet.columnCount, "manifest label column count must match the current schema");
+    addError(errors, manifest?.clinicalScaleEstimator?.version === expectedManifest.clinicalScaleEstimator.version, "manifest estimator version must match the current clinical-scale estimator");
+    addError(errors, manifest?.clinicalScaleEstimator?.currentVersionComparableRows === expectedManifest.clinicalScaleEstimator.currentVersionComparableRows, "manifest current-version comparable row count must match the dataset");
+    addError(errors, manifest?.releaseReadinessStandard?.minAgreementRate === expectedManifest.releaseReadinessStandard.minAgreementRate, "manifest release standard must preserve the 80% observed agreement floor");
+    addError(errors, manifest?.releaseReadinessStandard?.minAgreementWilsonLowerBound === expectedManifest.releaseReadinessStandard.minAgreementWilsonLowerBound, "manifest release standard must preserve the 80% Wilson lower-bound floor");
+  }
+
+  addError(errors, actualRows.length === expectedRows.length, "label sheet row count must match the package manifest");
+  addError(errors, countRowsByType(actualRows, "frameSample") === frameSampleRecords(records).length, "label sheet frame sample row count must match the dataset");
+  addError(errors, countRowsByType(actualRows, "assessmentClinicalScale") === assessmentClinicalScaleRecords(records).length, "label sheet clinical-scale row count must match the dataset");
+
+  for (const key of expectedByKey.keys()) addError(errors, actualByKey.has(key), `label sheet is missing ${key}`);
+  for (const key of actualByKey.keys()) addError(errors, expectedByKey.has(key), `label sheet has unexpected ${key}`);
+
+  for (const [key, expectedRow] of expectedByKey.entries()) {
+    const actualRow = actualByKey.get(key);
+    if (!actualRow) continue;
+    const mutableColumns = mutableColumnsForRowType(expectedRow.rowType);
+    for (const column of LABEL_COLUMNS) {
+      if (mutableColumns.has(column)) continue;
+      addError(
+        errors,
+        compactValue(actualRow[column]) === compactValue(expectedRow[column]),
+        `${key} read-only column ${column} must match the blinded package`,
+      );
+    }
+    if (expectedRow.rowType === "assessmentClinicalScale") {
+      addError(errors, actualRow.sourceLabelSheetMode === "blinded", `${key} sourceLabelSheetMode must remain blinded`);
+      for (const column of ESTIMATE_VALUE_COLUMNS) {
+        addError(errors, compactValue(actualRow[column]) === "", `${key} ${column} must remain hidden in blinded review`);
+      }
+    }
+  }
+
+  const status = errors.length === 0 ? "passed" : "failed";
+  return {
+    kind: CLINICAL_REVIEW_PACKAGE_VERIFICATION_KIND,
+    schemaVersion: CLINICAL_REVIEW_PACKAGE_VERIFICATION_SCHEMA_VERSION,
+    generatedAt: options.generatedAt ?? new Date().toISOString(),
+    status,
+    packageId: manifest?.packageId ?? null,
+    sourceDatasetSha256,
+    summary: {
+      labelRows: actualRows.length,
+      frameSampleRows: countRowsByType(actualRows, "frameSample"),
+      assessmentClinicalScaleRows: countRowsByType(actualRows, "assessmentClinicalScale"),
+      expectedLabelRows: expectedRows.length,
+      expectedFrameSampleRows: frameSampleRecords(records).length,
+      expectedAssessmentClinicalScaleRows: assessmentClinicalScaleRecords(records).length,
+    },
+    controls: {
+      sourceHashMatches: manifest?.sourceDataset?.sha256 === sourceDatasetSha256,
+      blindedManifest: manifest?.labelSheet?.blinded === true && manifest?.labelSheet?.includeEstimateValueColumns === false,
+      rowIdentityMatches: errors.every((error) => !/missing|unexpected|duplicate|row count/.test(error)),
+      estimateValuesHidden: errors.every((error) => !ESTIMATE_VALUE_COLUMNS.some((column) => error.includes(column))),
+      readOnlyColumnsMatch: errors.every((error) => !error.includes("read-only column")),
+    },
+    errors,
+  };
+}
+
 export {
   BLINDED_LABEL_SHEET_FILE,
   CLINICAL_REVIEW_PACKAGE_KIND,
   CLINICAL_REVIEW_PACKAGE_SCHEMA_VERSION,
+  CLINICAL_REVIEW_PACKAGE_VERIFICATION_KIND,
+  CLINICAL_REVIEW_PACKAGE_VERIFICATION_SCHEMA_VERSION,
   MANIFEST_FILE,
   REVIEWER_INSTRUCTIONS_FILE,
   buildClinicalReviewManifest,
   buildClinicalReviewPackage,
   createReviewerInstructionsMarkdown,
+  verifyClinicalReviewPackage,
 };

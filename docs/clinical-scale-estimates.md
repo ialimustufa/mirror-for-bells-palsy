@@ -119,7 +119,12 @@ primary review workflow uses a blinded label sheet as described in
 `docs/clinical-scale-review-protocol.md`. Use
 `npm run validation:clinical-review-package -- validation-dataset.jsonl clinical-review-package`
 to create an auditable reviewer handoff with a source dataset hash,
-`manifest.json`, `blinded-labels.csv`, and `reviewer-instructions.md`. The
+`manifest.json`, `blinded-labels.csv`, and `reviewer-instructions.md`. After
+labels are returned, run
+`npm run validation:verify-clinical-review-package -- validation-dataset.jsonl clinical-review-package review-package-verification.json`
+before merging labels so the source hash, row identities, hidden estimate-value
+columns, and read-only estimate provenance are checked against the blinded
+package. The
 normal label sheet can include
 Mirror's current estimates in read-only reference columns for audit, but the
 `--blinded` export hides those estimates for target assignment. The sheet has

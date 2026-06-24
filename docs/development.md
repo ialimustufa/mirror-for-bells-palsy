@@ -117,6 +117,11 @@ checks for:
   current clinical-scale estimator version, blinded row counts, and the 80%
   observed/Wilson release standard so future reviewer labels can be traced to
   the exact package that was distributed.
+- `npm run validation:verify-clinical-review-package --
+  <validation-dataset.jsonl> <output-dir> [report.json]` verifies a returned
+  package before merge by checking the source dataset hash, manifest schema,
+  blinded row identities, hidden estimate-value columns, read-only
+  estimate-provenance columns, and current 80% observed/Wilson release standard.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version, pseudonymous `validationCaseId`, pseudonymous `reviewerId`, and
   estimate-evidence provenance for each reviewer sheet; stale, missing,

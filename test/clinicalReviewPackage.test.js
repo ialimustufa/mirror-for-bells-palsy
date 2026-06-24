@@ -8,6 +8,7 @@ import {
   MANIFEST_FILE,
   REVIEWER_INSTRUCTIONS_FILE,
   buildClinicalReviewPackage,
+  verifyClinicalReviewPackage,
 } from "../src/ml/clinicalReviewPackage.js";
 import { parseCsv } from "../src/ml/validationLabels.js";
 
@@ -99,6 +100,33 @@ function sampleRecords() {
 
 const SAMPLE_DATASET_SHA256 = "a".repeat(64);
 
+function csvEscape(value) {
+  const text = value == null ? "" : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+}
+
+function writeCsvRows(rows) {
+  return `${rows.map((row) => row.map(csvEscape).join(",")).join("\n")}\n`;
+}
+
+function reviewedPackageCsv(reviewPackage) {
+  const rows = parseCsv(reviewPackage.labelSheetCsv);
+  const header = rows[0];
+  const clinicalRow = rows.find((row) => row[0] === "assessmentClinicalScale");
+  const index = Object.fromEntries(header.map((column, columnIndex) => [column, columnIndex]));
+  clinicalRow[index.validationCaseId] = "case-001";
+  clinicalRow[index.houseBrackmannGrade] = "II";
+  clinicalRow[index.sunnybrookComposite] = "82";
+  clinicalRow[index.efaceTotal] = "79";
+  clinicalRow[index.clinicianConfidence] = "high";
+  clinicalRow[index.reviewBlinded] = "yes";
+  clinicalRow[index.labelSource] = "clinician-assigned";
+  clinicalRow[index.reviewerId] = "reviewer-001";
+  clinicalRow[index.reviewerRole] = "clinician";
+  clinicalRow[index.reviewedAt] = "2026-06-24T11:00:00.000Z";
+  return writeCsvRows(rows);
+}
+
 test("clinical review package creates a blinded sheet and audit manifest", () => {
   const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
     createdAt: "2026-06-24T10:00:00.000Z",
@@ -160,4 +188,87 @@ test("clinical review package requires a source dataset SHA-256 hash", () => {
     () => buildClinicalReviewPackage(sampleRecords(), { createdAt: "2026-06-24T10:00:00.000Z" }),
     /requires sourceDatasetSha256/,
   );
+});
+
+test("clinical review package verification accepts reviewed mutable fields", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const report = verifyClinicalReviewPackage(sampleRecords(), reviewPackage.manifest, reviewedPackageCsv(reviewPackage), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+
+  assert.equal(report.status, "passed");
+  assert.deepEqual(report.errors, []);
+  assert.equal(report.controls.sourceHashMatches, true);
+  assert.equal(report.controls.estimateValuesHidden, true);
+  assert.equal(report.controls.readOnlyColumnsMatch, true);
+  assert.equal(report.summary.assessmentClinicalScaleRows, 1);
+});
+
+test("clinical review package verification rejects source hash mismatches", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const report = verifyClinicalReviewPackage(sampleRecords(), reviewPackage.manifest, reviewPackage.labelSheetCsv, {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: "b".repeat(64),
+  });
+
+  assert.equal(report.status, "failed");
+  assert.match(report.errors.join("\n"), /sourceDataset\.sha256/);
+  assert.equal(report.controls.sourceHashMatches, false);
+});
+
+test("clinical review package verification rejects unblinded estimate values", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const rows = parseCsv(reviewPackage.labelSheetCsv);
+  const header = rows[0];
+  const clinicalRow = rows.find((row) => row[0] === "assessmentClinicalScale");
+  const index = Object.fromEntries(header.map((column, columnIndex) => [column, columnIndex]));
+  clinicalRow[index.estimatedSunnybrookComposite] = "82";
+
+  const report = verifyClinicalReviewPackage(sampleRecords(), reviewPackage.manifest, writeCsvRows(rows), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+
+  assert.equal(report.status, "failed");
+  assert.match(report.errors.join("\n"), /estimatedSunnybrookComposite must remain hidden/);
+  assert.equal(report.controls.estimateValuesHidden, false);
+});
+
+test("clinical review package verification rejects changed read-only provenance", () => {
+  const reviewPackage = buildClinicalReviewPackage(sampleRecords(), {
+    createdAt: "2026-06-24T10:00:00.000Z",
+    packageId: "review-pack-001",
+    sourceDatasetPath: "validation-dataset.jsonl",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+  const rows = parseCsv(reviewPackage.labelSheetCsv);
+  const header = rows[0];
+  const clinicalRow = rows.find((row) => row[0] === "assessmentClinicalScale");
+  const index = Object.fromEntries(header.map((column, columnIndex) => [column, columnIndex]));
+  clinicalRow[index.clinicalScaleEstimateVersion] = String(CLINICAL_SCALE_ESTIMATE_VERSION - 1);
+
+  const report = verifyClinicalReviewPackage(sampleRecords(), reviewPackage.manifest, writeCsvRows(rows), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SAMPLE_DATASET_SHA256,
+  });
+
+  assert.equal(report.status, "failed");
+  assert.match(report.errors.join("\n"), /read-only column clinicalScaleEstimateVersion/);
+  assert.equal(report.controls.readOnlyColumnsMatch, false);
 });
