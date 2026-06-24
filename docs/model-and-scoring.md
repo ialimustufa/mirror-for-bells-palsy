@@ -1211,7 +1211,10 @@ observed agreement, Wilson lower bound, reviewer paired-label count, reviewer
 distinct-case count, reviewer observed agreement, and reviewer Wilson lower
 bound. `npm run validation:status` cross-checks those per-scale summaries
 against the parsed report artifacts, so a status file cannot promote a scale by
-entering unsupported counts, rates, Wilson lower bounds, or report paths. It also audits the
+entering unsupported counts, rates, Wilson lower bounds, or report paths. `npm
+run validation:status-evidence` can generate a draft of that status block from
+the reviewed artifacts, but the release decision remains a human-reviewed status
+file update. It also audits the
 machine-readable minimum standard before using clinical-facing wording: the
 30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
 Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence

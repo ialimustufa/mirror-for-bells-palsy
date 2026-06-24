@@ -18,6 +18,7 @@ npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-repo
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
 npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
 npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md
+npm run validation:status-evidence -- docs/validation-status.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md docs/validation/clinical-scale-reviewer-agreement-YYYY-MM-DD.json
 npm run validation:status
 npm run release:check # lint + tests + build + release doc checks
 ```
@@ -90,6 +91,11 @@ checks for:
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
+- `npm run validation:status-evidence` can draft the per-scale
+  `clinicalScaleAvailability` evidence block from a clinical agreement report
+  and reviewer-agreement report. A reviewer still has to choose which eligible
+  scales to enable and copy the block into `docs/validation-status.json`; the
+  helper does not edit the status file or bypass the clinical release gate.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version, pseudonymous `validationCaseId`, pseudonymous `reviewerId`, and
   estimate-evidence provenance for each reviewer sheet; stale, missing,

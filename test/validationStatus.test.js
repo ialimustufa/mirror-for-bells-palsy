@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { validateStatus, validateStatusArtifacts } from "../scripts/validation-status-check.mjs";
+import {
+  buildClinicalScaleAvailabilityEvidence,
+  validateClinicalScaleAgreementReportText,
+  validateClinicalScaleReviewerAgreementReportText,
+  validateStatus,
+  validateStatusArtifacts,
+} from "../scripts/validation-status-check.mjs";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
@@ -588,6 +594,42 @@ test("validation status artifacts accept scale-specific clinical availability fo
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.agreementWilsonLowerBound, 0.488);
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.status, "not-ready");
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].byScale.sunnybrookComposite.meetsMinimumStandard, false);
+});
+
+test("validation status evidence helper derives per-scale status summaries from reports", () => {
+  const clinicalAgreementReport = validateClinicalScaleAgreementReportText(passingClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
+  const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(passingClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
+  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport);
+
+  assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalAgreementReport, CLINICAL_AGREEMENT_REPORT_PATH);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerAgreementReport, REVIEWER_AGREEMENT_REPORT_PATH);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewedLabelCount, 30);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.distinctValidationCaseCount, 30);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.observedAgreementRate, 1);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.agreementWilsonLowerBound, 0.887);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerPairedLabelCount, 30);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerDistinctValidationCaseCount, 30);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerObservedAgreementRate, 1);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerAgreementWilsonLowerBound, 0.887);
+  assert.equal(clinicalScaleAvailability.sunnybrook.clinicalFacingScoresAllowed, true);
+  assert.equal(clinicalScaleAvailability.eface.clinicalFacingScoresAllowed, true);
+});
+
+test("validation status evidence helper keeps weak scales disabled unless explicitly requested", () => {
+  const clinicalAgreementReport = validateClinicalScaleAgreementReportText(houseBrackmannOnlyClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
+  const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(houseBrackmannOnlyClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
+  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport);
+
+  assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
+  assert.equal(clinicalScaleAvailability.sunnybrook.clinicalFacingScoresAllowed, false);
+  assert.equal(clinicalScaleAvailability.eface.clinicalFacingScoresAllowed, false);
+  assert.throws(
+    () => buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport, {
+      enabledScaleKeys: ["sunnybrook"],
+    }),
+    /clinical agreement report cannot support every requested enabled primary scale|clinical reviewer agreement report cannot support every requested enabled primary scale/,
+  );
 });
 
 test("validation status artifacts reject per-scale evidence summaries that do not match their reports", async () => {

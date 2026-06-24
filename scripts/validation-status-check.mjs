@@ -594,6 +594,64 @@ function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementRepo
   }
 }
 
+function assertRecognizedScaleKeys(scaleKeys, field = "enabledScaleKeys") {
+  for (const scaleKey of scaleKeys) {
+    assertCondition(CLINICAL_SCALE_AVAILABILITY_KEYS.includes(scaleKey), `${field} contains unrecognized primary clinical scale: ${scaleKey}`);
+  }
+}
+
+function clinicalScaleEvidenceFromReports(clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey) {
+  const clinicalRow = clinicalAgreementReport.primaryScaleAgreementRows?.[scaleKey];
+  const reviewerKey = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.reviewerKey;
+  const reviewerRow = reviewerKey ? clinicalReviewerAgreementReport.byScale?.[reviewerKey] : null;
+  assertCondition(clinicalRow, `${scaleKey} clinical agreement row is missing`);
+  assertCondition(reviewerRow, `${scaleKey} reviewer agreement row is missing`);
+  return {
+    clinicalFacingScoresAllowed: true,
+    clinicalAgreementReport: clinicalAgreementReport.path,
+    reviewerAgreementReport: clinicalReviewerAgreementReport.path,
+    clinicalScaleEstimateVersion: clinicalAgreementReport.clinicalScaleEstimateVersion,
+    reviewedLabelCount: clinicalRow.labeledCount,
+    distinctValidationCaseCount: clinicalAgreementReport.distinctClinicalCaseCount,
+    observedAgreementRate: clinicalRow.agreementRate,
+    agreementWilsonLowerBound: clinicalRow.agreementWilsonLowerBound,
+    reviewerPairedLabelCount: reviewerRow.pairedCount,
+    reviewerDistinctValidationCaseCount: clinicalReviewerAgreementReport.distinctValidationCaseCount,
+    reviewerObservedAgreementRate: reviewerRow.withinToleranceRate,
+    reviewerAgreementWilsonLowerBound: reviewerRow.withinToleranceConfidenceInterval?.lower,
+  };
+}
+
+function clinicalScaleMeetsReportEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey) {
+  return clinicalAgreementReportMeetsScaleSet(clinicalAgreementReport, status, [scaleKey])
+    && reviewerAgreementReportMeetsScaleSet(clinicalReviewerAgreementReport, status, [scaleKey]);
+}
+
+function buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options = {}) {
+  assertClinicalScaleMinimumStandard(status?.clinicalScaleMinimumStandard);
+  const requestedEnabledScaleKeys = options.enabledScaleKeys;
+  const enabledScaleKeys = requestedEnabledScaleKeys == null
+    ? CLINICAL_SCALE_AVAILABILITY_KEYS.filter((scaleKey) => clinicalScaleMeetsReportEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey))
+    : requestedEnabledScaleKeys;
+  assertCondition(Array.isArray(enabledScaleKeys), "enabledScaleKeys must be an array when provided");
+  assertRecognizedScaleKeys(enabledScaleKeys);
+  assertCondition(new Set(enabledScaleKeys).size === enabledScaleKeys.length, "enabledScaleKeys must not contain duplicates");
+  assertCondition(
+    clinicalAgreementReportMeetsScaleSet(clinicalAgreementReport, status, enabledScaleKeys),
+    "clinical agreement report cannot support every requested enabled primary scale",
+  );
+  assertCondition(
+    reviewerAgreementReportMeetsScaleSet(clinicalReviewerAgreementReport, status, enabledScaleKeys),
+    "clinical reviewer agreement report cannot support every requested enabled primary scale",
+  );
+  return Object.fromEntries(CLINICAL_SCALE_AVAILABILITY_KEYS.map((scaleKey) => [
+    scaleKey,
+    enabledScaleKeys.includes(scaleKey)
+      ? clinicalScaleEvidenceFromReports(clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey)
+      : { clinicalFacingScoresAllowed: false },
+  ]));
+}
+
 async function readArtifactText(path, options = {}) {
   if (options.readArtifactText) return options.readArtifactText(path);
   try {
@@ -721,6 +779,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 }
 
 export {
+  buildClinicalScaleAvailabilityEvidence,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
   validateStatus,

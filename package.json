@@ -16,6 +16,7 @@
     "validation:model-readiness": "node --import ./scripts/register-extensionless-loader.mjs scripts/evaluate-model-readiness.mjs",
     "validation:clinical-readiness": "node --import ./scripts/register-extensionless-loader.mjs scripts/evaluate-clinical-scale-readiness.mjs",
     "validation:clinical-report": "node --import ./scripts/register-extensionless-loader.mjs scripts/write-clinical-scale-agreement-report.mjs",
+    "validation:status-evidence": "node scripts/write-clinical-scale-status-evidence.mjs",
     "validation:status": "node scripts/validation-status-check.mjs",
     "release:check": "node scripts/release-check.mjs",
     "build": "vite build",

@@ -305,6 +305,9 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   the current estimator version, and repeats the report-backed label counts,
   distinct-case counts, observed agreement rates, and Wilson lower bounds for
   both clinician-label agreement and reviewer agreement.
+  `npm run validation:status-evidence` can draft this block from the reviewed
+  clinical agreement and reviewer-agreement artifacts, but a reviewer must still
+  decide which eligible scales to enable before editing the status file.
 
 Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.
