@@ -195,9 +195,10 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /usable-movements-only calculation flag/i, artifactPath, "the usable-movements-only calculation control");
   assertTextMatches(text, /House-Brackmann estimates require the gentle eye-closure input/i, artifactPath, "the House-Brackmann input control");
   assertTextMatches(text, /Sunnybrook\/eFACE input-completeness provenance/i, artifactPath, "the Sunnybrook/eFACE input provenance control");
+  assertTextMatches(text, /Sunnybrook\/eFACE primary comparisons require complete scale-specific movement input/i, artifactPath, "the complete Sunnybrook/eFACE input comparison control");
   assertTextMatches(text, /complete resting-metric keys/i, artifactPath, "the complete resting-metric provenance control");
   assertTextMatches(text, /complete-resting-metrics calculation flag/i, artifactPath, "the complete-resting-metrics calculation control");
-  assertTextMatches(text, /missing or invalid estimates are reported in that scale'?s denominator/i, artifactPath, "the scale-specific missing-estimate denominator control");
+  assertTextMatches(text, /missing.*invalid estimates are reported in that scale'?s denominator/i, artifactPath, "the scale-specific missing-estimate denominator control");
   assertTextMatches(text, /valid in-range target for that specific primary scale/i, artifactPath, "the scale-specific primary target validity control");
   assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
   assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role/i, artifactPath, "the explicit reviewer-role control");
@@ -316,6 +317,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     const scale = report.byScale?.[scaleKey];
     assertCondition(scale && typeof scale === "object", `${artifactPath} must include ${scaleKey} reviewer agreement row`);
     assertNonNegativeInteger(scale.pairedCount, `${artifactPath}.byScale.${scaleKey}.pairedCount`);
+    assertNonNegativeInteger(scale.incompleteEstimateInputCount, `${artifactPath}.byScale.${scaleKey}.incompleteEstimateInputCount`);
     assertNonNegativeInteger(scale.withinToleranceCount, `${artifactPath}.byScale.${scaleKey}.withinToleranceCount`);
     assertFiniteNumber(scale.withinToleranceRate, `${artifactPath}.byScale.${scaleKey}.withinToleranceRate`);
     assertCondition(scale.withinToleranceConfidenceInterval?.method === "wilson-score", `${artifactPath}.byScale.${scaleKey}.withinToleranceConfidenceInterval.method must be wilson-score`);
@@ -408,6 +410,7 @@ function reviewerAgreementScaleMeetsMinimum(report, status, scaleKey) {
   return Boolean(
     scale
       && (scale.pairedCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (scale.incompleteEstimateInputCount ?? 0) === 0
       && (scale.withinToleranceRate ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementRate
       && (scale.withinToleranceConfidenceInterval?.lower ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
       && scale.meetsMinimumStandard !== false

@@ -558,6 +558,42 @@ test("clinical-scale reviewer agreement blocks mismatched omitted movement prove
   assert.equal(report.adjudicationRows[0].reviewerBEstimateOmittedMovementExerciseIds, "eyebrow-raise");
 });
 
+test("clinical-scale reviewer agreement skips incomplete Sunnybrook and eFACE estimate inputs by scale", () => {
+  const partialEstimate = {
+    assessmentId: "assessment-1:clinical-scale",
+    estimateEvidenceTier: "minimum-standard-assessment",
+    estimateUsableMovementCoverageRatio: 0.8,
+    estimateUsableMovementCount: 4,
+    estimateRequiredMovementCount: 5,
+    estimateUsedMovementExerciseIds: "eyebrow-raise|eye-close|open-smile|nose-wrinkle",
+    estimateOmittedMovementExerciseIds: "pucker",
+    houseBrackmannGrade: "III",
+    sunnybrookComposite: 76,
+    efaceTotal: 73,
+  };
+  const report = compareClinicalScaleReviewerLabels(
+    reviewerCsv([partialEstimate]),
+    reviewerCsv([partialEstimate]),
+    {
+      generatedAt: "2026-06-24T12:00:00.000Z",
+      minPairedLabels: 1,
+      minAgreementWilsonLowerBound: 0,
+    },
+  );
+
+  assert.equal(report.summary.eligibleReviewerPairCount, 1);
+  assert.equal(report.summary.excludedReviewerPairCount, 0);
+  assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 1);
+  assert.equal(report.byScale.houseBrackmannGrade.meetsMinimumStandard, true);
+  assert.equal(report.byScale.sunnybrookComposite.pairedCount, 0);
+  assert.equal(report.byScale.sunnybrookComposite.incompleteEstimateInputCount, 1);
+  assert.equal(report.byScale.efaceTotal.pairedCount, 0);
+  assert.equal(report.byScale.efaceTotal.incompleteEstimateInputCount, 1);
+  assert.equal(report.summary.readyPrimaryScaleCount, 1);
+  assert.match(report.blockingReasons.join("\n"), /sunnybrookComposite:.*incomplete scale-specific estimate input/);
+  assert.match(report.blockingReasons.join("\n"), /efaceTotal:.*incomplete scale-specific estimate input/);
+});
+
 test("clinical-scale reviewer agreement blocks missing House-Brackmann input provenance", () => {
   const reviewerA = reviewerCsv([
     {

@@ -57,8 +57,12 @@ omits the House-Brackmann estimate when gentle eye closure is the omitted
 movement, rather than treating a missing eye-closure input as severe eye
 closure. Assessment panels and printable reports show a scale-specific
 unavailable note when this happens, while still showing any eligible Sunnybrook
-and eFACE-style estimates from the same minimum-standard assessment. Validation
-labels generated from older v1, v2, v3, or v4 estimates are
+and eFACE-style estimates from the same minimum-standard assessment. Clinical
+release validation is stricter than display: Sunnybrook and eFACE primary-scale
+agreement rows require complete scale-specific movement input, so normalized 4/5
+Sunnybrook/eFACE estimates are counted as missing estimates for those scale
+denominators instead of comparable agreement. Validation labels generated from
+older v1, v2, v3, or v4 estimates are
 stale and do not count toward the release agreement gate.
 
 ## Implemented Estimates
@@ -148,9 +152,11 @@ House-Brackmann agreement treats an estimate as missing unless these provenance
 fields or the overall used-movement provenance show that gentle eye closure was
 used. Sunnybrook and eFACE rows preserve their own used/omitted movement lists
 so a 4/5 normalized estimate is auditable without inferring scale inputs from
-unrelated columns. Assessment panels and printable reports show scale-specific
-input notes for available Sunnybrook/eFACE estimates when a minimum-standard
-assessment omits one movement.
+unrelated columns. For release agreement, those incomplete Sunnybrook/eFACE
+primary estimates are still reported in the scale denominator, but as missing
+estimates rather than comparable agreement. Assessment panels and printable
+reports show scale-specific input notes for available Sunnybrook/eFACE estimates
+when a minimum-standard assessment omits one movement.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -180,7 +186,11 @@ default minimum standard is:
   Sunnybrook/eFACE input-completeness provenance and
   required/available/missing resting metric keys proving all required rest
   metrics were available, with
-  `estimateCalculationUsesCompleteRestingMetrics: true`. Missing or invalid
+  `estimateCalculationUsesCompleteRestingMetrics: true`. Sunnybrook and eFACE
+  primary-scale comparisons require that provenance to show complete
+  scale-specific movement input; normalized 4/5 estimates remain displayable
+  Mirror estimates but count as missing estimates for those release denominators.
+  Missing or invalid
   estimates are reported as missing estimates in that scale's denominator rather
   than excluding other valid scale labels on the row.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,

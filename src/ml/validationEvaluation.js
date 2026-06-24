@@ -612,13 +612,25 @@ function clinicalScaleEstimate(record = {}) {
   const eface = scales.eface ?? {};
   const metadata = clinicalScaleEstimateMetadata(record);
   const houseBrackmannValue = parseHouseBrackmannGrade(houseBrackmann.numericGrade ?? houseBrackmann.grade);
+  const sunnybrookHasCompleteInput = movementScaleEstimateHasCompleteInput(
+    metadata,
+    "sunnybrookInputComplete",
+    "sunnybrookUsedExerciseIds",
+    "sunnybrookOmittedExerciseIds",
+  );
+  const efaceHasCompleteInput = movementScaleEstimateHasCompleteInput(
+    metadata,
+    "efaceInputComplete",
+    "efaceUsedExerciseIds",
+    "efaceOmittedExerciseIds",
+  );
   return {
     houseBrackmann: houseBrackmannValue != null && houseBrackmannEstimateHasRequiredInput(metadata) ? houseBrackmannValue : null,
-    sunnybrookComposite: boundedNumericLabel(sunnybrook.compositeScore),
-    efaceTotal: boundedNumericLabel(eface.totalScore),
+    sunnybrookComposite: sunnybrookHasCompleteInput ? boundedNumericLabel(sunnybrook.compositeScore) : null,
+    efaceTotal: efaceHasCompleteInput ? boundedNumericLabel(eface.totalScore) : null,
     efaceStatic: boundedNumericLabel(eface.staticScore),
-    efaceDynamic: boundedNumericLabel(eface.dynamicScore),
-    efaceSynkinesis: boundedNumericLabel(eface.synkinesisScore),
+    efaceDynamic: efaceHasCompleteInput ? boundedNumericLabel(eface.dynamicScore) : null,
+    efaceSynkinesis: efaceHasCompleteInput ? boundedNumericLabel(eface.synkinesisScore) : null,
   };
 }
 
@@ -641,6 +653,14 @@ function houseBrackmannEstimateHasRequiredInput(metadata = {}) {
   const noneRequiredMissing = missingIds.every((exerciseId) => !requiredSet.has(exerciseId));
   if (inputComplete != null) return inputComplete === true && allRequiredUsed && noneRequiredMissing;
   return allRequiredUsed && noneRequiredMissing;
+}
+
+function movementScaleEstimateHasCompleteInput(metadata = {}, inputKey, usedKey, omittedKey) {
+  const inputComplete = metadata[inputKey];
+  const used = metadata[usedKey]?.values ?? [];
+  const omitted = metadata[omittedKey]?.values ?? [];
+  if (!inputComplete?.provided || inputComplete.value !== true) return false;
+  return sameExerciseIdSet(used, STANDARD_SCALE_MOVEMENT_IDS) && omitted.length === 0;
 }
 
 function hasAnyClinicalLabel(labels = {}) {

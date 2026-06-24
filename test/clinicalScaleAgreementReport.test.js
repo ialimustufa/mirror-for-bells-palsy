@@ -89,6 +89,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Estimator input provenance: counted current-version rows preserve used\/omitted movement IDs/);
   assert.match(markdown, /Sunnybrook\/eFACE input-completeness provenance/);
   assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates[\s\S]*Sunnybrook\/eFACE input-completeness provenance/);
+  assert.match(markdown, /Sunnybrook\/eFACE primary comparisons require complete scale-specific movement input/);
   assert.match(markdown, /required\/available\/missing resting metric keys/);
   assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
@@ -116,7 +117,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /used\/omitted movement IDs/);
   assert.match(markdown, /usable-movements-only calculation flag/);
   assert.match(markdown, /House-Brackmann estimates require the gentle eye-closure input/);
-  assert.match(markdown, /missing or invalid estimates are reported in that scale's denominator/);
+  assert.match(markdown, /missing, incomplete-input, or invalid estimates are reported in that scale's denominator/);
   assert.match(markdown, /valid in-range target for that specific primary scale/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
   assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role/);

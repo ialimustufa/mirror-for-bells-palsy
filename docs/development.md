@@ -68,9 +68,10 @@ checks for:
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
   used/omitted movement input provenance, House-Brackmann required-input
-  provenance, Sunnybrook/eFACE input-completeness provenance, plus complete
-  resting-metric provenance, plus an eligible blinded independent label count
-  meeting the minimum reviewed-assessment floor.
+  provenance, Sunnybrook/eFACE input-completeness provenance with complete
+  scale-specific movement input for counted Sunnybrook/eFACE primary
+  comparisons, plus complete resting-metric provenance, plus an eligible blinded
+  independent label count meeting the minimum reviewed-assessment floor.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
@@ -87,7 +88,8 @@ checks for:
   readiness.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
-  enabled primary scale, zero excluded reviewer pairs, at least 80% observed
+  enabled primary scale, zero excluded reviewer pairs, zero incomplete
+  scale-specific estimate-input skips for enabled scales, at least 80% observed
   reviewer agreement, and a 95% Wilson lower bound meeting the configured 80%
   agreement floor for that scale.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced

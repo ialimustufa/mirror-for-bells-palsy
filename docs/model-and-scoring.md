@@ -887,6 +887,10 @@ Clinical-scale estimates are stored with explicit status and caveats:
 - Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
   Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
   treat missing or weak-capture movement rows as zero movement.
+- Clinical-release validation is stricter than estimate display for
+  Sunnybrook/eFACE: primary-scale agreement comparisons require complete
+  scale-specific movement input, so normalized 4/5 Sunnybrook/eFACE estimates
+  count as missing estimates in those release denominators.
 - App panels and printable reports also surface scale-specific input gaps, such
   as `House-Brackmann estimate unavailable: requires Gentle eye closure`, so a
   withheld scale is not silently hidden when other eligible estimates remain.
@@ -1080,7 +1084,10 @@ resting metric keys, and `estimateCalculationUsesCompleteRestingMetrics: true`;
 inconsistent or missing movement, scale-input, or resting-metric provenance
 excludes the reviewed row. House-Brackmann agreement treats the paired estimate
 as missing unless the estimate provenance shows the required gentle eye-closure
-input was used. Valid primary targets
+input was used. Sunnybrook and eFACE primary agreement comparisons require
+complete scale-specific movement input; normalized 4/5 Sunnybrook/eFACE
+estimates stay auditable but count as missing estimates for those release
+denominators. Valid primary targets
 count scale by scale; a missing or invalid estimate is reported as a missing
 estimate for that scale rather than excluding other valid targets on the row. This
 report does not make Mirror
@@ -1191,10 +1198,11 @@ to JSON
 eligible reviewer sheets, complete/minimum estimate evidence and 80%
 usable-movement coverage provenance, scale-specific input provenance, complete
 resting-metric provenance, no excluded reviewer-pair, metadata, or
-estimate-evidence blockers, at least 30 eligible paired labels on every enabled
-primary scale, at least 80% observed reviewer agreement, and Wilson lower-bound
-reviewer agreement meeting the configured 80% standard before clinical-facing
-support can be enabled for that scale.
+estimate-evidence blockers, zero incomplete scale-specific estimate-input skips
+for every enabled primary scale, at least 30 eligible paired labels on every
+enabled primary scale, at least 80% observed reviewer agreement, and Wilson
+lower-bound reviewer agreement meeting the configured 80% standard before
+clinical-facing support can be enabled for that scale.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

@@ -74,6 +74,13 @@ const REVIEW_SCALE_CONFIG = Object.freeze({
 });
 
 const REVIEW_SCALE_KEYS = Object.freeze(Object.keys(REVIEW_SCALE_CONFIG));
+const SCALE_ESTIMATE_INPUT_COMPLETE_KEYS = Object.freeze({
+  houseBrackmannGrade: "estimateHouseBrackmannInputComplete",
+  sunnybrookComposite: "estimateSunnybrookInputComplete",
+  efaceTotal: "estimateEfaceInputComplete",
+  efaceDynamic: "estimateEfaceInputComplete",
+  efaceSynkinesis: "estimateEfaceInputComplete",
+});
 
 const ADJUDICATION_EXTRA_COLUMNS = Object.freeze([
   "reviewerAClinicalScaleEstimateVersion",
@@ -668,9 +675,27 @@ function createScaleAccumulator(scaleKey) {
     missingReviewerBCount: 0,
     exactMatchCount: 0,
     withinToleranceCount: 0,
+    incompleteEstimateInputCount: 0,
     absoluteDeltas: [],
     disagreements: [],
   };
+}
+
+function scaleEstimateInputComplete(row = {}, scaleKey) {
+  const completeKey = SCALE_ESTIMATE_INPUT_COMPLETE_KEYS[scaleKey];
+  return !completeKey || estimateBooleanValue(row, completeKey) === true;
+}
+
+function recordIncompleteEstimateInput(accumulator, assessmentId, reviewerAComplete, reviewerBComplete) {
+  accumulator.incompleteEstimateInputCount += 1;
+  accumulator.disagreements.push({
+    assessmentId,
+    reviewerA: null,
+    reviewerB: null,
+    reason: reviewerAComplete === reviewerBComplete
+      ? "incomplete scale-specific estimate input"
+      : `incomplete scale-specific estimate input for ${reviewerAComplete ? "reviewer B" : "reviewer A"}`,
+  });
 }
 
 function updateScaleAccumulator(accumulator, assessmentId, reviewerAValue, reviewerBValue) {
@@ -717,6 +742,9 @@ function summarizeScale(accumulator, options = {}) {
   const confidenceInterval = wilsonScoreInterval(accumulator.withinToleranceCount, accumulator.pairedCount, confidenceLevel);
   const blockingReasons = [];
   if (accumulator.pairedCount < minPairedLabels) blockingReasons.push(`needs at least ${minPairedLabels} paired reviewer labels`);
+  if (accumulator.incompleteEstimateInputCount > 0 && accumulator.pairedCount < minPairedLabels) {
+    blockingReasons.push(`${accumulator.incompleteEstimateInputCount} paired labels skipped for incomplete scale-specific estimate input`);
+  }
   if (withinToleranceRate == null || withinToleranceRate < minAgreementRate) {
     blockingReasons.push(`needs at least ${Math.round(minAgreementRate * 100)}% ${accumulator.agreementLabel}`);
   }
@@ -731,6 +759,7 @@ function summarizeScale(accumulator, options = {}) {
     pairedCount: accumulator.pairedCount,
     missingReviewerACount: accumulator.missingReviewerACount,
     missingReviewerBCount: accumulator.missingReviewerBCount,
+    incompleteEstimateInputCount: accumulator.incompleteEstimateInputCount,
     exactMatchCount: accumulator.exactMatchCount,
     withinToleranceCount: accumulator.withinToleranceCount,
     exactAgreementRate: compactRate(accumulator.exactMatchCount, accumulator.pairedCount),
@@ -973,6 +1002,12 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     }
     if (pairEligibility.eligible) {
       for (const scaleKey of REVIEW_SCALE_KEYS) {
+        const reviewerAInputComplete = scaleEstimateInputComplete(reviewerA, scaleKey);
+        const reviewerBInputComplete = scaleEstimateInputComplete(reviewerB, scaleKey);
+        if (!reviewerAInputComplete || !reviewerBInputComplete) {
+          recordIncompleteEstimateInput(accumulators[scaleKey], assessmentId, reviewerAInputComplete, reviewerBInputComplete);
+          continue;
+        }
         updateScaleAccumulator(accumulators[scaleKey], assessmentId, reviewerValue(reviewerA, scaleKey), reviewerValue(reviewerB, scaleKey));
       }
       if (hasAnyPairedPrimaryReviewScale(reviewerA, reviewerB)) {

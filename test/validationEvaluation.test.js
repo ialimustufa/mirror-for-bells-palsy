@@ -504,7 +504,7 @@ test("clinical scale evaluation excludes labels paired with insufficient estimat
   assert.equal(report.byScale.efaceTotal.agreementRate, 0.5);
 });
 
-test("clinical scale evaluation accepts minimum evidence with exact movement provenance", () => {
+test("clinical scale evaluation counts minimum evidence only for scales with complete inputs", () => {
   const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
   const records = [
     clinicalRecord("assessment-minimum:clinical-scale", {
@@ -530,8 +530,18 @@ test("clinical scale evaluation accepts minimum evidence with exact movement pro
 
   assert.equal(report.summary.reviewedAssessmentCount, 1);
   assert.equal(report.summary.excludedClinicalLabelCount, 0);
+  assert.equal(report.summary.primaryScaleEstimateIssueReasons["missing valid sunnybrookComposite estimate"], 1);
+  assert.equal(report.summary.primaryScaleEstimateIssueReasons["missing valid efaceTotal estimate"], 1);
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.byScale.sunnybrookComposite.labeledCount, 1);
+  assert.equal(report.byScale.sunnybrookComposite.comparableCount, 0);
+  assert.equal(report.byScale.sunnybrookComposite.missingEstimateCount, 1);
+  assert.equal(report.byScale.sunnybrookComposite.agreementRate, 0);
+  assert.equal(report.byScale.efaceTotal.labeledCount, 1);
+  assert.equal(report.byScale.efaceTotal.comparableCount, 0);
+  assert.equal(report.byScale.efaceTotal.missingEstimateCount, 1);
+  assert.equal(report.byScale.efaceTotal.agreementRate, 0);
   assert.equal(report.standard.requiresV3MovementProvenance, true);
   assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
 });
@@ -573,8 +583,12 @@ test("clinical scale evaluation treats HB estimate as missing without required e
   assert.equal(report.caseMix.severityBands.moderate.count, 0);
   assert.equal(report.caseMix.meetsMinimumStandard, false);
   assert.match(report.blockingReasons.join("\n"), /House-Brackmann severity bands/);
-  assert.equal(report.byScale.sunnybrookComposite.comparableCount, 1);
-  assert.equal(report.byScale.efaceTotal.comparableCount, 1);
+  assert.equal(report.summary.primaryScaleEstimateIssueReasons["missing valid sunnybrookComposite estimate"], 1);
+  assert.equal(report.summary.primaryScaleEstimateIssueReasons["missing valid efaceTotal estimate"], 1);
+  assert.equal(report.byScale.sunnybrookComposite.comparableCount, 0);
+  assert.equal(report.byScale.sunnybrookComposite.missingEstimateCount, 1);
+  assert.equal(report.byScale.efaceTotal.comparableCount, 0);
+  assert.equal(report.byScale.efaceTotal.missingEstimateCount, 1);
   assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
 });
 

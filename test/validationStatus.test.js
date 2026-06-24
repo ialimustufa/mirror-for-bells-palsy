@@ -90,7 +90,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 - Eligible blinded independent clinical labels: ${reviewedCount}
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
-- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Scale-specific rows with missing or invalid estimates are reported in that scale's denominator as missing estimates.
+- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
 - Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.
@@ -187,6 +187,7 @@ function passingClinicalReviewerAgreementReport({
     byScale: {
       houseBrackmannGrade: {
         pairedCount: primaryPairedCount,
+        incompleteEstimateInputCount: 0,
         exactMatchCount: withinToleranceCount,
         withinToleranceCount,
         withinToleranceRate,
@@ -196,6 +197,7 @@ function passingClinicalReviewerAgreementReport({
       },
       sunnybrookComposite: {
         pairedCount: primaryPairedCount,
+        incompleteEstimateInputCount: 0,
         exactMatchCount: withinToleranceCount,
         withinToleranceCount,
         withinToleranceRate,
@@ -205,6 +207,7 @@ function passingClinicalReviewerAgreementReport({
       },
       efaceTotal: {
         pairedCount: primaryPairedCount,
+        incompleteEstimateInputCount: 0,
         exactMatchCount: withinToleranceCount,
         withinToleranceCount,
         withinToleranceRate,
@@ -442,6 +445,37 @@ test("validation status artifacts reject reviewer agreement reports with insuffi
   const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
   reviewerReport.summary.reviewerAInsufficientEstimateEvidenceCount = 1;
   reviewerReport.summary.estimateEvidenceMismatchCount = 1;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with incomplete enabled-scale inputs", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.byScale.sunnybrookComposite.incompleteEstimateInputCount = 1;
 
   await assert.rejects(
     () => validateStatusArtifacts(status, {
@@ -879,7 +913,7 @@ test("validation status artifacts reject clinical agreement reports without esti
         "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport()
           .replace("- Minimum usable movement coverage: 80.0%\n", "")
           .replace("- Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, House-Brackmann required-input provenance, Sunnybrook/eFACE input-completeness provenance, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.\n", "")
-          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Scale-specific rows with missing or invalid estimates are reported in that scale's denominator as missing estimates.\n", ""),
+          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.\n", ""),
         "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),

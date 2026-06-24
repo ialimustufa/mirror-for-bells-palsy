@@ -144,7 +144,11 @@ Clinical-scale readiness uses the machine-readable standard in
   coverage, used/omitted movement exercise IDs, and the usable-movements-only
   calculation flag. Sunnybrook and eFACE estimates must preserve scale-specific
   input-completeness provenance, and House-Brackmann estimates must preserve
-  provenance showing that the required gentle eye-closure input was used. A
+  provenance showing that the required gentle eye-closure input was used.
+  Sunnybrook and eFACE primary-scale comparisons require that provenance to show
+  complete scale-specific movement input; normalized 4/5 estimates remain
+  auditable Mirror estimates but count as missing estimates for those release
+  denominators. A
   missing or invalid estimate is reported in that scale's denominator as a
   missing estimate rather than excluding other valid scale labels on the row.
 - Wilson 95% confidence interval reported for each primary agreement rate.
@@ -179,7 +183,9 @@ If multiple reviewers label the same assessment:
   input-completeness fields must show the required gentle eye-closure input was
   used before a House-Brackmann estimate can count. Current blinded sheets also
   preserve Sunnybrook and eFACE input-completeness fields so each normalized 4/5
-  estimate can be audited by scale. Required, available, and missing resting
+  estimate can be audited by scale, but those incomplete Sunnybrook/eFACE
+  primary estimates do not count as comparable release evidence. Required,
+  available, and missing resting
   metric keys must also prove complete rest input coverage, with the
   complete-resting-metrics calculation flag set. Old reviewer sheets without the
   current movement, scale-specific input, and resting-metric provenance columns
@@ -199,7 +205,10 @@ blinding, independence, current-version, and estimate-evidence gates. It must
 have at least 30 eligible paired labels, at least 80% observed tolerance-based
 agreement, and a Wilson 95% lower confidence bound of at least 80%. The report
 also lists excluded reviewer-pair reasons, reviewer sheet metadata issues, and
-estimate-evidence issues before any adjudicated row can be merged. The
+estimate-evidence issues before any adjudicated row can be merged. Sunnybrook
+and eFACE reviewer-agreement rows with incomplete scale-specific estimate input
+are skipped by scale and reported with `incompleteEstimateInputCount`; enabled
+primary scales require that count to stay zero in release artifacts. The
 adjudication sheet keeps raw reviewer values, raw estimator versions, and raw
 estimate-evidence provenance in audit columns and leaves the mergeable target
 columns blank until a consensus label is entered.
