@@ -1250,9 +1250,9 @@ confidence-standard status. Structured clinical agreement JSON artifacts must be
 `mirror-clinical-scale-agreement-report` schema v1 before they can be used as
 machine release evidence, and observed agreement rates must match the reported
 within-tolerance counts, label denominators, and Wilson score intervals. Every
-clinical agreement, reviewer-agreement, and threshold calibration artifact must
-include a UTC ISO `generatedAt` timestamp that is not later than the validation
-status `updatedAt` date.
+clinical agreement, reviewer-agreement, clinical review package verification,
+and threshold calibration artifact must include a UTC ISO `generatedAt`
+timestamp that is not later than the validation status `updatedAt` date.
 Clinical reviewer-agreement report paths must point to JSON
 `mirror-clinical-scale-reviewer-agreement-report` schema-v1 artifacts with
 current-version eligible reviewer sheets, within-tolerance rates that match the
@@ -1266,6 +1266,13 @@ least 80% observed reviewer agreement, distinct pseudonymous reviewer ids for
 the raw reviewer sheets, and Wilson lower-bound reviewer agreement meeting the
 configured 80% standard, plus House-Brackmann same-band reviewer severity
 coverage, before clinical-facing support can be enabled for that scale.
+Clinical review package verification report paths must point to JSON
+`mirror-clinical-scale-review-package-verification` schema-v1 artifacts with
+`status: passed`, a source dataset SHA-256 match, blinded-manifest controls,
+stable row identities, hidden estimate-value columns, unchanged
+estimate-provenance columns, no verification errors, and at least the configured
+minimum reviewed clinical-scale assessment rows before clinical-facing support
+can be enabled.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

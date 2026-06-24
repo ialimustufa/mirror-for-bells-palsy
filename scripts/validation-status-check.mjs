@@ -16,6 +16,7 @@ const VALID_STATUS_VALUES = Object.freeze([
   "clinical-scale-agreement-reviewed",
 ]);
 const CLINICAL_SCALE_RELEASE_STATUS = "clinical-scale-agreement-reviewed";
+const CLINICAL_REVIEW_PACKAGE_VERIFICATION_KIND = "mirror-clinical-scale-review-package-verification";
 const PRIMARY_CLINICAL_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 const CLINICAL_SCALE_AVAILABILITY = Object.freeze({
   houseBrackmann: {
@@ -597,6 +598,61 @@ function validateThresholdCalibrationReportText(text, artifactPath) {
   };
 }
 
+function validateClinicalScaleReviewPackageVerificationReportText(text, artifactPath) {
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${artifactPath} must be a JSON clinical review package verification report: ${error.message}`);
+  }
+  assertCondition(report?.kind === CLINICAL_REVIEW_PACKAGE_VERIFICATION_KIND, `${artifactPath} must be a ${CLINICAL_REVIEW_PACKAGE_VERIFICATION_KIND}`);
+  assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
+  assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
+  assertCondition(report.status === "passed", `${artifactPath}.status must be passed`);
+  assertCondition(typeof report.packageId === "string" && report.packageId.length > 0, `${artifactPath}.packageId must be present`);
+  assertCondition(/^[a-f0-9]{64}$/i.test(report.sourceDatasetSha256 ?? ""), `${artifactPath}.sourceDatasetSha256 must be a SHA-256 hex string`);
+  assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
+  for (const field of [
+    "labelRows",
+    "frameSampleRows",
+    "assessmentClinicalScaleRows",
+    "expectedLabelRows",
+    "expectedFrameSampleRows",
+    "expectedAssessmentClinicalScaleRows",
+  ]) {
+    assertNonNegativeInteger(report.summary[field], `${artifactPath}.summary.${field}`);
+  }
+  assertCondition(report.summary.labelRows === report.summary.expectedLabelRows, `${artifactPath}.summary.labelRows must match expectedLabelRows`);
+  assertCondition(report.summary.frameSampleRows === report.summary.expectedFrameSampleRows, `${artifactPath}.summary.frameSampleRows must match expectedFrameSampleRows`);
+  assertCondition(report.summary.assessmentClinicalScaleRows === report.summary.expectedAssessmentClinicalScaleRows, `${artifactPath}.summary.assessmentClinicalScaleRows must match expectedAssessmentClinicalScaleRows`);
+  assertCondition(report.controls && typeof report.controls === "object", `${artifactPath} must include controls`);
+  for (const controlKey of [
+    "sourceHashMatches",
+    "blindedManifest",
+    "rowIdentityMatches",
+    "estimateValuesHidden",
+    "readOnlyColumnsMatch",
+  ]) {
+    assertCondition(report.controls[controlKey] === true, `${artifactPath}.controls.${controlKey} must be true`);
+  }
+  assertCondition(Array.isArray(report.errors), `${artifactPath}.errors must be an array`);
+  assertCondition(report.errors.length === 0, `${artifactPath}.errors must be empty`);
+  return {
+    path: artifactPath,
+    generatedAt: report.generatedAt,
+    status: report.status,
+    packageId: report.packageId,
+    sourceDatasetSha256: report.sourceDatasetSha256,
+    labelRows: report.summary.labelRows,
+    frameSampleRows: report.summary.frameSampleRows,
+    assessmentClinicalScaleRows: report.summary.assessmentClinicalScaleRows,
+    expectedLabelRows: report.summary.expectedLabelRows,
+    expectedFrameSampleRows: report.summary.expectedFrameSampleRows,
+    expectedAssessmentClinicalScaleRows: report.summary.expectedAssessmentClinicalScaleRows,
+    controls: report.controls,
+  };
+}
+
 function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   let report;
   try {
@@ -861,6 +917,19 @@ function reviewerAgreementReportMeetsScaleSet(report, status, scaleKeys) {
   );
 }
 
+function clinicalReviewPackageVerificationReportMeetsMinimum(report, status) {
+  return Boolean(
+    report.status === "passed"
+      && (report.assessmentClinicalScaleRows ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.expectedAssessmentClinicalScaleRows ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && report.controls?.sourceHashMatches === true
+      && report.controls?.blindedManifest === true
+      && report.controls?.rowIdentityMatches === true
+      && report.controls?.estimateValuesHidden === true
+      && report.controls?.readOnlyColumnsMatch === true
+  );
+}
+
 function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports) {
   for (const scaleKey of enabledClinicalScaleKeys(status)) {
     const fieldPrefix = `clinicalScaleAvailability.${scaleKey}`;
@@ -981,6 +1050,7 @@ function validateStatus(status) {
   assertClinicalScaleMinimumStandard(status.clinicalScaleMinimumStandard);
   assertStringArray(status.clinicalScaleAgreementReports, "clinicalScaleAgreementReports");
   assertStringArray(status.clinicalScaleReviewerAgreementReports, "clinicalScaleReviewerAgreementReports");
+  assertStringArray(status.clinicalScaleReviewPackageVerificationReports, "clinicalScaleReviewPackageVerificationReports");
   assertStringArray(status.thresholdCalibrationReports, "thresholdCalibrationReports");
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
   assertCondition(typeof status.productionThresholdConstantsCalibrated === "boolean", "productionThresholdConstantsCalibrated must be boolean");
@@ -1009,6 +1079,14 @@ function validateStatus(status) {
       "clinical scale reviewer agreement reports require reviewed clinical-scale assessment coverage meeting the minimum standard",
     );
   }
+  if (status.clinicalScaleReviewPackageVerificationReports.length > 0) {
+    assertCondition(status.status === CLINICAL_SCALE_RELEASE_STATUS, `clinical scale review package verification reports require status ${CLINICAL_SCALE_RELEASE_STATUS}`);
+    assertCondition(status.reviewedDatasetCount > 0, "clinical scale review package verification reports require reviewed datasets");
+    assertCondition(
+      status.reviewedClinicalScaleAssessmentCount >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
+      "clinical scale review package verification reports require reviewed clinical-scale assessment coverage meeting the minimum standard",
+    );
+  }
   if (status.clinicalFacingScoresAllowed) {
     assertCondition(status.status === CLINICAL_SCALE_RELEASE_STATUS, `clinical-facing scores require status ${CLINICAL_SCALE_RELEASE_STATUS}`);
     assertCondition(status.productionThresholdConstantsCalibrated, "clinical-facing scores require calibrated production thresholds");
@@ -1019,6 +1097,7 @@ function validateStatus(status) {
     );
     assertCondition(status.clinicalScaleAgreementReports.length > 0, "clinical-facing scores require clinical scale agreement reports");
     assertCondition(status.clinicalScaleReviewerAgreementReports.length > 0, "clinical-facing scores require clinical scale reviewer agreement reports");
+    assertCondition(status.clinicalScaleReviewPackageVerificationReports.length > 0, "clinical-facing scores require clinical review package verification reports");
   }
   return status;
 }
@@ -1035,6 +1114,11 @@ async function validateStatusArtifacts(status, options = {}) {
     const text = await readArtifactText(artifactPath, options);
     clinicalReviewerAgreementReports.push(validateClinicalScaleReviewerAgreementReportText(text, artifactPath));
   }
+  const clinicalScaleReviewPackageVerificationReports = [];
+  for (const artifactPath of status.clinicalScaleReviewPackageVerificationReports) {
+    const text = await readArtifactText(artifactPath, options);
+    clinicalScaleReviewPackageVerificationReports.push(validateClinicalScaleReviewPackageVerificationReportText(text, artifactPath));
+  }
   const thresholdCalibrationReports = [];
   for (const artifactPath of status.thresholdCalibrationReports) {
     const text = await readArtifactText(artifactPath, options);
@@ -1043,6 +1127,7 @@ async function validateStatusArtifacts(status, options = {}) {
   assertArtifactsNotNewerThanStatus(status, [
     clinicalAgreementReports,
     clinicalReviewerAgreementReports,
+    clinicalScaleReviewPackageVerificationReports,
     thresholdCalibrationReports,
   ]);
   if (status.clinicalScaleAgreementReports.length > 0) {
@@ -1062,6 +1147,13 @@ async function validateStatusArtifacts(status, options = {}) {
     );
     clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports);
   }
+  if (status.clinicalScaleReviewPackageVerificationReports.length > 0) {
+    const verifiedReviewPackage = clinicalScaleReviewPackageVerificationReports.find((report) => clinicalReviewPackageVerificationReportMeetsMinimum(report, status));
+    assertCondition(
+      verifiedReviewPackage,
+      "clinical review package verification reports must document a passed blinded package check with source hash match, stable row identities, hidden estimate values, unchanged estimate provenance, and reviewed assessment coverage meeting the minimum standard",
+    );
+  }
   if (status.productionThresholdConstantsCalibrated) {
     const readyExerciseCount = thresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);
     assertCondition(
@@ -1074,6 +1166,7 @@ async function validateStatusArtifacts(status, options = {}) {
     artifacts: {
       clinicalAgreementReports,
       clinicalReviewerAgreementReports,
+      clinicalScaleReviewPackageVerificationReports,
       thresholdCalibrationReports,
     },
   };
@@ -1095,6 +1188,7 @@ export {
   buildClinicalScaleStatusEvidencePatch,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
+  validateClinicalScaleReviewPackageVerificationReportText,
   validateStatus,
   validateStatusArtifacts,
   validateStatusFile,

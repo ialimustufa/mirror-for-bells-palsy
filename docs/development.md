@@ -100,16 +100,18 @@ checks for:
   ISO `generatedAt` timestamp for auditability, and the status `updatedAt` date
   must not precede any referenced artifact generation date.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
-  `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
-  support can be enabled.
+  `clinicalScaleReviewerAgreementReports` and review-package verification JSON
+  artifacts in `clinicalScaleReviewPackageVerificationReports` before
+  clinical-facing clinical-scale support can be enabled.
 - `npm run validation:status-evidence` can draft the per-scale
   `clinicalScaleAvailability` evidence block from a clinical agreement report
   and reviewer-agreement report. With `--status-patch`, it also drafts the
   corresponding `clinicalScaleAgreementReports` and
   `clinicalScaleReviewerAgreementReports` arrays so report paths and per-scale
   evidence stay together. A reviewer still has to choose which eligible scales
-  to enable and copy the reviewed fields into `docs/validation-status.json`; the
-  helper does not edit the status file or bypass the clinical release gate.
+  to enable, add the reviewed package verification reports, and copy the
+  reviewed fields into `docs/validation-status.json`; the helper does not edit
+  the status file or bypass the clinical release gate.
 - `npm run validation:clinical-review-package -- <validation-dataset.jsonl>
   <output-dir>` creates a blinded reviewer handoff with `manifest.json`,
   `blinded-labels.csv`, and `reviewer-instructions.md`. The manifest records the

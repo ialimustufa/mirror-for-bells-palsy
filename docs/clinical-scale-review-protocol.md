@@ -322,7 +322,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - A clinical review package verification report showing the returned blinded
   sheet still matched the original source dataset hash, row identities, hidden
   estimate-value columns, unchanged estimate-provenance columns, and the current
-  80% observed/Wilson release standard before labels were merged.
+  80% observed/Wilson release standard before labels were merged. This report
+  must be listed in `clinicalScaleReviewPackageVerificationReports`.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable

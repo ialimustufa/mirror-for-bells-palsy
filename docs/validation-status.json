@@ -20,6 +20,7 @@
   },
   "clinicalScaleAgreementReports": [],
   "clinicalScaleReviewerAgreementReports": [],
+  "clinicalScaleReviewPackageVerificationReports": [],
   "thresholdCalibrationReports": [],
   "productionThresholdConstantsCalibrated": false,
   "clinicalFacingScoresAllowed": false,
@@ -39,6 +40,7 @@
     "No clinician-reviewed validation dataset is committed in this repository.",
     "House-Brackmann, Sunnybrook, and eFACE-style estimates remain Mirror estimates until reviewed assessment labels from current v5 estimates with at least 80% usable movement coverage, complete scale-specific input provenance for counted primary-scale comparisons, complete resting-metric provenance, no inferred House-Brackmann eye-closure input, pseudonymous reviewer identity controls, and at least 10 distinct pseudonymous validation cases meet the documented 80% observed agreement, 80% Wilson lower-bound agreement, and House-Brackmann case-mix standard.",
     "Primary clinical-scale target assignment should use the blinded label sheet workflow in docs/clinical-scale-review-protocol.md.",
+    "Clinical-facing clinical-scale support also requires a passed clinical review package verification report listed in clinicalScaleReviewPackageVerificationReports.",
     "Production threshold constants should not be changed from calibration reports until reviewed datasets are available."
   ]
 }

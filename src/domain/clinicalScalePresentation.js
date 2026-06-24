@@ -101,6 +101,7 @@ function clinicalScaleReleaseEvidenceBlockers(status = DEFAULT_VALIDATION_STATUS
   }
   if (!nonEmptyStringArray(status?.clinicalScaleAgreementReports)) blockers.push("clinicalScaleAgreementReports must list at least one report");
   if (!nonEmptyStringArray(status?.clinicalScaleReviewerAgreementReports)) blockers.push("clinicalScaleReviewerAgreementReports must list at least one report");
+  if (!nonEmptyStringArray(status?.clinicalScaleReviewPackageVerificationReports)) blockers.push("clinicalScaleReviewPackageVerificationReports must list at least one report");
   if (!nonEmptyStringArray(status?.thresholdCalibrationReports)) blockers.push("thresholdCalibrationReports must list at least one report");
   return blockers;
 }

@@ -16,7 +16,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/model-and-scoring.md",
-    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /clinical-scale agreement\s+report/i, /clinical-scale-agreement-reviewed/i, /ready exercise coverage/i, /per-scale evidence\s+summary/i, /validationCaseId/i, /distinct validation-case/i, /reviewerId/i, /distinct pseudonymous reviewer ids/i, /not diagnosis/i],
+    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /clinical-scale agreement\s+report/i, /clinical review package verification/i, /clinical-scale-agreement-reviewed/i, /ready exercise coverage/i, /per-scale evidence\s+summary/i, /validationCaseId/i, /distinct validation-case/i, /reviewerId/i, /distinct pseudonymous reviewer ids/i, /not diagnosis/i],
   },
   {
     path: "docs/algorithm-upgrade-roadmap.md",
@@ -24,11 +24,11 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/validation-status.json",
-    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i, /"clinicalScaleAvailability"/i, /clinical-scale-review-protocol\.md/i],
+    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i, /"clinicalScaleAvailability"/i, /"clinicalScaleReviewPackageVerificationReports"/i, /clinical-scale-review-protocol\.md/i],
   },
   {
     path: "docs/clinical-scale-review-protocol.md",
-    patterns: [/blinded label sheet/i, /reviewer-agreement/i, /30 reviewed clinical-scale assessment/i, /clinical-scale-agreement-reviewed/i, /validationCaseId/i, /distinct validation-case/i, /reviewerId/i, /distinct pseudonymous reviewer ids/i, /clinician-assigned grade/i, /reference-standard controls/i],
+    patterns: [/blinded label sheet/i, /reviewer-agreement/i, /clinical review package verification/i, /30 reviewed clinical-scale assessment/i, /clinical-scale-agreement-reviewed/i, /validationCaseId/i, /distinct validation-case/i, /reviewerId/i, /distinct pseudonymous reviewer ids/i, /clinician-assigned grade/i, /reference-standard controls/i],
   },
 ];
 

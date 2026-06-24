@@ -5,6 +5,7 @@ import {
   buildClinicalScaleStatusEvidencePatch,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
+  validateClinicalScaleReviewPackageVerificationReportText,
   validateStatus,
   validateStatusArtifacts,
   validateThresholdCalibrationReportText,
@@ -15,6 +16,7 @@ const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement-2026-06-24.md";
 const STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement-2026-06-24.json";
 const REVIEWER_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json";
+const REVIEW_PACKAGE_VERIFICATION_REPORT_PATH = "docs/validation/clinical-scale-review-package-verification-2026-06-24.json";
 const THRESHOLD_CALIBRATION_REPORT_PATH = "docs/validation/threshold-calibration-2026-06-23.json";
 const TEST_WILSON_Z_95 = 1.959963984540054;
 
@@ -74,6 +76,7 @@ const BASE_STATUS = {
   },
   clinicalScaleAgreementReports: [],
   clinicalScaleReviewerAgreementReports: [],
+  clinicalScaleReviewPackageVerificationReports: [],
   thresholdCalibrationReports: [],
   productionThresholdConstantsCalibrated: false,
   clinicalFacingScoresAllowed: false,
@@ -277,6 +280,40 @@ function passingThresholdReport({ readyExercises = 5 } = {}) {
   });
 }
 
+function passingClinicalReviewPackageVerificationReport({
+  assessmentClinicalScaleRows = 30,
+  generatedAt = "2026-06-24T00:00:00.000Z",
+  controls = {},
+  errors = [],
+  status = "passed",
+} = {}) {
+  return JSON.stringify({
+    kind: "mirror-clinical-scale-review-package-verification",
+    schemaVersion: 1,
+    generatedAt,
+    status,
+    packageId: "clinical-review-2026-06-24",
+    sourceDatasetSha256: "a".repeat(64),
+    summary: {
+      labelRows: assessmentClinicalScaleRows,
+      frameSampleRows: 0,
+      assessmentClinicalScaleRows,
+      expectedLabelRows: assessmentClinicalScaleRows,
+      expectedFrameSampleRows: 0,
+      expectedAssessmentClinicalScaleRows: assessmentClinicalScaleRows,
+    },
+    controls: {
+      sourceHashMatches: true,
+      blindedManifest: true,
+      rowIdentityMatches: true,
+      estimateValuesHidden: true,
+      readOnlyColumnsMatch: true,
+      ...controls,
+    },
+    errors,
+  });
+}
+
 function testWilsonScoreInterval(successes, total) {
   const phat = successes / total;
   const z2 = TEST_WILSON_Z_95 * TEST_WILSON_Z_95;
@@ -475,6 +512,7 @@ function houseBrackmannOnlyClinicalReviewerAgreementReport() {
 function artifactReader(artifacts) {
   return async (path) => {
     if (Object.hasOwn(artifacts, path)) return artifacts[path];
+    if (path === REVIEW_PACKAGE_VERIFICATION_REPORT_PATH) return passingClinicalReviewPackageVerificationReport();
     throw new Error(`missing fixture: ${path}`);
   };
 }
@@ -508,6 +546,7 @@ test("validation status accepts documented clinical agreement state", () => {
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -526,6 +565,7 @@ test("validation status rejects enabled per-scale availability without evidence 
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -605,6 +645,7 @@ test("validation status rejects clinical artifacts under non-clinical status", (
       reviewedClinicalScaleAssessmentCount: 30,
       readyExerciseCount: 5,
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
       productionThresholdConstantsCalibrated: true,
     }),
@@ -623,12 +664,39 @@ test("validation status rejects clinical-facing support under non-clinical statu
       readyExerciseCount: 5,
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
     /clinical scale agreement reports require status clinical-scale-agreement-reviewed|clinical-facing scores require status clinical-scale-agreement-reviewed/,
+  );
+});
+
+test("clinical review package verification report validates pass controls", () => {
+  const report = validateClinicalScaleReviewPackageVerificationReportText(
+    passingClinicalReviewPackageVerificationReport(),
+    REVIEW_PACKAGE_VERIFICATION_REPORT_PATH,
+  );
+
+  assert.equal(report.status, "passed");
+  assert.equal(report.assessmentClinicalScaleRows, 30);
+  assert.equal(report.expectedAssessmentClinicalScaleRows, 30);
+  assert.equal(report.controls.sourceHashMatches, true);
+  assert.equal(report.controls.estimateValuesHidden, true);
+});
+
+test("clinical review package verification report rejects failed controls", () => {
+  assert.throws(
+    () => validateClinicalScaleReviewPackageVerificationReportText(
+      passingClinicalReviewPackageVerificationReport({
+        controls: { estimateValuesHidden: false },
+        errors: ["assessmentClinicalScale:assessment-1 estimatedSunnybrookComposite must remain hidden"],
+      }),
+      REVIEW_PACKAGE_VERIFICATION_REPORT_PATH,
+    ),
+    /controls\.estimateValuesHidden must be true/,
   );
 });
 
@@ -642,6 +710,7 @@ test("validation status artifacts accept documented clinical and calibration rep
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -694,6 +763,7 @@ test("validation status artifacts accept scale-specific clinical availability fo
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -725,6 +795,7 @@ test("validation status artifacts accept structured clinical agreement reports",
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -758,6 +829,7 @@ test("validation status artifacts reject unversioned structured clinical agreeme
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -790,6 +862,7 @@ test("validation status artifacts reject unversioned clinical reviewer agreement
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -906,6 +979,7 @@ test("validation status artifacts reject reports generated after the status deci
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -924,6 +998,36 @@ test("validation status artifacts reject reports generated after the status deci
   );
 });
 
+test("validation status artifacts reject review package verification without reviewed assessment coverage", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [CLINICAL_AGREEMENT_REPORT_PATH]: passingClinicalAgreementReport(),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]: passingClinicalReviewPackageVerificationReport({ assessmentClinicalScaleRows: 29 }),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /review package verification reports must document a passed blinded package check/,
+  );
+});
+
 test("validation status artifacts reject structured clinical agreement reports without required controls", async () => {
   const status = {
     ...BASE_STATUS,
@@ -934,6 +1038,7 @@ test("validation status artifacts reject structured clinical agreement reports w
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1023,6 +1128,7 @@ test("validation status artifacts reject per-scale evidence summaries that do no
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1069,6 +1175,7 @@ test("validation status artifacts reject reviewer agreement reports with too few
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1097,6 +1204,7 @@ test("validation status artifacts reject reviewer agreement reports with metadat
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1125,6 +1233,7 @@ test("validation status artifacts reject reviewer agreement reports with insuffi
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1157,6 +1266,7 @@ test("validation status artifacts reject reviewer agreement reports with duplica
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1190,6 +1300,7 @@ test("validation status artifacts reject reviewer agreement reports with too few
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1222,6 +1333,7 @@ test("validation status artifacts reject reviewer agreement reports with overlap
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1255,6 +1367,7 @@ test("validation status artifacts reject reviewer agreement reports with incompl
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1286,6 +1399,7 @@ test("validation status artifacts reject reviewer agreement reports with exclude
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1319,6 +1433,7 @@ test("validation status artifacts reject reviewer agreement reports with low Wil
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1349,6 +1464,7 @@ test("validation status artifacts reject reviewer agreement reports with narrow 
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1393,6 +1509,7 @@ test("validation status artifacts reject clinical agreement reports with duplica
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1421,6 +1538,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1590,6 +1708,7 @@ test("validation status artifacts reject clinical agreement reports for stale es
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1633,6 +1752,7 @@ test("validation status rejects clinical-facing scores without reviewed coverage
       readyExerciseCount: 5,
       clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
       clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+      clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
@@ -1686,6 +1806,7 @@ test("validation status rejects global clinical-facing availability with no enab
       readyExerciseCount: 5,
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
       clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
       thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
       productionThresholdConstantsCalibrated: true,
       clinicalFacingScoresAllowed: true,
@@ -1736,6 +1857,26 @@ test("validation status rejects clinical-facing scores without reviewer agreemen
   );
 });
 
+test("validation status rejects clinical-facing scores without review package verification reports", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
+      reviewedDatasetCount: 1,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 30,
+      readyExerciseCount: 5,
+      clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+      clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+      productionThresholdConstantsCalibrated: true,
+      clinicalFacingScoresAllowed: true,
+      clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+    }),
+    /clinical review package verification reports/,
+  );
+});
+
 test("validation status rejects clinical agreement reports without reviewed assessment coverage", () => {
   assert.throws(
     () => validateStatus({
@@ -1759,6 +1900,7 @@ test("validation status artifacts reject clinical agreement reports that do not 
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1787,6 +1929,7 @@ test("validation status artifacts reject clinical agreement reports without blin
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1815,6 +1958,7 @@ test("validation status artifacts reject clinical agreement reports without esti
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1846,6 +1990,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1874,6 +2019,7 @@ test("validation status artifacts reject clinical agreement reports with low Wil
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1902,6 +2048,7 @@ test("validation status artifacts reject clinical agreement reports with incompl
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -1930,6 +2077,7 @@ test("validation status artifacts reject clinical agreement reports with too few
     readyExerciseCount: 5,
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,

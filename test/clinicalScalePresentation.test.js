@@ -19,6 +19,8 @@ import {
 } from "../src/domain/clinicalScalePresentation.js";
 import { buildSessionReportHtml, clinicalScaleEstimateRows } from "../src/reports/sessionReport.js";
 
+const REVIEW_PACKAGE_VERIFICATION_REPORT_PATH = "docs/validation/clinical-scale-review-package-verification-2026-06-24.json";
+
 const RESTING_METRICS = {
   version: 1,
   averageAsymmetryRatio: 0.08,
@@ -88,6 +90,7 @@ function reviewedClinicalScaleStatus(clinicalScaleAvailabilityConfig = clinicalS
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -139,6 +142,7 @@ test("clinical scale presentation policy switches copy only with complete releas
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -204,6 +208,7 @@ test("clinical scale presentation policy fails closed when release evidence is i
     { reviewedClinicalScaleAssessmentCount: 29, blocker: /reviewedClinicalScaleAssessmentCount/ },
     { clinicalScaleAgreementReports: [], blocker: /clinicalScaleAgreementReports/ },
     { clinicalScaleReviewerAgreementReports: [], blocker: /clinicalScaleReviewerAgreementReports/ },
+    { clinicalScaleReviewPackageVerificationReports: [], blocker: /clinicalScaleReviewPackageVerificationReports/ },
     { thresholdCalibrationReports: [], blocker: /thresholdCalibrationReports/ },
   ];
 
@@ -291,6 +296,7 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -318,6 +324,7 @@ test("clinical scale presentation policy can keep individual scales as estimates
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -512,6 +519,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
@@ -530,6 +538,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
