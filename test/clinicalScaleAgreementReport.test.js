@@ -5,7 +5,15 @@ import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 
-function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, lower = 0.887, upper = 1, mismatches = [] }) {
+function scaleReport({
+  labeledCount,
+  withinToleranceCount,
+  agreementRate = withinToleranceCount / labeledCount,
+  lower = 0.887,
+  upper = 1,
+  mismatches = [],
+  agreementSamplePlan,
+}) {
   return {
     labeledCount,
     comparableCount: labeledCount,
@@ -17,6 +25,15 @@ function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withi
       confidenceLevel: 0.95,
       lower,
       upper,
+    },
+    agreementSamplePlan: agreementSamplePlan ?? {
+      currentReviewedLabels: labeledCount,
+      currentWithinToleranceCount: withinToleranceCount,
+      minimumReviewedLabels: 30,
+      requiredWithinToleranceAtCurrentLabelCount: labeledCount >= 30 ? 29 : null,
+      additionalPerfectLabelsToReachStandard: lower >= 0.8 && agreementRate >= 0.8 && labeledCount >= 30 ? 0 : null,
+      projectedReviewedLabelsAtStandard: lower >= 0.8 && agreementRate >= 0.8 && labeledCount >= 30 ? labeledCount : null,
+      projectedWithinToleranceAtStandard: lower >= 0.8 && agreementRate >= 0.8 && labeledCount >= 30 ? withinToleranceCount : null,
     },
     meanAbsDelta: 2,
     mismatches,
@@ -94,6 +111,9 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
   assert.match(markdown, /eFACE total \| within 10 points/);
+  assert.match(markdown, /Agreement Sample Plan/);
+  assert.match(markdown, /House-Brackmann \| 30 \| 30 \| 29 \| 0 \| 30 \| 30/);
+  assert.match(markdown, /Additional-perfect-label planning assumes future rows are eligible/);
   assert.match(markdown, /Scale-Specific Availability Recommendation/);
   assert.match(markdown, /houseBrackmann \| House-Brackmann \| meets minimum \| true after human review/);
   assert.match(markdown, /sunnybrook \| Sunnybrook composite \| meets minimum \| true after human review/);
@@ -133,8 +153,36 @@ test("clinical scale agreement markdown marks non-ready scales as estimate-only 
   const markdown = buildClinicalScaleAgreementMarkdown(validationReport({
     byScale: {
       houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1, lower: 0.887 }),
-      sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 24, agreementRate: 0.8, lower: 0.63 }),
-      efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 24, agreementRate: 0.8, lower: 0.63 }),
+      sunnybrookComposite: scaleReport({
+        labeledCount: 30,
+        withinToleranceCount: 24,
+        agreementRate: 0.8,
+        lower: 0.63,
+        agreementSamplePlan: {
+          currentReviewedLabels: 30,
+          currentWithinToleranceCount: 24,
+          minimumReviewedLabels: 30,
+          requiredWithinToleranceAtCurrentLabelCount: 29,
+          additionalPerfectLabelsToReachStandard: 49,
+          projectedReviewedLabelsAtStandard: 79,
+          projectedWithinToleranceAtStandard: 73,
+        },
+      }),
+      efaceTotal: scaleReport({
+        labeledCount: 30,
+        withinToleranceCount: 24,
+        agreementRate: 0.8,
+        lower: 0.63,
+        agreementSamplePlan: {
+          currentReviewedLabels: 30,
+          currentWithinToleranceCount: 24,
+          minimumReviewedLabels: 30,
+          requiredWithinToleranceAtCurrentLabelCount: 29,
+          additionalPerfectLabelsToReachStandard: 49,
+          projectedReviewedLabelsAtStandard: 79,
+          projectedWithinToleranceAtStandard: 73,
+        },
+      }),
     },
     blockingReasons: [
       "sunnybrookComposite: needs 95% Wilson lower bound at least 80%",
@@ -146,6 +194,7 @@ test("clinical scale agreement markdown marks non-ready scales as estimate-only 
   assert.match(markdown, /houseBrackmann \| House-Brackmann \| meets minimum \| true after human review/);
   assert.match(markdown, /sunnybrook \| Sunnybrook composite \| not ready \| false/);
   assert.match(markdown, /eface \| eFACE total \| not ready \| false/);
+  assert.match(markdown, /Sunnybrook composite \| 30 \| 24 \| 29 \| 49 \| 79 \| 73/);
 });
 
 test("clinical scale agreement markdown includes blockers and mismatch review rows", () => {

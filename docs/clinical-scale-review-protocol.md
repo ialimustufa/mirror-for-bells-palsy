@@ -115,6 +115,9 @@ npm run validation:clinical-readiness -- validation-report.json clinical-readine
    all primary scales to meet the configured observed agreement and Wilson
    lower-bound standard. Scale-specific availability recommendations may identify
    one primary scale that is evidence-eligible while another remains estimate-only.
+   The agreement sample plan shows how many additional perfect eligible labels
+   would be needed for a failing scale to clear the observed and Wilson gates;
+   use it for planning only, not as replacement evidence.
 7. Only after human review of the dataset, label process, and readiness report
    should `docs/validation-status.json` be updated.
 
@@ -163,6 +166,10 @@ estimates cannot satisfy case mix. The estimator-version gate is a local change-
 measure: if the House-Brackmann/Sunnybrook/eFACE estimator changes, stale or
 missing-version label rows are excluded until the reviewed agreement evidence is
 regenerated for the current estimator version.
+Agreement sample planning is reported separately from readiness. It computes the
+minimum additional all-success eligible labels needed to satisfy the observed
+agreement and Wilson lower-bound gates from the current counts, while preserving
+the rule that only real blinded clinician-reviewed rows can satisfy readiness.
 
 ## Adjudication
 

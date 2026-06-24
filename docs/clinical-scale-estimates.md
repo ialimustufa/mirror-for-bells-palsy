@@ -207,6 +207,13 @@ threshold, or the Wilson lower bound is below the configured threshold. Passing
 this tooling is still not the same as clinician assignment; it only proves that
 Mirror estimates met the documented agreement target on the reviewed local
 validation set.
+Each scale row also includes an agreement sample plan. The plan reports the
+current denominator, current within-tolerance count, required successes at the
+current denominator when the reviewed-label floor has been reached, and the
+minimum number of additional perfect eligible labels needed to clear the
+observed-agreement and Wilson lower-bound gates. This is a reviewer planning aid
+only; it assumes future rows are current-version, non-missing estimates within
+tolerance and does not replace collecting reviewed clinical data.
 
 After `npm run validation:clinical-readiness`, use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
@@ -215,6 +222,7 @@ report packages the dataset summary, excluded-label reason counts, agreement
 table, Wilson intervals, missing estimate counts, scale-specific label gaps,
 estimator-version counts, reference-standard control statements,
 House-Brackmann case-mix table,
+agreement sample plan,
 scale-specific availability recommendations, blocking reasons, and mismatch
 samples that a release reviewer needs before any validation-status update. The
 release status artifact checker requires the report

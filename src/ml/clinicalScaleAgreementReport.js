@@ -95,6 +95,31 @@ function scaleTable(scaleEntries, readiness, validation) {
   return rows.join("\n");
 }
 
+function formatPlanCount(value) {
+  return Number.isFinite(value) ? String(value) : "n/a";
+}
+
+function agreementSamplePlanTable(scaleEntries, validation = {}) {
+  const rows = [
+    "| Scale | Current labels | Within tolerance | Required within tolerance now | Additional perfect labels needed | Projected labels | Projected within tolerance |",
+    "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+  ];
+  for (const [scaleKey, label] of Object.entries(scaleEntries)) {
+    const plan = validation.byScale?.[scaleKey]?.agreementSamplePlan ?? {};
+    rows.push([
+      markdownEscape(label),
+      formatPlanCount(plan.currentReviewedLabels),
+      formatPlanCount(plan.currentWithinToleranceCount),
+      formatPlanCount(plan.requiredWithinToleranceAtCurrentLabelCount),
+      formatPlanCount(plan.additionalPerfectLabelsToReachStandard),
+      formatPlanCount(plan.projectedReviewedLabelsAtStandard),
+      formatPlanCount(plan.projectedWithinToleranceAtStandard),
+    ].join(" | ").replace(/^/, "| ").replace(/$/, " |"));
+  }
+  rows.push("", "Additional-perfect-label planning assumes future rows are eligible, current-version, non-missing estimates within tolerance; it is not a substitute for collecting reviewed clinical data.");
+  return rows.join("\n");
+}
+
 function mismatchRows(validation, scaleKeys) {
   const rows = [];
   for (const scaleKey of scaleKeys) {
@@ -247,6 +272,10 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "## Primary Scale Agreement",
     "",
     scaleTable(PRIMARY_SCALE_LABELS, readiness, validation),
+    "",
+    "## Agreement Sample Plan",
+    "",
+    agreementSamplePlanTable(PRIMARY_SCALE_LABELS, validation),
     ...availabilityRecommendationLines(readiness),
     ...caseMixLines(validation, readiness),
     "",

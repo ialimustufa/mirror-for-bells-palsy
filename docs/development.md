@@ -71,7 +71,8 @@ checks for:
   provenance, Sunnybrook/eFACE input-completeness provenance with complete
   scale-specific movement input for counted Sunnybrook/eFACE primary
   comparisons, plus complete resting-metric provenance, plus an eligible blinded
-  independent label count meeting the minimum reviewed-assessment floor.
+  independent label count meeting the minimum reviewed-assessment floor, plus an
+  agreement sample plan for the primary scale Wilson gates.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.

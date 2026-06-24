@@ -176,6 +176,8 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
   assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
   assertTextMatches(text, /eFACE total\s*\|/i, artifactPath, "eFACE total agreement row");
+  assertTextMatches(text, /## Agreement Sample Plan/i, artifactPath, "the agreement sample plan section");
+  assertTextMatches(text, /Additional-perfect-label planning assumes future rows are eligible/i, artifactPath, "the agreement sample planning assumption");
   assertTextMatches(text, /## House-Brackmann Case Mix/i, artifactPath, "the House-Brackmann case-mix section");
   assertTextMatches(text, /HB I-II mild\/normal\s*\|/i, artifactPath, "mild House-Brackmann case-mix row");
   assertTextMatches(text, /HB III-IV moderate\s*\|/i, artifactPath, "moderate House-Brackmann case-mix row");

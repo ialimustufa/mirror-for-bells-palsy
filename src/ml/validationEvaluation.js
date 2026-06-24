@@ -104,6 +104,66 @@ function wilsonScoreInterval(successes, total, confidenceLevel = DEFAULT_CLINICA
   };
 }
 
+function agreementPassesMinimum(successes, total, options = {}) {
+  const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
+  const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound;
+  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
+  const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
+  const agreementRate = compactRate(successes, total);
+  const interval = wilsonScoreInterval(successes, total, confidenceLevel);
+  return Boolean(
+    total >= minReviewedAssessments
+      && Number.isFinite(agreementRate)
+      && agreementRate >= minAgreementRate
+      && Number.isFinite(interval?.lower)
+      && interval.lower >= minAgreementWilsonLowerBound
+  );
+}
+
+function requiredSuccessesForAgreementStandard(total, options = {}) {
+  const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
+  const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
+  if (!Number.isInteger(total) || total < minReviewedAssessments) return null;
+  const firstCandidate = Math.max(0, Math.ceil(minAgreementRate * total - Number.EPSILON));
+  for (let successes = firstCandidate; successes <= total; successes += 1) {
+    if (agreementPassesMinimum(successes, total, options)) return successes;
+  }
+  return null;
+}
+
+function additionalPerfectLabelsForAgreementStandard(successes, total, options = {}) {
+  if (!Number.isInteger(successes) || !Number.isInteger(total) || successes < 0 || total < 0 || successes > total) return null;
+  if (agreementPassesMinimum(successes, total, options)) return 0;
+  const maxAdditionalLabels = Math.max(
+    1000,
+    Math.round(options.maxAgreementPlanningLabels ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments * 20),
+  );
+  for (let additionalLabels = 1; additionalLabels <= maxAdditionalLabels; additionalLabels += 1) {
+    if (agreementPassesMinimum(successes + additionalLabels, total + additionalLabels, options)) return additionalLabels;
+  }
+  return null;
+}
+
+function agreementSamplePlan(successes, total, options = {}) {
+  const additionalPerfectLabelsToReachStandard = additionalPerfectLabelsForAgreementStandard(successes, total, options);
+  const projectedReviewedLabelsAtStandard = additionalPerfectLabelsToReachStandard == null
+    ? null
+    : total + additionalPerfectLabelsToReachStandard;
+  const projectedWithinToleranceAtStandard = additionalPerfectLabelsToReachStandard == null
+    ? null
+    : successes + additionalPerfectLabelsToReachStandard;
+  return {
+    currentReviewedLabels: total,
+    currentWithinToleranceCount: successes,
+    minimumReviewedLabels: Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments)),
+    requiredWithinToleranceAtCurrentLabelCount: requiredSuccessesForAgreementStandard(total, options),
+    additionalPerfectLabelsToReachStandard,
+    projectedReviewedLabelsAtStandard,
+    projectedWithinToleranceAtStandard,
+    assumption: "additional labels are assumed to be eligible, current-version, non-missing estimates within tolerance",
+  };
+}
+
 function createValidationCounts() {
   return {
     labeledFrameCount: 0,
@@ -756,6 +816,12 @@ function summarizeAgreement(accumulator, options = {}) {
     exactAgreementRate,
     agreementRate,
     agreementConfidenceInterval: confidenceInterval,
+    agreementSamplePlan: agreementSamplePlan(accumulator.withinToleranceCount, denominator, {
+      minAgreementRate,
+      minAgreementWilsonLowerBound,
+      minReviewedAssessments,
+      confidenceLevel,
+    }),
     meanAbsDelta: compactNumber(meanAbsDelta, 2),
     meetsMinimumStandard: blockingReasons.length === 0,
     blockingReasons,

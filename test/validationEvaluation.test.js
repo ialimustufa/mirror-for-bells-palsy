@@ -302,6 +302,7 @@ test("clinical scale evaluation passes only when Wilson lower-bound agreement cl
   assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
   assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 30);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementSamplePlan.additionalPerfectLabelsToReachStandard, 0);
   assert.ok(report.byScale.houseBrackmann.agreementConfidenceInterval.lower >= 0.8);
   assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 30);
   assert.equal(report.byScale.sunnybrookComposite.agreementRate, 1);
@@ -359,6 +360,10 @@ test("clinical scale evaluation fails closed when 80 percent observed agreement 
   assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
   assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 24);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 0.8);
+  assert.equal(report.byScale.houseBrackmann.agreementSamplePlan.currentReviewedLabels, 30);
+  assert.equal(report.byScale.houseBrackmann.agreementSamplePlan.currentWithinToleranceCount, 24);
+  assert.equal(report.byScale.houseBrackmann.agreementSamplePlan.requiredWithinToleranceAtCurrentLabelCount > 24, true);
+  assert.equal(report.byScale.houseBrackmann.agreementSamplePlan.additionalPerfectLabelsToReachStandard > 0, true);
   assert.equal(report.byScale.houseBrackmann.agreementConfidenceInterval.method, "wilson-score");
   assert.ok(report.byScale.houseBrackmann.agreementConfidenceInterval.lower < 0.8);
   assert.ok(report.byScale.houseBrackmann.agreementConfidenceInterval.upper > 0.8);
@@ -389,6 +394,7 @@ test("clinical scale evaluation fails closed without enough reviewed assessments
 
   assert.equal(report.summary.reviewedAssessmentCount, 29);
   assert.equal(report.summary.meetsMinimumStandard, false);
+  assert.equal(report.byScale.houseBrackmann.agreementSamplePlan.additionalPerfectLabelsToReachStandard, 1);
   assert.match(report.blockingReasons.join("\n"), /needs at least 30 reviewed clinical-scale assessments/);
   assert.equal(report.byScale.houseBrackmann.meetsMinimumStandard, false);
 });

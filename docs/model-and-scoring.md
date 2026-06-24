@@ -1093,6 +1093,12 @@ estimate for that scale rather than excluding other valid targets on the row. Th
 report does not make Mirror
 estimates clinician-assigned grades; it only documents agreement against
 reviewed target labels for the local validation set.
+The same report includes an agreement sample plan per primary scale. It reports
+how many current labels are in the denominator, how many are within tolerance,
+the success count required at the current denominator, and the minimum additional
+all-success eligible labels needed to clear the 80% observed and Wilson
+lower-bound gates. The plan is deliberately separated from readiness status
+because projected labels are not evidence.
 
 The threshold calibration command groups reviewed labels by exercise and writes a
 recommendation report. It includes current reliable thresholds, positive/negative
@@ -1187,8 +1193,9 @@ report artifacts. Clinical agreement report paths must point to Markdown reports
 with the Mirror clinical-scale agreement heading, primary
 House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
 observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
-coverage, current estimator-version evidence, the 80% usable-movement coverage
-floor, complete/minimum estimate evidence-tier controls, explicit
+coverage, an agreement sample plan, current estimator-version evidence, the 80%
+usable-movement coverage floor, complete/minimum estimate evidence-tier controls,
+explicit
 movement, scale-input, and resting-metric provenance controls, explicit
 reference-standard controls, and release-control text. When all three primary
 scales are enabled, the report status must also be the passing

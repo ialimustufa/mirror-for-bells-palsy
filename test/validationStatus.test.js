@@ -73,6 +73,16 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 | Sunnybrook composite | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |
 | eFACE total | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |
 
+## Agreement Sample Plan
+
+| Scale | Current labels | Within tolerance | Required within tolerance now | Additional perfect labels needed | Projected labels | Projected within tolerance |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| House-Brackmann | 30 | 30 | 29 | 0 | 30 | 30 |
+| Sunnybrook composite | 30 | 30 | 29 | 0 | 30 | 30 |
+| eFACE total | 30 | 30 | 29 | 0 | 30 | 30 |
+
+Additional-perfect-label planning assumes future rows are eligible, current-version, non-missing estimates within tolerance; it is not a substitute for collecting reviewed clinical data.
+
 ## House-Brackmann Case Mix
 
 - Required severity bands: 3
