@@ -2,7 +2,7 @@ import { summarizeAssessmentSession } from "./assessment";
 
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 2;
+const VALIDATION_LABEL_SCHEMA_VERSION = 3;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
@@ -99,6 +99,10 @@ function buildAssessmentClinicalLabelFields() {
     estimateUsedMovementExerciseIds: { type: "exercise-id-list", default: "record.estimate.evidence.estimatedMovementExerciseIds" },
     estimateOmittedMovementExerciseIds: { type: "exercise-id-list", default: "record.estimate.evidence.omittedMovementExerciseIds" },
     estimateCalculationUsesOnlyUsableMovements: { type: "boolean|null", default: "record.estimate.evidence.calculationUsesOnlyUsableMovements" },
+    estimateHouseBrackmannInputComplete: { type: "boolean|null", default: "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.complete" },
+    estimateHouseBrackmannRequiredExerciseIds: { type: "exercise-id-list", default: "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.requiredExerciseIds" },
+    estimateHouseBrackmannUsedExerciseIds: { type: "exercise-id-list", default: "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.usedExerciseIds" },
+    estimateHouseBrackmannMissingRequiredExerciseIds: { type: "exercise-id-list", default: "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.missingRequiredExerciseIds" },
     estimateRequiredRestingMetricKeys: { type: "resting-metric-key-list", default: "record.estimate.evidence.requiredRestingMetricKeys" },
     estimateAvailableRestingMetricKeys: { type: "resting-metric-key-list", default: "record.estimate.evidence.availableRestingMetricKeys" },
     estimateMissingRestingMetricKeys: { type: "resting-metric-key-list", default: "record.estimate.evidence.missingRestingMetricKeys" },
@@ -183,6 +187,7 @@ function buildAssessmentClinicalLabelTemplate() {
 function compactAssessmentClinicalScale(session = {}) {
   const assessment = summarizeAssessmentSession(session);
   const clinicalScales = assessment.clinicalScales ?? null;
+  const houseBrackmannInput = clinicalScales?.evidence?.scaleInputCompleteness?.houseBrackmann ?? null;
   return {
     id: session.id ? `${session.id}:clinical-scale` : session.ts != null ? `ts:${session.ts}:clinical-scale` : null,
     sessionId: session.id ?? null,
@@ -205,6 +210,10 @@ function compactAssessmentClinicalScale(session = {}) {
       estimateUsedMovementExerciseIds: clinicalScales?.evidence?.estimatedMovementExerciseIds ?? null,
       estimateOmittedMovementExerciseIds: clinicalScales?.evidence?.omittedMovementExerciseIds ?? null,
       estimateCalculationUsesOnlyUsableMovements: clinicalScales?.evidence?.calculationUsesOnlyUsableMovements ?? null,
+      estimateHouseBrackmannInputComplete: houseBrackmannInput?.complete ?? null,
+      estimateHouseBrackmannRequiredExerciseIds: houseBrackmannInput?.requiredExerciseIds ?? null,
+      estimateHouseBrackmannUsedExerciseIds: houseBrackmannInput?.usedExerciseIds ?? null,
+      estimateHouseBrackmannMissingRequiredExerciseIds: houseBrackmannInput?.missingRequiredExerciseIds ?? null,
       estimateRequiredRestingMetricKeys: clinicalScales?.evidence?.requiredRestingMetricKeys ?? null,
       estimateAvailableRestingMetricKeys: clinicalScales?.evidence?.availableRestingMetricKeys ?? null,
       estimateMissingRestingMetricKeys: clinicalScales?.evidence?.missingRestingMetricKeys ?? null,

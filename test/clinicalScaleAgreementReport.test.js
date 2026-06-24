@@ -41,6 +41,7 @@ function validationReport(overrides = {}) {
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
+      requiresHouseBrackmannRequiredInput: true,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -111,6 +112,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /at least 80% usable movement coverage/);
   assert.match(markdown, /used\/omitted movement IDs/);
   assert.match(markdown, /usable-movements-only calculation flag/);
+  assert.match(markdown, /House-Brackmann estimates require the gentle eye-closure input/);
   assert.match(markdown, /missing or invalid estimates are reported in that scale's denominator/);
   assert.match(markdown, /valid in-range target for that specific primary scale/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);

@@ -124,11 +124,18 @@ provenance columns for `estimateStatus`, `estimateEvidenceTier`,
 `estimateRequiredMovementCount`, `estimateUsedMovementExerciseIds`,
 `estimateOmittedMovementExerciseIds`,
 `estimateCalculationUsesOnlyUsableMovements`,
+`estimateHouseBrackmannInputComplete`,
+`estimateHouseBrackmannRequiredExerciseIds`,
+`estimateHouseBrackmannUsedExerciseIds`,
+`estimateHouseBrackmannMissingRequiredExerciseIds`,
 `estimateRequiredRestingMetricKeys`, `estimateAvailableRestingMetricKeys`,
 `estimateMissingRestingMetricKeys`,
 `estimateCalculationUsesCompleteRestingMetrics`, and
 `clinicalScaleEstimateVersion` so release tooling can prove the row came from
 qualifying current-version evidence with the exact v5 estimator inputs.
+House-Brackmann agreement treats an estimate as missing unless these provenance
+fields or the overall used-movement provenance show that gentle eye closure was
+used.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:

@@ -141,9 +141,10 @@ Clinical-scale readiness uses the machine-readable standard in
 - The paired Mirror estimate must also be a current-version `status: estimated`
   row with a complete or minimum evidence tier, at least 80% usable movement
   coverage, used/omitted movement exercise IDs, and the usable-movements-only
-  calculation flag. A missing or invalid estimate is reported in that scale's
-  denominator as a missing estimate rather than excluding other valid scale labels
-  on the row.
+  calculation flag. House-Brackmann estimates must also preserve provenance
+  showing that the required gentle eye-closure input was used. A missing or
+  invalid estimate is reported in that scale's denominator as a missing estimate
+  rather than excluding other valid scale labels on the row.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson lower-bound gate is used because a raw observed percentage can hide
@@ -170,13 +171,15 @@ If multiple reviewers label the same assessment:
   estimate status, complete/minimum evidence tier, or 80% usable-movement
   coverage as adjudication blockers. Used and omitted movement exercise IDs must
   also be present and match between reviewer sheets, because a 4/5 estimate with
-  a different omitted movement is a different estimator input. Required,
-  available, and missing resting metric keys must also prove complete rest input
-  coverage, with the complete-resting-metrics calculation flag set. Old reviewer
-  sheets without the current movement and resting-metric provenance columns
-  should be recollected from a current blinded sheet. Both raw reviewer sheets and the
-  final adjudicated row must preserve the current qualifying estimate provenance
-  before labels can count.
+  a different omitted movement is a different estimator input. House-Brackmann
+  input-completeness fields must show the required gentle eye-closure input was
+  used before a House-Brackmann estimate can count. Required, available, and
+  missing resting metric keys must also prove complete rest input coverage, with
+  the complete-resting-metrics calculation flag set. Old reviewer sheets without
+  the current movement, House-Brackmann input, and resting-metric provenance
+  columns should be recollected from a current blinded sheet. Both raw reviewer
+  sheets and the final adjudicated row must preserve the current qualifying
+  estimate provenance before labels can count.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
   incomplete, or out-of-range reviewer rows as adjudication blockers. They should
   be recollected from a blinded current-version sheet rather than resolved by

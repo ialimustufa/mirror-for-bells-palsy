@@ -67,9 +67,9 @@ checks for:
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
-  used/omitted movement input provenance plus complete resting-metric
-  provenance, plus an eligible blinded independent label count meeting the
-  minimum reviewed-assessment floor.
+  used/omitted movement input provenance, House-Brackmann required-input
+  provenance, plus complete resting-metric provenance, plus an eligible blinded
+  independent label count meeting the minimum reviewed-assessment floor.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.

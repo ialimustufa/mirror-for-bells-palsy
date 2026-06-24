@@ -1,5 +1,5 @@
 import { replayFrameSamples } from "./frameSampleReplay.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION, REQUIRED_RESTING_METRIC_KEYS, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS, REQUIRED_RESTING_METRIC_KEYS, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
 
 const POSITIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["trace", "low", "moderate", "strong"]);
 const NEGATIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["none"]);
@@ -279,6 +279,27 @@ function clinicalScaleEstimateMetadata(record = {}) {
     sourceSummary.estimateCalculationUsesCompleteRestingMetrics,
     record.estimateCalculationUsesCompleteRestingMetrics,
   ));
+  const houseBrackmannInput = evidence.scaleInputCompleteness?.houseBrackmann ?? {};
+  const houseBrackmannInputComplete = booleanValueWithPresence(firstPresent(
+    houseBrackmannInput.complete,
+    sourceSummary.estimateHouseBrackmannInputComplete,
+    record.estimateHouseBrackmannInputComplete,
+  ));
+  const houseBrackmannRequiredExerciseIds = listValueWithPresence(firstPresent(
+    houseBrackmannInput.requiredExerciseIds,
+    sourceSummary.estimateHouseBrackmannRequiredExerciseIds,
+    record.estimateHouseBrackmannRequiredExerciseIds,
+  ));
+  const houseBrackmannUsedExerciseIds = listValueWithPresence(firstPresent(
+    houseBrackmannInput.usedExerciseIds,
+    sourceSummary.estimateHouseBrackmannUsedExerciseIds,
+    record.estimateHouseBrackmannUsedExerciseIds,
+  ));
+  const houseBrackmannMissingRequiredExerciseIds = listValueWithPresence(firstPresent(
+    houseBrackmannInput.missingRequiredExerciseIds,
+    sourceSummary.estimateHouseBrackmannMissingRequiredExerciseIds,
+    record.estimateHouseBrackmannMissingRequiredExerciseIds,
+  ));
   return {
     status: estimate.status ?? record.estimateStatus ?? null,
     evidenceTier: evidence.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? record.estimateEvidenceTier ?? null,
@@ -292,6 +313,10 @@ function clinicalScaleEstimateMetadata(record = {}) {
     availableRestingMetricKeys,
     missingRestingMetricKeys,
     calculationUsesCompleteRestingMetrics,
+    houseBrackmannInputComplete,
+    houseBrackmannRequiredExerciseIds,
+    houseBrackmannUsedExerciseIds,
+    houseBrackmannMissingRequiredExerciseIds,
   };
 }
 
@@ -483,14 +508,37 @@ function clinicalScaleEstimate(record = {}) {
   const houseBrackmann = scales.houseBrackmann ?? {};
   const sunnybrook = scales.sunnybrook ?? {};
   const eface = scales.eface ?? {};
+  const metadata = clinicalScaleEstimateMetadata(record);
+  const houseBrackmannValue = parseHouseBrackmannGrade(houseBrackmann.numericGrade ?? houseBrackmann.grade);
   return {
-    houseBrackmann: parseHouseBrackmannGrade(houseBrackmann.numericGrade ?? houseBrackmann.grade),
+    houseBrackmann: houseBrackmannValue != null && houseBrackmannEstimateHasRequiredInput(metadata) ? houseBrackmannValue : null,
     sunnybrookComposite: boundedNumericLabel(sunnybrook.compositeScore),
     efaceTotal: boundedNumericLabel(eface.totalScore),
     efaceStatic: boundedNumericLabel(eface.staticScore),
     efaceDynamic: boundedNumericLabel(eface.dynamicScore),
     efaceSynkinesis: boundedNumericLabel(eface.synkinesisScore),
   };
+}
+
+function houseBrackmannEstimateHasRequiredInput(metadata = {}) {
+  const requiredIds = metadata.houseBrackmannRequiredExerciseIds?.provided
+    ? metadata.houseBrackmannRequiredExerciseIds.values
+    : HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS;
+  const missingIds = metadata.houseBrackmannMissingRequiredExerciseIds?.provided
+    ? metadata.houseBrackmannMissingRequiredExerciseIds.values
+    : [];
+  const usedIds = metadata.houseBrackmannUsedExerciseIds?.provided
+    ? metadata.houseBrackmannUsedExerciseIds.values
+    : metadata.usedMovementExerciseIds?.values ?? [];
+  const inputComplete = metadata.houseBrackmannInputComplete?.provided
+    ? metadata.houseBrackmannInputComplete.value
+    : null;
+  const requiredSet = new Set(requiredIds.length ? requiredIds : HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS);
+  const usedSet = new Set(usedIds);
+  const allRequiredUsed = [...requiredSet].every((exerciseId) => usedSet.has(exerciseId));
+  const noneRequiredMissing = missingIds.every((exerciseId) => !requiredSet.has(exerciseId));
+  if (inputComplete != null) return inputComplete === true && allRequiredUsed && noneRequiredMissing;
+  return allRequiredUsed && noneRequiredMissing;
 }
 
 function hasAnyClinicalLabel(labels = {}) {
@@ -740,6 +788,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
         minAssessmentsPerSeverityBand,
       },
       clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
+      requiresHouseBrackmannRequiredInput: true,
     },
     summary: {
       assessmentClinicalScaleRecords: assessmentRecords.length,

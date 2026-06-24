@@ -44,6 +44,14 @@ function sampleRecords() {
             estimatedMovementExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
             omittedMovementExerciseIds: ["pucker"],
             calculationUsesOnlyUsableMovements: true,
+            scaleInputCompleteness: {
+              houseBrackmann: {
+                requiredExerciseIds: ["eye-close"],
+                usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+                missingRequiredExerciseIds: [],
+                complete: true,
+              },
+            },
             requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
             availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
             missingRestingMetricKeys: [],
@@ -93,6 +101,10 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].estimateUsedMovementExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(rows[1].estimateOmittedMovementExerciseIds, "pucker");
   assert.equal(rows[1].estimateCalculationUsesOnlyUsableMovements, "true");
+  assert.equal(rows[1].estimateHouseBrackmannInputComplete, "true");
+  assert.equal(rows[1].estimateHouseBrackmannRequiredExerciseIds, "eye-close");
+  assert.equal(rows[1].estimateHouseBrackmannUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateHouseBrackmannMissingRequiredExerciseIds, "");
   assert.equal(rows[1].estimateRequiredRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateAvailableRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateMissingRestingMetricKeys, "");
@@ -124,6 +136,10 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].estimateUsedMovementExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(rows[1].estimateOmittedMovementExerciseIds, "pucker");
   assert.equal(rows[1].estimateCalculationUsesOnlyUsableMovements, "true");
+  assert.equal(rows[1].estimateHouseBrackmannInputComplete, "true");
+  assert.equal(rows[1].estimateHouseBrackmannRequiredExerciseIds, "eye-close");
+  assert.equal(rows[1].estimateHouseBrackmannUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateHouseBrackmannMissingRequiredExerciseIds, "");
   assert.equal(rows[1].estimateRequiredRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateAvailableRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateMissingRestingMetricKeys, "");
@@ -144,6 +160,10 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(clinicalRow[index.estimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(clinicalRow[index.estimateOmittedMovementExerciseIds], "pucker");
   assert.equal(clinicalRow[index.estimateCalculationUsesOnlyUsableMovements], "true");
+  assert.equal(clinicalRow[index.estimateHouseBrackmannInputComplete], "true");
+  assert.equal(clinicalRow[index.estimateHouseBrackmannRequiredExerciseIds], "eye-close");
+  assert.equal(clinicalRow[index.estimateHouseBrackmannUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(clinicalRow[index.estimateHouseBrackmannMissingRequiredExerciseIds], "");
   assert.equal(clinicalRow[index.estimateRequiredRestingMetricKeys], "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(clinicalRow[index.estimateAvailableRestingMetricKeys], "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(clinicalRow[index.estimateMissingRestingMetricKeys], "");

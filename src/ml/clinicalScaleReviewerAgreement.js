@@ -1,5 +1,5 @@
 import { LABEL_COLUMNS, parseCsv } from "./validationLabels.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION, REQUIRED_RESTING_METRIC_KEYS, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS, REQUIRED_RESTING_METRIC_KEYS, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
 
 const PRIMARY_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
@@ -324,6 +324,43 @@ function estimateRestingMetricProvenanceReasons(row = {}) {
   return reasons;
 }
 
+function estimateHouseBrackmannInputProvenanceReasons(row = {}) {
+  const reasons = [];
+  const inputComplete = estimateBooleanValue(row, "estimateHouseBrackmannInputComplete");
+  const required = estimateMovementIdList(row, "estimateHouseBrackmannRequiredExerciseIds");
+  const used = estimateMovementIdList(row, "estimateHouseBrackmannUsedExerciseIds");
+  const missingRequired = estimateMovementIdList(row, "estimateHouseBrackmannMissingRequiredExerciseIds");
+  const requiredSet = new Set(required);
+  const usedSet = new Set(used);
+  if (
+    !estimateEvidenceColumnPresent(row, "estimateHouseBrackmannInputComplete")
+    || !estimateEvidenceColumnPresent(row, "estimateHouseBrackmannRequiredExerciseIds")
+    || !estimateEvidenceColumnPresent(row, "estimateHouseBrackmannUsedExerciseIds")
+    || !estimateEvidenceColumnPresent(row, "estimateHouseBrackmannMissingRequiredExerciseIds")
+  ) {
+    reasons.push("clinical scale estimate House-Brackmann input provenance is missing");
+  }
+  if (inputComplete !== true) {
+    reasons.push("clinical scale estimate House-Brackmann input complete flag is missing or false");
+  }
+  const hasUnknownIds = [...required, ...used, ...missingRequired].some((exerciseId) => !STANDARD_SCALE_MOVEMENT_ID_SET.has(exerciseId));
+  const hasRequiredIds = HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS.every((exerciseId) => requiredSet.has(exerciseId));
+  const allRequiredUsed = required.every((exerciseId) => usedSet.has(exerciseId));
+  const noRequiredMissing = missingRequired.every((exerciseId) => !requiredSet.has(exerciseId));
+  if (
+    hasUnknownIds
+    || hasDuplicates(required)
+    || hasDuplicates(used)
+    || hasDuplicates(missingRequired)
+    || !hasRequiredIds
+    || !allRequiredUsed
+    || !noRequiredMissing
+  ) {
+    reasons.push("clinical scale estimate House-Brackmann input provenance is inconsistent");
+  }
+  return reasons;
+}
+
 function estimateEvidenceReasons(row = {}, options = {}) {
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio
     ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
@@ -339,6 +376,7 @@ function estimateEvidenceReasons(row = {}, options = {}) {
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
   }
   reasons.push(...estimateMovementProvenanceReasons(row));
+  reasons.push(...estimateHouseBrackmannInputProvenanceReasons(row));
   reasons.push(...estimateRestingMetricProvenanceReasons(row));
   return reasons;
 }
@@ -635,6 +673,10 @@ function estimateEvidenceKey(row = {}) {
   const usedMovementIds = normalizedEstimateEvidenceText(row, "estimateUsedMovementExerciseIds");
   const omittedMovementIds = normalizedEstimateEvidenceText(row, "estimateOmittedMovementExerciseIds");
   const calculationUsesOnlyUsableMovements = normalizedEstimateEvidenceText(row, "estimateCalculationUsesOnlyUsableMovements");
+  const houseBrackmannInputComplete = normalizedEstimateEvidenceText(row, "estimateHouseBrackmannInputComplete");
+  const houseBrackmannRequiredExerciseIds = normalizedEstimateEvidenceText(row, "estimateHouseBrackmannRequiredExerciseIds");
+  const houseBrackmannUsedExerciseIds = normalizedEstimateEvidenceText(row, "estimateHouseBrackmannUsedExerciseIds");
+  const houseBrackmannMissingRequiredExerciseIds = normalizedEstimateEvidenceText(row, "estimateHouseBrackmannMissingRequiredExerciseIds");
   const requiredRestingMetricKeys = normalizedEstimateEvidenceText(row, "estimateRequiredRestingMetricKeys");
   const availableRestingMetricKeys = normalizedEstimateEvidenceText(row, "estimateAvailableRestingMetricKeys");
   const missingRestingMetricKeys = normalizedEstimateEvidenceText(row, "estimateMissingRestingMetricKeys");
@@ -648,6 +690,10 @@ function estimateEvidenceKey(row = {}) {
     usedMovementIds || "missing-used-movements",
     omittedMovementIds || "missing-omitted-movements",
     calculationUsesOnlyUsableMovements || "missing-calculation-input-filter",
+    houseBrackmannInputComplete || "missing-hb-input-complete",
+    houseBrackmannRequiredExerciseIds || "missing-hb-required-inputs",
+    houseBrackmannUsedExerciseIds || "missing-hb-used-inputs",
+    houseBrackmannMissingRequiredExerciseIds || "no-missing-hb-required-inputs",
     requiredRestingMetricKeys || "missing-required-resting-metrics",
     availableRestingMetricKeys || "missing-available-resting-metrics",
     missingRestingMetricKeys || "no-missing-resting-metrics",
@@ -877,6 +923,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       minUsableMovementCoverageRatio,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
+      requiresHouseBrackmannRequiredInput: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,

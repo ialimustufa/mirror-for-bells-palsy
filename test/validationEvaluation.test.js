@@ -176,6 +176,12 @@ function clinicalRecord(id, estimate, label) {
   const requiredMovementCount = estimate.requiredMovementCount ?? 5;
   const defaultUsedMovementExerciseIds = STANDARD_SCALE_MOVEMENT_IDS.slice(0, usableMovementCount);
   const defaultOmittedMovementExerciseIds = STANDARD_SCALE_MOVEMENT_IDS.filter((exerciseId) => !defaultUsedMovementExerciseIds.includes(exerciseId));
+  const usedMovementExerciseIds = estimate.usedMovementExerciseIds ?? defaultUsedMovementExerciseIds;
+  const houseBrackmannRequiredExerciseIds = estimate.houseBrackmannRequiredExerciseIds ?? ["eye-close"];
+  const houseBrackmannUsedExerciseIds = estimate.houseBrackmannUsedExerciseIds ?? usedMovementExerciseIds;
+  const houseBrackmannMissingRequiredExerciseIds = estimate.houseBrackmannMissingRequiredExerciseIds
+    ?? houseBrackmannRequiredExerciseIds.filter((exerciseId) => !houseBrackmannUsedExerciseIds.includes(exerciseId));
+  const houseBrackmannInputComplete = estimate.houseBrackmannInputComplete ?? houseBrackmannMissingRequiredExerciseIds.length === 0;
   return {
     section: "assessmentClinicalScale",
     record: {
@@ -188,9 +194,17 @@ function clinicalRecord(id, estimate, label) {
         evidence: {
           tier: estimate.evidenceTier ?? "complete-standard-assessment",
           label: estimate.evidenceLabel ?? "Complete standard-assessment evidence",
-          estimatedMovementExerciseIds: estimate.usedMovementExerciseIds ?? defaultUsedMovementExerciseIds,
+          estimatedMovementExerciseIds: usedMovementExerciseIds,
           omittedMovementExerciseIds: estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds,
           calculationUsesOnlyUsableMovements: estimate.calculationUsesOnlyUsableMovements ?? true,
+          scaleInputCompleteness: {
+            houseBrackmann: {
+              requiredExerciseIds: houseBrackmannRequiredExerciseIds,
+              usedExerciseIds: houseBrackmannUsedExerciseIds,
+              missingRequiredExerciseIds: houseBrackmannMissingRequiredExerciseIds,
+              complete: houseBrackmannInputComplete,
+            },
+          },
           requiredRestingMetricKeys: estimate.requiredRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
           availableRestingMetricKeys: estimate.availableRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
           missingRestingMetricKeys: estimate.missingRestingMetricKeys ?? [],
@@ -509,6 +523,44 @@ test("clinical scale evaluation accepts minimum evidence with exact movement pro
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.standard.requiresV3MovementProvenance, true);
+});
+
+test("clinical scale evaluation treats HB estimate as missing without required eye-closure input", () => {
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const records = [
+    clinicalRecord("assessment-missing-hb-input:clinical-scale", {
+      hb: 3,
+      sunnybrook: 72,
+      eface: 70,
+      evidenceTier: "minimum-standard-assessment",
+      usableMovementCoverageRatio: 0.8,
+      usableMovementCount: 4,
+      requiredMovementCount: 5,
+      usedMovementExerciseIds: ["eyebrow-raise", "open-smile", "nose-wrinkle", "pucker"],
+      omittedMovementExerciseIds: ["eye-close"],
+      houseBrackmannInputComplete: false,
+      houseBrackmannUsedExerciseIds: ["eyebrow-raise", "open-smile", "nose-wrinkle", "pucker"],
+      houseBrackmannMissingRequiredExerciseIds: ["eye-close"],
+    }, validLabel),
+  ];
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.primaryScaleEstimateIssueReasons["missing valid houseBrackmann estimate"], 1);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.byScale.houseBrackmann.comparableCount, 0);
+  assert.equal(report.byScale.houseBrackmann.missingEstimateCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 0);
+  assert.equal(report.byScale.sunnybrookComposite.comparableCount, 1);
+  assert.equal(report.byScale.efaceTotal.comparableCount, 1);
+  assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
 });
 
 test("clinical scale evaluation excludes labels without movement provenance", () => {

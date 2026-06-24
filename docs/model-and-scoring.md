@@ -997,7 +997,9 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - Assessment clinical-scale rows include estimate status, evidence tier, usable
   movement coverage, used/omitted movement exercise IDs, and the
   usable-movements-only calculation flag so reviewer sheets remain tied to the
-  exact estimator inputs.
+  exact estimator inputs. Label schema v3 also carries House-Brackmann
+  input-completeness provenance: required exercise IDs, used exercise IDs,
+  missing required exercise IDs, and the complete flag.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
@@ -1034,7 +1036,8 @@ The label-sheet command creates a CSV for clinician, user, or developer review.
 The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. Use
 `--blinded` for primary clinical-scale review so Mirror estimate columns are left
 blank during target assignment while preserving estimate provenance columns such
-as evidence tier, coverage, used/omitted movement IDs, and estimator version. The
+as evidence tier, coverage, used/omitted movement IDs, House-Brackmann
+input-completeness fields, and estimator version. The
 merge command copies reviewed label fields back into a new JSONL dataset without
 changing the original export. The evaluator replays labeled frame samples through
 the current scorer and reports
@@ -1066,7 +1069,9 @@ movement coverage. For v5, counted rows must also preserve used/omitted movement
 exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`, required,
 available, and missing resting metric keys, and
 `estimateCalculationUsesCompleteRestingMetrics: true`; inconsistent or missing
-movement or resting-metric provenance excludes the reviewed row. Valid primary targets
+movement or resting-metric provenance excludes the reviewed row. House-Brackmann
+agreement treats the paired estimate as missing unless the estimate provenance
+shows the required gentle eye-closure input was used. Valid primary targets
 count scale by scale; a missing or invalid estimate is reported as a missing
 estimate for that scale rather than excluding other valid targets on the row. This
 report does not make Mirror

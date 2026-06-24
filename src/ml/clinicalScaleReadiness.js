@@ -120,6 +120,9 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   if (clinicalValidation.standard?.requiresV4RestingMetricProvenance !== true) {
     commonBlockingReasons.push("estimateRestingMetricProvenance: needs validation report with complete resting-metric input controls");
   }
+  if (clinicalValidation.standard?.requiresHouseBrackmannRequiredInput !== true) {
+    commonBlockingReasons.push("houseBrackmannInputProvenance: needs validation report proving HB estimates use required eye-closure input");
+  }
   if (!clinicalValidation.caseMix) {
     commonBlockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
   } else if (clinicalValidation.caseMix.blockingReasons?.length) {

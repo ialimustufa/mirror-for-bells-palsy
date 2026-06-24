@@ -35,6 +35,7 @@ function clinicalValidationReport(overrides = {}) {
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
+      requiresHouseBrackmannRequiredInput: true,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -145,6 +146,7 @@ test("clinical scale readiness fails closed without current estimator-version ev
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
+      requiresHouseBrackmannRequiredInput: true,
     },
   }), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
@@ -170,6 +172,16 @@ test("clinical scale readiness fails closed without resting-metric provenance co
 
   assert.equal(report.status, "needs-reviewed-clinical-scale-data");
   assert.match(report.blockingReasons.join("\n"), /complete resting-metric input controls/);
+});
+
+test("clinical scale readiness fails closed without House-Brackmann input controls", () => {
+  const source = clinicalValidationReport();
+  delete source.standard.requiresHouseBrackmannRequiredInput;
+
+  const report = assessClinicalScaleReadiness(source, { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.match(report.blockingReasons.join("\n"), /required eye-closure input/);
 });
 
 test("clinical scale readiness reports confidence standard without enabling clinical-facing scores by itself", () => {
