@@ -68,6 +68,11 @@ test("clinical scale estimates map complete assessment evidence into HB, Sunnybr
   assert.equal(result.scales.sunnybrook.compositeScore, 53);
   assert.ok(result.scales.eface.totalScore > 65);
   assert.ok(result.scales.eface.totalScore < 75);
+  assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, true);
+  assert.equal(result.evidence.scaleInputCompleteness.sunnybrook.complete, true);
+  assert.equal(result.evidence.scaleInputCompleteness.eface.complete, true);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, []);
   assert.match(result.caveats.join(" "), /not assigned by a clinician/);
 });
 
@@ -94,6 +99,14 @@ test("clinical scale estimates distinguish minimum from complete standard eviden
   assert.deepEqual(result.scales.sunnybrook.inputCompleteness.omittedExerciseIds, ["pucker"]);
   assert.equal(result.scales.houseBrackmann.grade, "IV");
   assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, true);
+  assert.equal(result.evidence.scaleInputCompleteness.sunnybrook.complete, false);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.omittedExerciseIds, ["pucker"]);
+  assert.equal(result.evidence.scaleInputCompleteness.sunnybrook.calculationUsesOnlyUsableMovements, true);
+  assert.equal(result.evidence.scaleInputCompleteness.eface.complete, false);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, ["pucker"]);
+  assert.equal(result.evidence.scaleInputCompleteness.eface.calculationUsesOnlyUsableMovements, true);
 });
 
 test("clinical scale estimates omit House-Brackmann when eye closure is missing", () => {
@@ -118,6 +131,10 @@ test("clinical scale estimates omit House-Brackmann when eye closure is missing"
   assert.equal(result.scales.eface.dynamicItems.gentleEyeClosure, undefined);
   assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, false);
   assert.deepEqual(result.evidence.scaleInputCompleteness.houseBrackmann.missingRequiredExerciseIds, ["eye-close"]);
+  assert.equal(result.evidence.scaleInputCompleteness.sunnybrook.complete, false);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.omittedExerciseIds, ["eye-close"]);
+  assert.equal(result.evidence.scaleInputCompleteness.eface.complete, false);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, ["eye-close"]);
 
   const inputGaps = clinicalScaleInputGapSummaries(result);
   assert.equal(inputGaps.length, 1);

@@ -51,6 +51,18 @@ function sampleRecords() {
                 missingRequiredExerciseIds: [],
                 complete: true,
               },
+              sunnybrook: {
+                usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+                omittedExerciseIds: ["pucker"],
+                complete: false,
+                calculationUsesOnlyUsableMovements: true,
+              },
+              eface: {
+                usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+                omittedExerciseIds: ["pucker"],
+                complete: false,
+                calculationUsesOnlyUsableMovements: true,
+              },
             },
             requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
             availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
@@ -105,6 +117,12 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].estimateHouseBrackmannRequiredExerciseIds, "eye-close");
   assert.equal(rows[1].estimateHouseBrackmannUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(rows[1].estimateHouseBrackmannMissingRequiredExerciseIds, "");
+  assert.equal(rows[1].estimateSunnybrookInputComplete, "false");
+  assert.equal(rows[1].estimateSunnybrookUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateSunnybrookOmittedExerciseIds, "pucker");
+  assert.equal(rows[1].estimateEfaceInputComplete, "false");
+  assert.equal(rows[1].estimateEfaceUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateEfaceOmittedExerciseIds, "pucker");
   assert.equal(rows[1].estimateRequiredRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateAvailableRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateMissingRestingMetricKeys, "");
@@ -140,6 +158,12 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].estimateHouseBrackmannRequiredExerciseIds, "eye-close");
   assert.equal(rows[1].estimateHouseBrackmannUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(rows[1].estimateHouseBrackmannMissingRequiredExerciseIds, "");
+  assert.equal(rows[1].estimateSunnybrookInputComplete, "false");
+  assert.equal(rows[1].estimateSunnybrookUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateSunnybrookOmittedExerciseIds, "pucker");
+  assert.equal(rows[1].estimateEfaceInputComplete, "false");
+  assert.equal(rows[1].estimateEfaceUsedExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateEfaceOmittedExerciseIds, "pucker");
   assert.equal(rows[1].estimateRequiredRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateAvailableRestingMetricKeys, "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(rows[1].estimateMissingRestingMetricKeys, "");
@@ -164,6 +188,12 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(clinicalRow[index.estimateHouseBrackmannRequiredExerciseIds], "eye-close");
   assert.equal(clinicalRow[index.estimateHouseBrackmannUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
   assert.equal(clinicalRow[index.estimateHouseBrackmannMissingRequiredExerciseIds], "");
+  assert.equal(clinicalRow[index.estimateSunnybrookInputComplete], "false");
+  assert.equal(clinicalRow[index.estimateSunnybrookUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(clinicalRow[index.estimateSunnybrookOmittedExerciseIds], "pucker");
+  assert.equal(clinicalRow[index.estimateEfaceInputComplete], "false");
+  assert.equal(clinicalRow[index.estimateEfaceUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(clinicalRow[index.estimateEfaceOmittedExerciseIds], "pucker");
   assert.equal(clinicalRow[index.estimateRequiredRestingMetricKeys], "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(clinicalRow[index.estimateAvailableRestingMetricKeys], "palpebralFissure|nasolabialMidface|oralCommissure");
   assert.equal(clinicalRow[index.estimateMissingRestingMetricKeys], "");

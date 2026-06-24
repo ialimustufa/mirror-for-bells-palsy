@@ -27,6 +27,12 @@ const LABEL_COLUMNS = [
   "estimateHouseBrackmannRequiredExerciseIds",
   "estimateHouseBrackmannUsedExerciseIds",
   "estimateHouseBrackmannMissingRequiredExerciseIds",
+  "estimateSunnybrookInputComplete",
+  "estimateSunnybrookUsedExerciseIds",
+  "estimateSunnybrookOmittedExerciseIds",
+  "estimateEfaceInputComplete",
+  "estimateEfaceUsedExerciseIds",
+  "estimateEfaceOmittedExerciseIds",
   "estimateRequiredRestingMetricKeys",
   "estimateAvailableRestingMetricKeys",
   "estimateMissingRestingMetricKeys",
@@ -182,6 +188,12 @@ function frameLabelRowFromRecord(line) {
     estimateHouseBrackmannRequiredExerciseIds: "",
     estimateHouseBrackmannUsedExerciseIds: "",
     estimateHouseBrackmannMissingRequiredExerciseIds: "",
+    estimateSunnybrookInputComplete: "",
+    estimateSunnybrookUsedExerciseIds: "",
+    estimateSunnybrookOmittedExerciseIds: "",
+    estimateEfaceInputComplete: "",
+    estimateEfaceUsedExerciseIds: "",
+    estimateEfaceOmittedExerciseIds: "",
     estimateRequiredRestingMetricKeys: "",
     estimateAvailableRestingMetricKeys: "",
     estimateMissingRestingMetricKeys: "",
@@ -217,7 +229,10 @@ function assessmentClinicalLabelRowFromRecord(line, options = {}) {
   const sourceSummary = record.sourceSummary ?? {};
   const evidence = estimate.evidence ?? {};
   const coverage = estimate.coverage ?? {};
-  const houseBrackmannInput = evidence.scaleInputCompleteness?.houseBrackmann ?? {};
+  const scaleInputCompleteness = evidence.scaleInputCompleteness ?? {};
+  const houseBrackmannInput = scaleInputCompleteness.houseBrackmann ?? {};
+  const sunnybrookInput = scaleInputCompleteness.sunnybrook ?? {};
+  const efaceInput = scaleInputCompleteness.eface ?? {};
   const scales = includeEstimateColumns && estimate.status === "estimated" ? estimate.scales ?? {} : {};
   const houseBrackmann = scales.houseBrackmann ?? {};
   const sunnybrook = scales.sunnybrook ?? {};
@@ -252,6 +267,12 @@ function assessmentClinicalLabelRowFromRecord(line, options = {}) {
     estimateHouseBrackmannRequiredExerciseIds: formatList(houseBrackmannInput.requiredExerciseIds ?? sourceSummary.estimateHouseBrackmannRequiredExerciseIds),
     estimateHouseBrackmannUsedExerciseIds: formatList(houseBrackmannInput.usedExerciseIds ?? sourceSummary.estimateHouseBrackmannUsedExerciseIds),
     estimateHouseBrackmannMissingRequiredExerciseIds: formatList(houseBrackmannInput.missingRequiredExerciseIds ?? sourceSummary.estimateHouseBrackmannMissingRequiredExerciseIds),
+    estimateSunnybrookInputComplete: formatBoolean(sunnybrookInput.complete ?? sourceSummary.estimateSunnybrookInputComplete),
+    estimateSunnybrookUsedExerciseIds: formatList(sunnybrookInput.usedExerciseIds ?? sourceSummary.estimateSunnybrookUsedExerciseIds),
+    estimateSunnybrookOmittedExerciseIds: formatList(sunnybrookInput.omittedExerciseIds ?? sourceSummary.estimateSunnybrookOmittedExerciseIds),
+    estimateEfaceInputComplete: formatBoolean(efaceInput.complete ?? sourceSummary.estimateEfaceInputComplete),
+    estimateEfaceUsedExerciseIds: formatList(efaceInput.usedExerciseIds ?? sourceSummary.estimateEfaceUsedExerciseIds),
+    estimateEfaceOmittedExerciseIds: formatList(efaceInput.omittedExerciseIds ?? sourceSummary.estimateEfaceOmittedExerciseIds),
     estimateRequiredRestingMetricKeys: formatList(evidence.requiredRestingMetricKeys ?? sourceSummary.estimateRequiredRestingMetricKeys),
     estimateAvailableRestingMetricKeys: formatList(evidence.availableRestingMetricKeys ?? sourceSummary.estimateAvailableRestingMetricKeys),
     estimateMissingRestingMetricKeys: formatList(evidence.missingRestingMetricKeys ?? sourceSummary.estimateMissingRestingMetricKeys),

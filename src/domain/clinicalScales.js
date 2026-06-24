@@ -481,6 +481,7 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
     ratio: item.ratio,
   }));
   const sunnybrook = buildSunnybrookEstimate(usableMovementItems, restingMetrics, coverage);
+  const primaryMovementInputCompleteness = movementInputCompleteness(usableMovementItems, coverage);
   const houseBrackmannInputCompleteness = scaleMovementInputCompleteness(usableMovementItems, HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS);
   const houseBrackmann = houseBrackmannInputCompleteness.complete
     ? buildHouseBrackmannEstimate(sunnybrook, usableMovementItems, coverage)
@@ -491,6 +492,8 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
       ...base.evidence,
       scaleInputCompleteness: {
         houseBrackmann: houseBrackmannInputCompleteness,
+        sunnybrook: primaryMovementInputCompleteness,
+        eface: primaryMovementInputCompleteness,
       },
     },
     reasons: [],

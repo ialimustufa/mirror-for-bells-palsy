@@ -194,6 +194,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /used\/omitted movement IDs/i, artifactPath, "the estimate movement-input provenance control");
   assertTextMatches(text, /usable-movements-only calculation flag/i, artifactPath, "the usable-movements-only calculation control");
   assertTextMatches(text, /House-Brackmann estimates require the gentle eye-closure input/i, artifactPath, "the House-Brackmann input control");
+  assertTextMatches(text, /Sunnybrook\/eFACE input-completeness provenance/i, artifactPath, "the Sunnybrook/eFACE input provenance control");
   assertTextMatches(text, /complete resting-metric keys/i, artifactPath, "the complete resting-metric provenance control");
   assertTextMatches(text, /complete-resting-metrics calculation flag/i, artifactPath, "the complete-resting-metrics calculation control");
   assertTextMatches(text, /missing or invalid estimates are reported in that scale'?s denominator/i, artifactPath, "the scale-specific missing-estimate denominator control");
@@ -284,6 +285,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertCondition(report.standard.requiresV3MovementProvenance === true, `${artifactPath}.standard.requiresV3MovementProvenance must be true`);
   assertCondition(report.standard.requiresV4RestingMetricProvenance === true, `${artifactPath}.standard.requiresV4RestingMetricProvenance must be true`);
   assertCondition(report.standard.requiresHouseBrackmannRequiredInput === true, `${artifactPath}.standard.requiresHouseBrackmannRequiredInput must be true`);
+  assertCondition(report.standard.requiresV5ScaleInputProvenance === true, `${artifactPath}.standard.requiresV5ScaleInputProvenance must be true`);
   assertCondition(report.standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.standard.confidenceInterval.method must be wilson-score`);
   assertCondition(report.standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.standard.confidenceInterval.confidenceLevel must be 0.95`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);

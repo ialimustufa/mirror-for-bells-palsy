@@ -79,7 +79,7 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.summary.assessmentClinicalScaleRecords, 1);
   assert.deepEqual(manifest.summary.exercises, ["eye-close"]);
   assert.equal(manifest.summary.containsLandmarks, true);
-  assert.equal(manifest.labelSchema.version, 4);
+  assert.equal(manifest.labelSchema.version, 5);
   assert.deepEqual(manifest.labelSchema.requiredFields, ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"]);
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, []);
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.primaryTargetFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
@@ -94,6 +94,12 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateHouseBrackmannRequiredExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.requiredExerciseIds");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateHouseBrackmannUsedExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.usedExerciseIds");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateHouseBrackmannMissingRequiredExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.houseBrackmann.missingRequiredExerciseIds");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateSunnybrookInputComplete.default, "record.estimate.evidence.scaleInputCompleteness.sunnybrook.complete");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateSunnybrookUsedExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.sunnybrook.usedExerciseIds");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateSunnybrookOmittedExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.sunnybrook.omittedExerciseIds");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateEfaceInputComplete.default, "record.estimate.evidence.scaleInputCompleteness.eface.complete");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateEfaceUsedExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.eface.usedExerciseIds");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateEfaceOmittedExerciseIds.default, "record.estimate.evidence.scaleInputCompleteness.eface.omittedExerciseIds");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateRequiredRestingMetricKeys.default, "record.estimate.evidence.requiredRestingMetricKeys");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateAvailableRestingMetricKeys.default, "record.estimate.evidence.availableRestingMetricKeys");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateMissingRestingMetricKeys.default, "record.estimate.evidence.missingRestingMetricKeys");
@@ -112,6 +118,12 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateHouseBrackmannRequiredExerciseIds, null);
   assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateHouseBrackmannUsedExerciseIds, null);
   assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateHouseBrackmannMissingRequiredExerciseIds, null);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateSunnybrookInputComplete, null);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateSunnybrookUsedExerciseIds, null);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateSunnybrookOmittedExerciseIds, null);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateEfaceInputComplete, null);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateEfaceUsedExerciseIds, null);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateEfaceOmittedExerciseIds, null);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateRequiredRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateAvailableRestingMetricKeys, []);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateMissingRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
@@ -194,6 +206,12 @@ test("validation dataset exports clinical-scale assessment rows without frame sa
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateHouseBrackmannRequiredExerciseIds, ["eye-close"]);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateHouseBrackmannUsedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateHouseBrackmannMissingRequiredExerciseIds, []);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateSunnybrookInputComplete, true);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateSunnybrookUsedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateSunnybrookOmittedExerciseIds, []);
+  assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateEfaceInputComplete, true);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateEfaceUsedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle", "pucker"]);
+  assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateEfaceOmittedExerciseIds, []);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateRequiredRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateAvailableRestingMetricKeys, ["palpebralFissure", "nasolabialMidface", "oralCommissure"]);
   assert.deepEqual(clinicalScaleAssessments[0].sourceSummary.estimateMissingRestingMetricKeys, []);

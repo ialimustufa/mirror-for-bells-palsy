@@ -997,9 +997,11 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - Assessment clinical-scale rows include estimate status, evidence tier, usable
   movement coverage, used/omitted movement exercise IDs, and the
   usable-movements-only calculation flag so reviewer sheets remain tied to the
-  exact estimator inputs. Label schema v4 also carries House-Brackmann
+  exact estimator inputs. Label schema v5 also carries House-Brackmann
   input-completeness provenance: required exercise IDs, used exercise IDs,
-  missing required exercise IDs, and the complete flag. It lists
+  missing required exercise IDs, and the complete flag. It also carries
+  Sunnybrook and eFACE input-completeness provenance with each scale's complete
+  flag plus used and omitted movement exercise IDs. It lists
   `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
   target fields rather than required fields because valid targets count
   scale-by-scale.
@@ -1042,7 +1044,8 @@ The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. Use
 `--blinded` for primary clinical-scale review so Mirror estimate columns are left
 blank during target assignment while preserving estimate provenance columns such
 as evidence tier, coverage, used/omitted movement IDs, House-Brackmann
-input-completeness fields, and estimator version. The
+input-completeness fields, Sunnybrook/eFACE input-completeness fields, and
+estimator version. The
 merge command copies reviewed label fields back into a new JSONL dataset without
 changing the original export. The evaluator replays labeled frame samples through
 the current scorer and reports
@@ -1071,12 +1074,13 @@ version; stale or missing estimator-version rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
 "estimated"` with a complete/minimum v5 evidence tier and at least 80% usable
 movement coverage. For v5, counted rows must also preserve used/omitted movement
-exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`, required,
-available, and missing resting metric keys, and
-`estimateCalculationUsesCompleteRestingMetrics: true`; inconsistent or missing
-movement or resting-metric provenance excludes the reviewed row. House-Brackmann
-agreement treats the paired estimate as missing unless the estimate provenance
-shows the required gentle eye-closure input was used. Valid primary targets
+exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`,
+Sunnybrook/eFACE input-completeness provenance, required, available, and missing
+resting metric keys, and `estimateCalculationUsesCompleteRestingMetrics: true`;
+inconsistent or missing movement, scale-input, or resting-metric provenance
+excludes the reviewed row. House-Brackmann agreement treats the paired estimate
+as missing unless the estimate provenance shows the required gentle eye-closure
+input was used. Valid primary targets
 count scale by scale; a missing or invalid estimate is reported as a missing
 estimate for that scale rather than excluding other valid targets on the row. This
 report does not make Mirror

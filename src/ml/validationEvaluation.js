@@ -18,6 +18,20 @@ const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessme
 const STANDARD_SCALE_MOVEMENT_IDS = Object.freeze(STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId));
 const STANDARD_SCALE_MOVEMENT_ID_SET = new Set(STANDARD_SCALE_MOVEMENT_IDS);
 const REQUIRED_RESTING_METRIC_KEY_SET = new Set(REQUIRED_RESTING_METRIC_KEYS);
+const MOVEMENT_SCALE_INPUT_PROVENANCE = Object.freeze([
+  {
+    label: "Sunnybrook",
+    input: "sunnybrookInputComplete",
+    used: "sunnybrookUsedExerciseIds",
+    omitted: "sunnybrookOmittedExerciseIds",
+  },
+  {
+    label: "eFACE",
+    input: "efaceInputComplete",
+    used: "efaceUsedExerciseIds",
+    omitted: "efaceOmittedExerciseIds",
+  },
+]);
 const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
   mild: { label: "HB I-II mild/normal", min: 1, max: 2 },
   moderate: { label: "HB III-IV moderate", min: 3, max: 4 },
@@ -300,6 +314,38 @@ function clinicalScaleEstimateMetadata(record = {}) {
     sourceSummary.estimateHouseBrackmannMissingRequiredExerciseIds,
     record.estimateHouseBrackmannMissingRequiredExerciseIds,
   ));
+  const sunnybrookInput = evidence.scaleInputCompleteness?.sunnybrook ?? {};
+  const sunnybrookInputComplete = booleanValueWithPresence(firstPresent(
+    sunnybrookInput.complete,
+    sourceSummary.estimateSunnybrookInputComplete,
+    record.estimateSunnybrookInputComplete,
+  ));
+  const sunnybrookUsedExerciseIds = listValueWithPresence(firstPresent(
+    sunnybrookInput.usedExerciseIds,
+    sourceSummary.estimateSunnybrookUsedExerciseIds,
+    record.estimateSunnybrookUsedExerciseIds,
+  ));
+  const sunnybrookOmittedExerciseIds = listValueWithPresence(firstPresent(
+    sunnybrookInput.omittedExerciseIds,
+    sourceSummary.estimateSunnybrookOmittedExerciseIds,
+    record.estimateSunnybrookOmittedExerciseIds,
+  ));
+  const efaceInput = evidence.scaleInputCompleteness?.eface ?? {};
+  const efaceInputComplete = booleanValueWithPresence(firstPresent(
+    efaceInput.complete,
+    sourceSummary.estimateEfaceInputComplete,
+    record.estimateEfaceInputComplete,
+  ));
+  const efaceUsedExerciseIds = listValueWithPresence(firstPresent(
+    efaceInput.usedExerciseIds,
+    sourceSummary.estimateEfaceUsedExerciseIds,
+    record.estimateEfaceUsedExerciseIds,
+  ));
+  const efaceOmittedExerciseIds = listValueWithPresence(firstPresent(
+    efaceInput.omittedExerciseIds,
+    sourceSummary.estimateEfaceOmittedExerciseIds,
+    record.estimateEfaceOmittedExerciseIds,
+  ));
   return {
     status: estimate.status ?? record.estimateStatus ?? null,
     evidenceTier: evidence.tier ?? sourceSummary.clinicalScaleEvidenceTier ?? record.estimateEvidenceTier ?? null,
@@ -317,6 +363,12 @@ function clinicalScaleEstimateMetadata(record = {}) {
     houseBrackmannRequiredExerciseIds,
     houseBrackmannUsedExerciseIds,
     houseBrackmannMissingRequiredExerciseIds,
+    sunnybrookInputComplete,
+    sunnybrookUsedExerciseIds,
+    sunnybrookOmittedExerciseIds,
+    efaceInputComplete,
+    efaceUsedExerciseIds,
+    efaceOmittedExerciseIds,
   };
 }
 
@@ -406,6 +458,55 @@ function estimateMovementProvenanceReasons(metadata = {}) {
   return reasons;
 }
 
+function sameExerciseIdSet(a = [], b = []) {
+  if (a.length !== b.length) return false;
+  const bSet = new Set(b);
+  return a.every((exerciseId) => bSet.has(exerciseId));
+}
+
+function estimateMovementScaleInputProvenanceReasons(metadata = {}) {
+  const reasons = [];
+  const globalUsed = metadata.usedMovementExerciseIds?.values ?? [];
+  const globalOmitted = metadata.omittedMovementExerciseIds?.values ?? [];
+  const usableCount = metadata.usableMovementCount;
+  const requiredCount = metadata.requiredMovementCount ?? STANDARD_SCALE_MOVEMENT_IDS.length;
+  for (const config of MOVEMENT_SCALE_INPUT_PROVENANCE) {
+    const inputComplete = metadata[config.input];
+    const used = metadata[config.used]?.values ?? [];
+    const omitted = metadata[config.omitted]?.values ?? [];
+    const usedSet = new Set(used);
+    const omittedSet = new Set(omitted);
+    if (!inputComplete?.provided || !metadata[config.used]?.provided || !metadata[config.omitted]?.provided) {
+      reasons.push(`clinical scale estimate ${config.label} input provenance is missing`);
+    }
+    if (!inputComplete?.provided) {
+      reasons.push(`clinical scale estimate ${config.label} input complete flag is missing`);
+    }
+    const hasUnknownIds = [...used, ...omitted].some((exerciseId) => !STANDARD_SCALE_MOVEMENT_ID_SET.has(exerciseId));
+    const hasOverlap = used.some((exerciseId) => omittedSet.has(exerciseId));
+    const hasAllStandardIds = STANDARD_SCALE_MOVEMENT_IDS.every((exerciseId) => usedSet.has(exerciseId) || omittedSet.has(exerciseId));
+    const hasExpectedUsedCount = usableCount == null || used.length === usableCount;
+    const hasExpectedOmittedCount = usableCount == null || requiredCount == null || omitted.length === Math.max(0, requiredCount - usableCount);
+    const completeMatchesInputs = !inputComplete?.provided || inputComplete.value === (used.length === STANDARD_SCALE_MOVEMENT_IDS.length && omitted.length === 0);
+    if (
+      hasUnknownIds
+      || hasDuplicates(used)
+      || hasDuplicates(omitted)
+      || hasOverlap
+      || !hasAllStandardIds
+      || !hasExpectedUsedCount
+      || !hasExpectedOmittedCount
+      || requiredCount !== STANDARD_SCALE_MOVEMENT_IDS.length
+      || !sameExerciseIdSet(used, globalUsed)
+      || !sameExerciseIdSet(omitted, globalOmitted)
+      || !completeMatchesInputs
+    ) {
+      reasons.push(`clinical scale estimate ${config.label} input provenance is inconsistent`);
+    }
+  }
+  return reasons;
+}
+
 function estimateRestingMetricProvenanceReasons(metadata = {}) {
   const reasons = [];
   const required = metadata.requiredRestingMetricKeys?.values ?? [];
@@ -468,6 +569,7 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
   }
   reasons.push(...estimateMovementProvenanceReasons(estimateMetadata));
+  reasons.push(...estimateMovementScaleInputProvenanceReasons(estimateMetadata));
   reasons.push(...estimateRestingMetricProvenanceReasons(estimateMetadata));
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
@@ -782,6 +884,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       minUsableMovementCoverageRatio,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
+      requiresV5ScaleInputProvenance: true,
       caseMix: {
         houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
         minHouseBrackmannSeverityBands,

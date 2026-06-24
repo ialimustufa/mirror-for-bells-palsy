@@ -87,7 +87,7 @@ Exclude an assessment row from clinical readiness counts when:
   `houseBrackmannGrade` I-VI/1-6, `sunnybrookComposite` 0-100, and
   `efaceTotal` 0-100. A missing or out-of-range target removes that specific
   scale from its denominator, but it does not remove other valid primary targets
-  on the same assessment. Validation label schema v4 records these columns as
+  on the same assessment. Validation label schema v5 records these columns as
   `primaryTargetFields` rather than all-or-nothing required fields.
 
 The evaluator enforces row-level provenance exclusions before counting reviewed
@@ -176,11 +176,13 @@ If multiple reviewers label the same assessment:
   also be present and match between reviewer sheets, because a 4/5 estimate with
   a different omitted movement is a different estimator input. House-Brackmann
   input-completeness fields must show the required gentle eye-closure input was
-  used before a House-Brackmann estimate can count. Required, available, and
-  missing resting metric keys must also prove complete rest input coverage, with
-  the complete-resting-metrics calculation flag set. Old reviewer sheets without
-  the current movement, House-Brackmann input, and resting-metric provenance
-  columns should be recollected from a current blinded sheet. Both raw reviewer
+  used before a House-Brackmann estimate can count. Current blinded sheets also
+  preserve Sunnybrook and eFACE input-completeness fields so each normalized 4/5
+  estimate can be audited by scale. Required, available, and missing resting
+  metric keys must also prove complete rest input coverage, with the
+  complete-resting-metrics calculation flag set. Old reviewer sheets without the
+  current movement, scale-specific input, and resting-metric provenance columns
+  should be recollected from a current blinded sheet. Both raw reviewer
   sheets and the final adjudicated row must preserve the current qualifying
   estimate provenance before labels can count.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,

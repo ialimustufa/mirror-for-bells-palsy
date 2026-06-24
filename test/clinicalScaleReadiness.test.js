@@ -36,6 +36,7 @@ function clinicalValidationReport(overrides = {}) {
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
       requiresHouseBrackmannRequiredInput: true,
+      requiresV5ScaleInputProvenance: true,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -147,6 +148,7 @@ test("clinical scale readiness fails closed without current estimator-version ev
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
       requiresHouseBrackmannRequiredInput: true,
+      requiresV5ScaleInputProvenance: true,
     },
   }), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
@@ -182,6 +184,16 @@ test("clinical scale readiness fails closed without House-Brackmann input contro
 
   assert.equal(report.status, "needs-reviewed-clinical-scale-data");
   assert.match(report.blockingReasons.join("\n"), /required eye-closure input/);
+});
+
+test("clinical scale readiness fails closed without scale input controls", () => {
+  const source = clinicalValidationReport();
+  delete source.standard.requiresV5ScaleInputProvenance;
+
+  const report = assessClinicalScaleReadiness(source, { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.match(report.blockingReasons.join("\n"), /Sunnybrook\/eFACE input controls/);
 });
 
 test("clinical scale readiness reports confidence standard without enabling clinical-facing scores by itself", () => {

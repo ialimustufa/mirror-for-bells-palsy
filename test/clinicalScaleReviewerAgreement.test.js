@@ -13,7 +13,7 @@ const REQUIRED_RESTING_METRIC_KEYS = "palpebralFissure|nasolabialMidface|oralCom
 
 function reviewerCsv(rows) {
   return [
-    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateSunnybrookInputComplete,estimateSunnybrookUsedExerciseIds,estimateSunnybrookOmittedExerciseIds,estimateEfaceInputComplete,estimateEfaceUsedExerciseIds,estimateEfaceOmittedExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -33,6 +33,12 @@ function reviewerCsv(rows) {
       row.estimateHouseBrackmannRequiredExerciseIds ?? "eye-close",
       row.estimateHouseBrackmannUsedExerciseIds ?? (row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker"),
       row.estimateHouseBrackmannMissingRequiredExerciseIds ?? "",
+      row.estimateSunnybrookInputComplete ?? (row.estimateOmittedMovementExerciseIds ? "false" : "true"),
+      row.estimateSunnybrookUsedExerciseIds ?? (row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker"),
+      row.estimateSunnybrookOmittedExerciseIds ?? (row.estimateOmittedMovementExerciseIds ?? ""),
+      row.estimateEfaceInputComplete ?? (row.estimateOmittedMovementExerciseIds ? "false" : "true"),
+      row.estimateEfaceUsedExerciseIds ?? (row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker"),
+      row.estimateEfaceOmittedExerciseIds ?? (row.estimateOmittedMovementExerciseIds ?? ""),
       row.estimateRequiredRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
       row.estimateAvailableRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
       row.estimateMissingRestingMetricKeys ?? "",
@@ -88,6 +94,50 @@ function legacyReviewerCsvWithoutMovementProvenance(rows) {
   ].join("\n");
 }
 
+function legacyReviewerCsvWithoutScaleInputProvenance(rows) {
+  return [
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    ...rows.map((row) => [
+      "assessmentClinicalScale",
+      "",
+      row.assessmentId,
+      row.sessionId ?? row.assessmentId.replace(":clinical-scale", ""),
+      row.sessionTs ?? "",
+      row.date ?? "2026-06-24",
+      row.estimateStatus ?? "estimated",
+      row.estimateEvidenceTier ?? "complete-standard-assessment",
+      row.estimateUsableMovementCoverageRatio ?? 1,
+      row.estimateUsableMovementCount ?? 5,
+      row.estimateRequiredMovementCount ?? 5,
+      row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker",
+      row.estimateOmittedMovementExerciseIds ?? "",
+      row.estimateCalculationUsesOnlyUsableMovements ?? "true",
+      row.estimateHouseBrackmannInputComplete ?? "true",
+      row.estimateHouseBrackmannRequiredExerciseIds ?? "eye-close",
+      row.estimateHouseBrackmannUsedExerciseIds ?? (row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker"),
+      row.estimateHouseBrackmannMissingRequiredExerciseIds ?? "",
+      row.estimateRequiredRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
+      row.estimateAvailableRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
+      row.estimateMissingRestingMetricKeys ?? "",
+      row.estimateCalculationUsesCompleteRestingMetrics ?? "true",
+      row.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION,
+      row.houseBrackmannGrade ?? "",
+      row.sunnybrookComposite ?? "",
+      row.efaceTotal ?? "",
+      row.efaceStatic ?? "",
+      row.efaceDynamic ?? "",
+      row.efaceSynkinesis ?? "",
+      row.clinicianConfidence ?? "high",
+      row.sourceLabelSheetMode ?? "blinded",
+      row.reviewBlinded ?? "yes",
+      row.labelSource ?? "clinician-assigned",
+      row.reviewerRole ?? "clinician",
+      "2026-06-24T10:00:00.000Z",
+      row.notes ?? "",
+    ].join(",")),
+  ].join("\n");
+}
+
 test("clinical-scale reviewer agreement reports per-scale agreement and adjudication rows", () => {
   const reviewerA = reviewerCsv([
     { assessmentId: "assessment-1:clinical-scale", houseBrackmannGrade: "III", sunnybrookComposite: 76, efaceTotal: 73, efaceStatic: 80 },
@@ -122,6 +172,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.requiresV3MovementProvenance, true);
   assert.equal(report.standard.requiresV4RestingMetricProvenance, true);
   assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
+  assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
@@ -230,6 +281,12 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(row[index.estimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
   assert.equal(row[index.estimateOmittedMovementExerciseIds], "");
   assert.equal(row[index.estimateCalculationUsesOnlyUsableMovements], "true");
+  assert.equal(row[index.estimateSunnybrookInputComplete], "true");
+  assert.equal(row[index.estimateSunnybrookUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.estimateSunnybrookOmittedExerciseIds], "");
+  assert.equal(row[index.estimateEfaceInputComplete], "true");
+  assert.equal(row[index.estimateEfaceUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.estimateEfaceOmittedExerciseIds], "");
   assert.equal(row[index.reviewerAClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(row[index.reviewerBClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(row[index.reviewerAEstimateStatus], "estimated");
@@ -240,6 +297,14 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(row[index.reviewerBEstimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
   assert.equal(row[index.reviewerAEstimateCalculationUsesOnlyUsableMovements], "true");
   assert.equal(row[index.reviewerBEstimateCalculationUsesOnlyUsableMovements], "true");
+  assert.equal(row[index.reviewerAEstimateSunnybrookInputComplete], "true");
+  assert.equal(row[index.reviewerBEstimateSunnybrookInputComplete], "true");
+  assert.equal(row[index.reviewerAEstimateSunnybrookUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.reviewerBEstimateSunnybrookUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.reviewerAEstimateEfaceInputComplete], "true");
+  assert.equal(row[index.reviewerBEstimateEfaceInputComplete], "true");
+  assert.equal(row[index.reviewerAEstimateEfaceUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.reviewerBEstimateEfaceUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
   assert.equal(row[index.reviewerAHouseBrackmannGrade], "III");
   assert.equal(row[index.reviewerBHouseBrackmannGrade], "IV");
   assert.equal(row[index.reviewerANotes], "A note");
@@ -377,6 +442,37 @@ test("clinical-scale reviewer agreement blocks reviewer sheets without movement 
   assert.equal(report.summary.excludedReviewerPairReasons["reviewer A: clinical scale estimate movement provenance is missing"], 1);
   assert.equal(report.summary.excludedReviewerPairReasons["reviewer B: clinical scale estimate movement provenance is missing"], 1);
   assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 0);
+  assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
+});
+
+test("clinical-scale reviewer agreement blocks reviewer sheets without scale input provenance columns", () => {
+  const rows = [{
+    assessmentId: "assessment-1:clinical-scale",
+    houseBrackmannGrade: "III",
+    sunnybrookComposite: 76,
+    efaceTotal: 73,
+  }];
+
+  const report = compareClinicalScaleReviewerLabels(
+    legacyReviewerCsvWithoutScaleInputProvenance(rows),
+    legacyReviewerCsvWithoutScaleInputProvenance(rows),
+    { generatedAt: "2026-06-24T12:00:00.000Z" },
+  );
+
+  assert.equal(report.summary.reviewerAEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerBEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.summary.excludedReviewerPairCount, 1);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
+  assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate Sunnybrook input provenance is missing"], 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate eFACE input provenance is missing"], 1);
+  assert.equal(report.summary.reviewerBIneligibleReasons["clinical scale estimate Sunnybrook input complete flag is missing"], 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer A: clinical scale estimate Sunnybrook input provenance is missing"], 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer B: clinical scale estimate eFACE input provenance is missing"], 1);
+  assert.equal(report.byScale.sunnybrookComposite.pairedCount, 0);
+  assert.equal(report.byScale.efaceTotal.pairedCount, 0);
   assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
 });
 

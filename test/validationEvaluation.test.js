@@ -204,6 +204,16 @@ function clinicalRecord(id, estimate, label) {
               missingRequiredExerciseIds: houseBrackmannMissingRequiredExerciseIds,
               complete: houseBrackmannInputComplete,
             },
+            sunnybrook: {
+              usedExerciseIds: estimate.sunnybrookUsedExerciseIds ?? usedMovementExerciseIds,
+              omittedExerciseIds: estimate.sunnybrookOmittedExerciseIds ?? (estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds),
+              complete: estimate.sunnybrookInputComplete ?? (estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds).length === 0,
+            },
+            eface: {
+              usedExerciseIds: estimate.efaceUsedExerciseIds ?? usedMovementExerciseIds,
+              omittedExerciseIds: estimate.efaceOmittedExerciseIds ?? (estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds),
+              complete: estimate.efaceInputComplete ?? (estimate.omittedMovementExerciseIds ?? defaultOmittedMovementExerciseIds).length === 0,
+            },
           },
           requiredRestingMetricKeys: estimate.requiredRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
           availableRestingMetricKeys: estimate.availableRestingMetricKeys ?? REQUIRED_RESTING_METRIC_KEYS,
@@ -523,6 +533,7 @@ test("clinical scale evaluation accepts minimum evidence with exact movement pro
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.standard.requiresV3MovementProvenance, true);
+  assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
 });
 
 test("clinical scale evaluation treats HB estimate as missing without required eye-closure input", () => {
@@ -607,6 +618,45 @@ test("clinical scale evaluation excludes labels without movement provenance", ()
   assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate movement provenance is inconsistent"], 2);
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+});
+
+test("clinical scale evaluation excludes labels without scale input provenance", () => {
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const missingProvenance = clinicalRecord("assessment-missing-scale-input:clinical-scale", {
+    hb: 3,
+    sunnybrook: 72,
+    eface: 70,
+  }, validLabel);
+  delete missingProvenance.record.estimate.evidence.scaleInputCompleteness.sunnybrook;
+  delete missingProvenance.record.estimate.evidence.scaleInputCompleteness.eface;
+  const inconsistentProvenance = clinicalRecord("assessment-inconsistent-scale-input:clinical-scale", {
+    hb: 3,
+    sunnybrook: 72,
+    eface: 70,
+    efaceOmittedExerciseIds: ["pucker"],
+  }, validLabel);
+  const records = [
+    clinicalRecord("assessment-current:clinical-scale", { hb: 3, sunnybrook: 72, eface: 70 }, validLabel),
+    missingProvenance,
+    inconsistentProvenance,
+  ];
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate Sunnybrook input provenance is missing"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate eFACE input complete flag is missing"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate eFACE input provenance is inconsistent"], 2);
+  assert.equal(report.byScale.sunnybrookComposite.labeledCount, 1);
+  assert.equal(report.byScale.efaceTotal.labeledCount, 1);
+  assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
 });
 
 test("clinical scale evaluation excludes labels without complete resting-metric provenance", () => {

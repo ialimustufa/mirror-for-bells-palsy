@@ -123,6 +123,9 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   if (clinicalValidation.standard?.requiresHouseBrackmannRequiredInput !== true) {
     commonBlockingReasons.push("houseBrackmannInputProvenance: needs validation report proving HB estimates use required eye-closure input");
   }
+  if (clinicalValidation.standard?.requiresV5ScaleInputProvenance !== true) {
+    commonBlockingReasons.push("scaleInputProvenance: needs validation report with Sunnybrook/eFACE input controls");
+  }
   if (!clinicalValidation.caseMix) {
     commonBlockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
   } else if (clinicalValidation.caseMix.blockingReasons?.length) {

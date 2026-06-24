@@ -117,7 +117,7 @@ Mirror's current estimates in read-only reference columns for audit, but the
   label came from a blinded sheet and was independently clinician-assigned or
   adjudicated before it is counted by readiness tooling
 
-Validation label schema v4 lists the three primary scale fields as
+Validation label schema v5 lists the three primary scale fields as
 `primaryTargetFields`, not all-or-nothing required fields. A row needs at least
 one valid primary target to count, and each valid target counts only for its own
 scale's denominator.
@@ -133,6 +133,12 @@ provenance columns for `estimateStatus`, `estimateEvidenceTier`,
 `estimateHouseBrackmannRequiredExerciseIds`,
 `estimateHouseBrackmannUsedExerciseIds`,
 `estimateHouseBrackmannMissingRequiredExerciseIds`,
+`estimateSunnybrookInputComplete`,
+`estimateSunnybrookUsedExerciseIds`,
+`estimateSunnybrookOmittedExerciseIds`,
+`estimateEfaceInputComplete`,
+`estimateEfaceUsedExerciseIds`,
+`estimateEfaceOmittedExerciseIds`,
 `estimateRequiredRestingMetricKeys`, `estimateAvailableRestingMetricKeys`,
 `estimateMissingRestingMetricKeys`,
 `estimateCalculationUsesCompleteRestingMetrics`, and
@@ -140,7 +146,9 @@ provenance columns for `estimateStatus`, `estimateEvidenceTier`,
 qualifying current-version evidence with the exact v5 estimator inputs.
 House-Brackmann agreement treats an estimate as missing unless these provenance
 fields or the overall used-movement provenance show that gentle eye closure was
-used.
+used. Sunnybrook and eFACE rows preserve their own used/omitted movement lists
+so a 4/5 normalized estimate is auditable without inferring scale inputs from
+unrelated columns.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -167,6 +175,7 @@ default minimum standard is:
   at least 80% usable movement coverage, used/omitted movement exercise IDs that
   match the coverage counts, and
   `estimateCalculationUsesOnlyUsableMovements: true`. It must also preserve
+  Sunnybrook/eFACE input-completeness provenance and
   required/available/missing resting metric keys proving all required rest
   metrics were available, with
   `estimateCalculationUsesCompleteRestingMetrics: true`. Missing or invalid
