@@ -45,7 +45,7 @@ function markdownEscape(value) {
 }
 
 function scaleStatus(scaleReport = {}) {
-  return scaleReport.status ?? (scaleReport.meetsMinimumStandard ? "meets-observed-standard" : "not-ready");
+  return scaleReport.status ?? (scaleReport.meetsMinimumStandard ? "meets-confidence-standard" : "not-ready");
 }
 
 function scaleTolerance(scaleKey, scaleReport = {}, readiness = {}) {
@@ -180,6 +180,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     `- Reviewed assessment minimum: ${readiness.thresholds?.minReviewedAssessments ?? validation.standard?.minReviewedAssessments ?? 30}`,
     `- Minimum observed agreement: ${formatPercent(readiness.thresholds?.minAgreementRate ?? validation.standard?.minAgreementRate ?? 0.8)}`,
+    `- Minimum Wilson lower-bound agreement: ${formatPercent(readiness.thresholds?.minAgreementWilsonLowerBound ?? validation.standard?.minAgreementWilsonLowerBound ?? 0.8)}`,
     `- House-Brackmann target: ${readiness.thresholds?.houseBrackmannAgreement ?? "within one grade"}`,
     `- Sunnybrook target: within ${readiness.thresholds?.sunnybrookTolerance ?? validation.standard?.sunnybrookTolerance ?? 10} composite points`,
     `- eFACE total target: within ${readiness.thresholds?.efaceTolerance ?? validation.standard?.efaceTolerance ?? 10} points`,
@@ -211,7 +212,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     "## Blocking Reasons",
     "",
-    blockingReasons.length ? blockingReasons.map((reason) => `- ${reason}`).join("\n") : "- None. The observed primary-scale standard is met, but a human-reviewed release decision is still required before changing `docs/validation-status.json`.",
+    blockingReasons.length ? blockingReasons.map((reason) => `- ${reason}`).join("\n") : "- None. The primary-scale confidence standard is met, but a human-reviewed release decision is still required before changing `docs/validation-status.json`.",
     "",
     "## Out-Of-Tolerance Review Sample",
     "",

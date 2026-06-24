@@ -79,9 +79,11 @@ Mirror's current estimates in read-only reference columns for audit, but the
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
 
-- House-Brackmann: at least 80% of reviewed assessments within one HB grade.
-- Sunnybrook composite: at least 80% within 10 points.
-- eFACE total: at least 80% within 10 points.
+- House-Brackmann: at least 80% observed agreement within one HB grade.
+- Sunnybrook composite: at least 80% observed agreement within 10 points.
+- eFACE total: at least 80% observed agreement within 10 points.
+- The Wilson 95% lower confidence bound for each primary agreement rate must
+  also be at least 80%.
 - At least 30 reviewed assessment labels before any primary scale can pass.
 - House-Brackmann case mix must cover all three local severity bands with at
   least three eligible labels in each band: HB I-II mild/normal, HB III-IV
@@ -95,13 +97,15 @@ default minimum standard is:
   unblinded, incomplete, and out-of-range rows are excluded from the readiness
   denominators and reported as excluded label rows.
 - A Wilson 95% binomial confidence interval is reported for each agreement rate
-  so reviewers can see the uncertainty around the observed percentage.
+  and the lower bound is a blocking release gate, so a raw 80% observed rate on
+  a small validation set cannot pass by itself.
 
 The evaluator reports each scale separately and fails closed when reviewed data is
-missing, estimates are unavailable, or agreement is below the configured
-threshold. Passing this tooling is still not the same as clinician assignment; it
-only proves that Mirror estimates met the documented agreement target on the
-reviewed local validation set.
+missing, estimates are unavailable, observed agreement is below the configured
+threshold, or the Wilson lower bound is below the configured threshold. Passing
+this tooling is still not the same as clinician assignment; it only proves that
+Mirror estimates met the documented agreement target on the reviewed local
+validation set.
 
 After `npm run validation:clinical-readiness`, use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
@@ -111,9 +115,10 @@ table, Wilson intervals, missing estimate counts, reference-standard control
 statements, House-Brackmann case-mix table, blocking reasons, and mismatch
 samples that a release reviewer needs before any validation-status update. The
 release status artifact checker requires the report to document the eligible
-blinded independent label count, all three House-Brackmann severity bands, and
-the `sourceLabelSheetMode`/`reviewBlinded`/`labelSource` controls before a
-clinical agreement artifact can support clinical-facing score availability.
+blinded independent label count, all three House-Brackmann severity bands, the
+primary-scale Wilson lower bounds, and the
+`sourceLabelSheetMode`/`reviewBlinded`/`labelSource` controls before a clinical
+agreement artifact can support clinical-facing score availability.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

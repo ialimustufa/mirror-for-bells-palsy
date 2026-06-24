@@ -9,6 +9,7 @@ function finiteOrNull(value) {
 function normalizeThresholds(options = {}) {
   return {
     minAgreementRate: options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate,
+    minAgreementWilsonLowerBound: options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound,
     minReviewedAssessments: Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments)),
     minHouseBrackmannSeverityBands: Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
     minAssessmentsPerSeverityBand: Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand)),
@@ -27,19 +28,23 @@ function summarizeScaleReadiness(scaleKey, scaleReport = {}, thresholds) {
   const labeledCount = scaleReport.labeledCount ?? 0;
   const agreementRate = scaleReport.agreementRate;
   const confidenceInterval = scaleReport.agreementConfidenceInterval ?? null;
+  const confidenceLowerBound = confidenceInterval?.lower;
   const blockingReasons = [];
   if (labeledCount < thresholds.minReviewedAssessments) {
     blockingReasons.push(`needs at least ${thresholds.minReviewedAssessments} reviewed labels`);
   }
   if (!Number.isFinite(agreementRate) || agreementRate < thresholds.minAgreementRate) {
-    blockingReasons.push(`needs at least ${Math.round(thresholds.minAgreementRate * 100)}% agreement`);
+    blockingReasons.push(`needs at least ${Math.round(thresholds.minAgreementRate * 100)}% observed agreement`);
+  }
+  if (!Number.isFinite(confidenceLowerBound) || confidenceLowerBound < thresholds.minAgreementWilsonLowerBound) {
+    blockingReasons.push(`needs ${Math.round(thresholds.confidenceLevel * 100)}% Wilson lower bound at least ${Math.round(thresholds.minAgreementWilsonLowerBound * 100)}%`);
   }
   if ((scaleReport.missingEstimateCount ?? 0) > 0) {
     blockingReasons.push("has reviewed labels without Mirror estimates");
   }
   return {
     scale: scaleKey,
-    status: blockingReasons.length ? "not-ready" : "meets-observed-standard",
+    status: blockingReasons.length ? "not-ready" : "meets-confidence-standard",
     labeledCount,
     agreementRate: finiteOrNull(agreementRate),
     agreementConfidenceInterval: confidenceInterval,
@@ -74,7 +79,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
     if (scale.blockingReasons.length) blockingReasons.push(`${scaleKey}: ${scale.blockingReasons.join("; ")}`);
   }
 
-  const status = blockingReasons.length ? "needs-reviewed-clinical-scale-data" : "meets-clinical-scale-observed-standard";
+  const status = blockingReasons.length ? "needs-reviewed-clinical-scale-data" : "meets-clinical-scale-confidence-standard";
   return {
     kind: "mirror-clinical-scale-readiness-report",
     generatedAt,
@@ -100,7 +105,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       excludedClinicalLabelCount: clinicalValidation.summary?.excludedClinicalLabelCount ?? 0,
       excludedClinicalLabelReasons: clinicalValidation.summary?.excludedClinicalLabelReasons ?? {},
       assessmentClinicalScaleRecords: clinicalValidation.summary?.assessmentClinicalScaleRecords ?? 0,
-      readyPrimaryScaleCount: Object.values(byScale).filter((scale) => scale.status === "meets-observed-standard").length,
+      readyPrimaryScaleCount: Object.values(byScale).filter((scale) => scale.status === "meets-confidence-standard").length,
       primaryScaleCount: PRIMARY_CLINICAL_SCALE_KEYS.length,
       caseMix: clinicalValidation.caseMix ?? null,
       readyForClinicalFacingScoring: false,
@@ -110,7 +115,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
     blockingReasons,
     findings: blockingReasons.length
       ? ["Clinical scale readiness cannot be claimed until reviewed assessment labels meet the configured coverage and agreement standard."]
-      : ["Reviewed clinical-scale labels meet the configured observed agreement standard for all primary scales."],
+      : ["Reviewed clinical-scale labels meet the configured observed and Wilson confidence lower-bound standard for all primary scales."],
     nextActions: blockingReasons.length
       ? [
         "Collect clinician-reviewed House-Brackmann, Sunnybrook, and eFACE target labels from standard assessments.",

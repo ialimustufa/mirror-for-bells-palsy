@@ -12,6 +12,7 @@ const BASE_STATUS = {
   readyExerciseCount: 0,
   clinicalScaleMinimumStandard: {
     minAgreementRate: 0.8,
+    minAgreementWilsonLowerBound: 0.8,
     minReviewedAssessments: 30,
     minHouseBrackmannSeverityBands: 3,
     minAssessmentsPerSeverityBand: 3,
@@ -28,7 +29,7 @@ function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales
   return `# Mirror Clinical Scale Agreement Report
 
 Generated: 2026-06-24T00:00:00.000Z
-Status: meets-clinical-scale-observed-standard
+Status: meets-clinical-scale-confidence-standard
 Recommendation: allow-controlled-estimate-availability-after-human-review
 
 ## Dataset Summary
@@ -40,9 +41,9 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 
 | Scale | Tolerance | Labels | Missing estimates | Within tolerance | Agreement | Wilson interval | Mean absolute delta | Status |
 | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | --- |
-| House-Brackmann | within one grade | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 0.5 | meets-observed-standard |
-| Sunnybrook composite | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
-| eFACE total | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
+| House-Brackmann | within one grade | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 0.5 | meets-confidence-standard |
+| Sunnybrook composite | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |
+| eFACE total | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |
 
 ## House-Brackmann Case Mix
 
@@ -171,6 +172,7 @@ test("validation status rejects weak clinical scale minimum standards", () => {
       ...BASE_STATUS,
       clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
+        minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 12,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
@@ -188,6 +190,7 @@ test("validation status rejects missing clinical scale review protocol", () => {
       ...BASE_STATUS,
       clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
+        minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
@@ -204,6 +207,22 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
       ...BASE_STATUS,
       clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
+        minAgreementWilsonLowerBound: 0.7,
+        minReviewedAssessments: 30,
+        minHouseBrackmannSeverityBands: 3,
+        minAssessmentsPerSeverityBand: 3,
+        confidenceInterval: "wilson-95",
+        reviewProtocol: "docs/clinical-scale-review-protocol.md",
+      },
+    }),
+    /minAgreementWilsonLowerBound/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        minAgreementRate: 0.8,
+        minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 2,
         minAssessmentsPerSeverityBand: 3,
@@ -218,6 +237,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
       ...BASE_STATUS,
       clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
+        minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 30,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 2,
@@ -280,7 +300,7 @@ test("validation status rejects clinical agreement reports without reviewed asse
   );
 });
 
-test("validation status artifacts reject clinical agreement reports that do not meet the observed standard", async () => {
+test("validation status artifacts reject clinical agreement reports that do not meet the confidence standard", async () => {
   const status = {
     ...BASE_STATUS,
     status: "clinical-scale-agreement-reviewed",
@@ -297,7 +317,7 @@ test("validation status artifacts reject clinical agreement reports that do not 
   await assert.rejects(
     () => validateStatusArtifacts(status, {
       readArtifactText: artifactReader({
-        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("Status: meets-clinical-scale-observed-standard", "Status: needs-reviewed-clinical-scale-data"),
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("Status: meets-clinical-scale-confidence-standard", "Status: needs-reviewed-clinical-scale-data"),
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),
     }),
@@ -352,6 +372,31 @@ test("validation status artifacts reject clinical agreement reports with too few
       }),
     }),
     /clinical scale agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports with low Wilson lower-bound agreement", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replaceAll("88.7%-100.0% 95% Wilson CI", "63.1%-90.0% 95% Wilson CI"),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /Wilson lower-bound agreement/,
   );
 });
 

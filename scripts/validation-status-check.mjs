@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_STATUS_PATH = "docs/validation-status.json";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
+const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
 const PRIMARY_CLINICAL_SCALE_COUNT = 3;
 const DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
 const DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND = 3;
@@ -24,9 +25,17 @@ function assertStringArray(value, field) {
   }
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function assertClinicalScaleMinimumStandard(value) {
   assertCondition(value && typeof value === "object" && !Array.isArray(value), "clinicalScaleMinimumStandard must be an object");
   assertCondition(value.minAgreementRate === 0.8, "clinicalScaleMinimumStandard.minAgreementRate must be 0.8");
+  assertCondition(
+    value.minAgreementWilsonLowerBound === DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND,
+    `clinicalScaleMinimumStandard.minAgreementWilsonLowerBound must be ${DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND}`,
+  );
   assertCondition(
     Number.isInteger(value.minReviewedAssessments) && value.minReviewedAssessments >= DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS,
     `clinicalScaleMinimumStandard.minReviewedAssessments must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
@@ -54,9 +63,21 @@ function integerFromMatch(text, pattern) {
   return Number.isInteger(value) ? value : null;
 }
 
+function primaryScaleWilsonLowerBound(text, scaleLabel) {
+  const rowPattern = new RegExp(`^\\|\\s*${escapeRegExp(scaleLabel)}\\s*\\|`, "i");
+  const row = text.split(/\r?\n/).find((line) => rowPattern.test(line));
+  if (!row) return null;
+  const cells = row.split("|").slice(1, -1).map((cell) => cell.trim());
+  const interval = cells[6] ?? "";
+  const match = interval.match(/(\d+(?:\.\d+)?)%\s*-/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value / 100 : null;
+}
+
 function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /# Mirror Clinical Scale Agreement Report/i, artifactPath, "the Mirror clinical-scale agreement report heading");
-  assertTextMatches(text, /Status:\s*meets-clinical-scale-observed-standard/i, artifactPath, "a passing clinical-scale readiness status");
+  assertTextMatches(text, /Status:\s*meets-clinical-scale-confidence-standard/i, artifactPath, "a passing clinical-scale readiness status");
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
   assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
   assertTextMatches(text, /eFACE total\s*\|/i, artifactPath, "eFACE total agreement row");
@@ -82,6 +103,12 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
     integerFromMatch(text, /HB V-VI severe\/complete\s*\|\s*(\d+)\s*\|\s*yes/i),
   ];
   const minimumHouseBrackmannSeverityBandLabelCount = Math.min(...houseBrackmannSeverityBandCounts.map((count) => count ?? 0));
+  const primaryScaleWilsonLowerBounds = {
+    houseBrackmann: primaryScaleWilsonLowerBound(text, "House-Brackmann"),
+    sunnybrookComposite: primaryScaleWilsonLowerBound(text, "Sunnybrook composite"),
+    efaceTotal: primaryScaleWilsonLowerBound(text, "eFACE total"),
+  };
+  const minimumPrimaryScaleWilsonLowerBound = Math.min(...Object.values(primaryScaleWilsonLowerBounds).map((value) => value ?? 0));
   const readyPrimaryScaleCount = integerFromMatch(text, /Ready primary scales:\s*(\d+)\/\d+/i);
   return {
     path: artifactPath,
@@ -90,6 +117,8 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
     minimumLabelsPerRepresentedSeverityBand,
     representedHouseBrackmannSeverityBandCount,
     minimumHouseBrackmannSeverityBandLabelCount,
+    primaryScaleWilsonLowerBounds,
+    minimumPrimaryScaleWilsonLowerBound,
     readyPrimaryScaleCount,
   };
 }
@@ -181,11 +210,12 @@ async function validateStatusArtifacts(status, options = {}) {
       && (report.representedHouseBrackmannSeverityBandCount ?? 0) >= status.clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands
       && (report.minimumLabelsPerRepresentedSeverityBand ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
       && (report.minimumHouseBrackmannSeverityBandLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
+      && (report.minimumPrimaryScaleWilsonLowerBound ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
       && (report.readyPrimaryScaleCount ?? 0) >= PRIMARY_CLINICAL_SCALE_COUNT
     ));
     assertCondition(
       reportMeetingMinimum,
-      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, House-Brackmann severity-band case mix, and 3/3 ready primary scales meeting the minimum standard",
+      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, 80% Wilson lower-bound agreement, House-Brackmann severity-band case mix, and 3/3 ready primary scales meeting the minimum standard",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

@@ -1014,12 +1014,12 @@ being hidden by aggregate accuracy.
 
 When reviewed `assessmentClinicalScale` labels are present, the same evaluator
 also emits a clinical-scale validation report. The default minimum standard is at
-least 30 reviewed assessment labels and at least 80% agreement for each primary
-scale: House-Brackmann within one grade, Sunnybrook composite within 10 points,
-and eFACE total within 10 points. eFACE static, dynamic, and synkinesis domain
-agreement is reported when those labels are supplied. Each agreement rate also
-includes a Wilson 95% binomial confidence interval to show uncertainty around the
-observed pass rate. The clinical-scale gate also requires House-Brackmann labels
+least 30 reviewed assessment labels, at least 80% observed agreement for each
+primary scale, and a Wilson 95% lower confidence bound of at least 80% for each
+primary agreement rate. The primary tolerances are House-Brackmann within one
+grade, Sunnybrook composite within 10 points, and eFACE total within 10 points.
+eFACE static, dynamic, and synkinesis domain agreement is reported when those
+labels are supplied. The clinical-scale gate also requires House-Brackmann labels
 to cover HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete,
 with at least three eligible labels in each represented severity band. This
 report does not make Mirror estimates clinician-assigned grades; it only
@@ -1044,9 +1044,9 @@ annotations.
 The clinical-readiness command reads a reviewed dataset, combined validation
 report, or clinical-scale validation report and writes a release decision for the
 clinical-scale estimates. It requires the primary House-Brackmann, Sunnybrook
-composite, and eFACE total checks to meet the 30-assessment / 80% observed
-agreement standard, plus the House-Brackmann severity-band case-mix gate. Passing
-this report still does not flip
+composite, and eFACE total checks to meet the 30-assessment, 80% observed
+agreement, and 80% Wilson lower-bound standard, plus the House-Brackmann
+severity-band case-mix gate. Passing this report still does not flip
 `clinicalFacingScoresAllowed`; a human-reviewed status update is required because
 Mirror values remain estimates rather than clinician-assigned grades. The full
 review protocol is documented in `docs/clinical-scale-review-protocol.md`.
@@ -1075,11 +1075,12 @@ enabled by changing only a UI component.
 
 `npm run validation:status` validates both the status JSON and any referenced
 report artifacts. Clinical agreement report paths must point to Markdown reports
-with the Mirror clinical-scale agreement heading, a passing observed-standard
-status, primary House-Brackmann/Sunnybrook/eFACE rows, House-Brackmann case-mix
-coverage, Wilson interval reporting, and release-control text. Threshold
-calibration report paths must point to JSON `mirror-threshold-calibration-report`
-artifacts with ready-exercise coverage that matches the status claim.
+with the Mirror clinical-scale agreement heading, a passing confidence-standard
+status, primary House-Brackmann/Sunnybrook/eFACE rows, primary Wilson lower
+bounds meeting the configured standard, House-Brackmann case-mix coverage, and
+release-control text. Threshold calibration report paths must point to JSON
+`mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
+matches the status claim.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

@@ -28,7 +28,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 4 validation label workflow: implemented CSV label-sheet export and label merge scripts so clinician/user/developer-reviewed frame and clinical-scale labels can be attached to validation JSONL datasets.
 - Phase 4 validation evaluation: started with `npm run validate:dataset`, which replays labeled frame samples and reports accuracy, false-positive rate, false-negative rate, score drift, and per-exercise error rates. It also evaluates reviewed House-Brackmann, Sunnybrook, and eFACE target labels against Mirror estimates with an explicit 80% minimum agreement gate. Threshold calibration reports can be generated with `npm run validation:calibrate-thresholds`; model-readiness decisions can be generated with `npm run validation:model-readiness`.
 - Phase 5 release gates: implemented with `npm run release:check`, rollback-safe backup parse tests, a machine-readable `docs/validation-status.json`, and documentation checks for medical, privacy, and validation status.
-- Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets, applying reviewed calibration reports to production constants, and proving the clinical-scale 80% agreement gate on reviewed assessment labels.
+- Still pending across Phases 1 and 4: collecting actual clinician-reviewed validation datasets, applying reviewed calibration reports to production constants, and proving the clinical-scale 80% observed and Wilson lower-bound agreement gate on reviewed assessment labels.
 
 ## Product Features Worth Adding
 

@@ -35,6 +35,7 @@ const CLINICAL_LABEL_SOURCE_FIELDS = Object.freeze([
 ]);
 const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
+  minAgreementWilsonLowerBound: 0.8,
   minReviewedAssessments: 30,
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
@@ -316,6 +317,7 @@ function recordAgreementCase(accumulator, record, estimateValue, labelValue) {
 
 function summarizeAgreement(accumulator, options = {}) {
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
+  const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound;
   const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const comparableCount = accumulator.labeledCount;
@@ -329,6 +331,9 @@ function summarizeAgreement(accumulator, options = {}) {
   const blockingReasons = [];
   if (denominator < minReviewedAssessments) blockingReasons.push(`needs at least ${minReviewedAssessments} reviewed assessment labels`);
   if (agreementRate == null || agreementRate < minAgreementRate) blockingReasons.push(`needs at least ${Math.round(minAgreementRate * 100)}% ${accumulator.agreementLabel}`);
+  if (confidenceInterval?.lower == null || confidenceInterval.lower < minAgreementWilsonLowerBound) {
+    blockingReasons.push(`needs ${Math.round(confidenceLevel * 100)}% Wilson lower bound at least ${Math.round(minAgreementWilsonLowerBound * 100)}% for ${accumulator.agreementLabel}`);
+  }
   return {
     scale: accumulator.scale,
     agreementLabel: accumulator.agreementLabel,
@@ -386,6 +391,7 @@ function summarizeHouseBrackmannCaseMix(counts = {}, options = {}) {
 function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const assessmentRecords = extractAssessmentClinicalScaleRecords(records);
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
+  const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound;
   const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const sunnybrookTolerance = Number.isFinite(options.sunnybrookTolerance) ? options.sunnybrookTolerance : 10;
@@ -395,7 +401,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
   );
   const minAssessmentsPerSeverityBand = Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand));
-  const agreementOptions = { minAgreementRate, minReviewedAssessments, confidenceLevel };
+  const agreementOptions = { minAgreementRate, minAgreementWilsonLowerBound, minReviewedAssessments, confidenceLevel };
   const caseMixOptions = { minHouseBrackmannSeverityBands, minAssessmentsPerSeverityBand };
   const accumulators = {
     houseBrackmann: createAgreementAccumulator("houseBrackmann", "within-one-grade agreement", 1),
@@ -454,6 +460,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     standard: {
       minAgreementRate,
+      minAgreementWilsonLowerBound,
       minReviewedAssessments,
       confidenceInterval: {
         method: "wilson-score",

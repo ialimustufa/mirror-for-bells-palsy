@@ -108,7 +108,7 @@ npm run validation:clinical-readiness -- validation-report.json clinical-readine
 ```
 
 6. Inspect the clinical readiness report. Passing requires all primary scales to
-   meet the configured observed agreement standard.
+   meet the configured observed agreement and Wilson lower-bound standard.
 7. Only after human review of the dataset, label process, and readiness report
    should `docs/validation-status.json` be updated.
 
@@ -118,9 +118,11 @@ Clinical-scale readiness uses the machine-readable standard in
 `docs/validation-status.json`:
 
 - At least 30 reviewed clinical-scale assessment labels.
-- At least 80% House-Brackmann agreement within one grade.
-- At least 80% Sunnybrook composite agreement within 10 points.
-- At least 80% eFACE total agreement within 10 points.
+- At least 80% observed House-Brackmann agreement within one grade.
+- At least 80% observed Sunnybrook composite agreement within 10 points.
+- At least 80% observed eFACE total agreement within 10 points.
+- A Wilson 95% lower confidence bound of at least 80% for each primary
+  agreement rate.
 - All three local House-Brackmann severity bands represented by eligible labels:
   HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete.
 - At least three eligible labels in each represented House-Brackmann severity
@@ -130,7 +132,7 @@ Clinical-scale readiness uses the machine-readable standard in
   per-scale agreement denominators.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
-The Wilson interval is reported because a raw observed percentage can hide
+The Wilson lower-bound gate is used because a raw observed percentage can hide
 uncertainty in small validation sets. The 30-assessment floor is a local release
 gate, not a universal clinical sample-size claim. The House-Brackmann case-mix
 gate is a local applicability control so a passing agreement rate cannot come
@@ -164,6 +166,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   `npm run validation:clinical-readiness`.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
+- Primary-scale Wilson intervals whose lower bounds meet the machine-readable
+  80% standard.
 - Documentation of whether labels were blinded and whether adjudication was used.
 - A human-reviewed update to `docs/validation-status.json` referencing the
   agreement report artifacts.
@@ -172,13 +176,13 @@ Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.
 
 The release gate runs `npm run validation:status`, which verifies that referenced
-clinical-scale agreement reports exist and contain a passing observed-standard
-status, all three primary scale rows, Wilson interval reporting, explicit
-reference-standard controls, an eligible blinded independent label count meeting
-the minimum reviewed-assessment floor, a House-Brackmann case-mix section meeting
-the severity-band minimum, and release-control text. A status update that only
-changes counts or report paths without matching artifacts must fail the release
-check.
+clinical-scale agreement reports exist and contain a passing confidence-standard
+status, all three primary scale rows, Wilson lower-bound agreement meeting the
+minimum, explicit reference-standard controls, an eligible blinded independent
+label count meeting the minimum reviewed-assessment floor, a House-Brackmann
+case-mix section meeting the severity-band minimum, and release-control text. A
+status update that only changes counts or report paths without matching
+artifacts must fail the release check.
 
 ## References
 

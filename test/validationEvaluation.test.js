@@ -227,8 +227,8 @@ function clinicalAgreementRecords(total, successCount) {
   });
 }
 
-test("clinical scale evaluation reports 80 percent reviewed agreement across 30 assessments", () => {
-  const records = clinicalAgreementRecords(30, 24);
+test("clinical scale evaluation passes only when Wilson lower-bound agreement clears 80 percent", () => {
+  const records = clinicalAgreementRecords(30, 30);
 
   const extracted = extractAssessmentClinicalScaleRecords(records);
   const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
@@ -238,11 +238,35 @@ test("clinical scale evaluation reports 80 percent reviewed agreement across 30 
   assert.equal(report.summary.meetsMinimumStandard, true);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
   assert.equal(report.caseMix.representedSeverityBandCount, 3);
+  assert.equal(report.caseMix.severityBands.mild.count, 10);
+  assert.equal(report.caseMix.severityBands.moderate.count, 10);
+  assert.equal(report.caseMix.severityBands.severe.count, 10);
+  assert.equal(report.standard.minAgreementRate, 0.8);
+  assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
+  assert.equal(report.standard.minReviewedAssessments, 30);
+  assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
+  assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 30);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.ok(report.byScale.houseBrackmann.agreementConfidenceInterval.lower >= 0.8);
+  assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 30);
+  assert.equal(report.byScale.sunnybrookComposite.agreementRate, 1);
+  assert.equal(report.byScale.efaceTotal.withinToleranceCount, 30);
+  assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
+});
+
+test("clinical scale evaluation fails closed when 80 percent observed agreement has a low Wilson lower bound", () => {
+  const records = clinicalAgreementRecords(30, 24);
+
+  const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 30);
+  assert.equal(report.summary.meetsMinimumStandard, false);
+  assert.equal(report.summary.readyForClinicalFacingScoring, false);
+  assert.equal(report.caseMix.representedSeverityBandCount, 3);
   assert.equal(report.caseMix.severityBands.mild.count, 8);
   assert.equal(report.caseMix.severityBands.moderate.count, 12);
   assert.equal(report.caseMix.severityBands.severe.count, 10);
-  assert.equal(report.standard.minReviewedAssessments, 30);
-  assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
   assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 24);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 0.8);
@@ -252,7 +276,8 @@ test("clinical scale evaluation reports 80 percent reviewed agreement across 30 
   assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 24);
   assert.equal(report.byScale.sunnybrookComposite.agreementRate, 0.8);
   assert.equal(report.byScale.efaceTotal.withinToleranceCount, 24);
-  assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
+  assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, false);
+  assert.match(report.blockingReasons.join("\n"), /Wilson lower bound/);
 });
 
 test("clinical scale evaluation fails closed when reviewed labels do not span HB case mix", () => {
@@ -297,6 +322,7 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
   });

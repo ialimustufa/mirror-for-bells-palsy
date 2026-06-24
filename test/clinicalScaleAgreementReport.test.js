@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { buildClinicalScaleAgreementMarkdown } from "../src/ml/clinicalScaleAgreementReport.js";
 
-function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, mismatches = [] }) {
+function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, lower = 0.887, upper = 1, mismatches = [] }) {
   return {
     labeledCount,
     comparableCount: labeledCount,
@@ -12,8 +12,8 @@ function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withi
     agreementConfidenceInterval: {
       method: "wilson-score",
       confidenceLevel: 0.95,
-      lower: 0.63,
-      upper: 0.9,
+      lower,
+      upper,
     },
     meanAbsDelta: 2,
     mismatches,
@@ -26,6 +26,7 @@ function validationReport(overrides = {}) {
     generatedAt: "2026-06-24T00:00:00.000Z",
     standard: {
       minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
       minReviewedAssessments: 30,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
@@ -43,9 +44,9 @@ function validationReport(overrides = {}) {
       meetsMinimumStandard: true,
     },
     byScale: {
-      houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 24 }),
-      sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 24 }),
-      efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 24 }),
+      houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1 }),
+      sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1 }),
+      efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1 }),
       efaceStatic: scaleReport({ labeledCount: 30, withinToleranceCount: 25 }),
     },
     caseMix: {
@@ -71,8 +72,9 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   const markdown = buildClinicalScaleAgreementMarkdown(validationReport(), { generatedAt: "2026-06-24T12:00:00.000Z" });
 
   assert.match(markdown, /# Mirror Clinical Scale Agreement Report/);
-  assert.match(markdown, /Status: meets-clinical-scale-observed-standard/);
-  assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 24 \| 80\.0%/);
+  assert.match(markdown, /Status: meets-clinical-scale-confidence-standard/);
+  assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
+  assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
   assert.match(markdown, /eFACE total \| within 10 points/);
   assert.match(markdown, /eFACE static/);
