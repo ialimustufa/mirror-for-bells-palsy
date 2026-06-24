@@ -1201,7 +1201,13 @@ enabled by changing only a UI component. The runtime policy also requires the
 same high-level status evidence as the release gate: reviewed dataset and frame
 counts, reviewed clinical-scale assessment coverage, calibration reports,
 clinical agreement reports, reviewer-agreement reports, calibrated thresholds,
-and the explicit `clinicalFacingScoresAllowed` flag. The status file must also
+and the explicit `clinicalFacingScoresAllowed` flag. It also audits the
+machine-readable minimum standard before using clinical-facing wording: the
+30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
+Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence
+interval, current clinical-scale estimator version, review protocol, and
+House-Brackmann severity-band floors must remain at or above the documented
+release standard. The status file must also
 include `clinicalScaleAvailability` entries for House-Brackmann, Sunnybrook, and
 eFACE, so every release records an explicit per-scale presentation decision.
 Future releases can keep one primary scale in estimate mode even if another

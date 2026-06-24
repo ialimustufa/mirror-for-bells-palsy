@@ -4,6 +4,8 @@ import validationStatus from "../docs/validation-status.json" with { type: "json
 import {
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleValidationStandardBlockers,
+  clinicalScaleValidationStandardEligible,
   compactClinicalScaleValueLabel,
   clinicalScalePresentationPolicy,
   DEFAULT_VALIDATION_STATUS,
@@ -31,15 +33,20 @@ function movementScore(exerciseId, ratio) {
   };
 }
 
+function clinicalScaleMinimumStandard(overrides = {}) {
+  return {
+    ...validationStatus.clinicalScaleMinimumStandard,
+    ...overrides,
+  };
+}
+
 function reviewedClinicalScaleStatus(clinicalScaleAvailability) {
   return {
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
-    clinicalScaleMinimumStandard: {
-      minReviewedAssessments: 30,
-    },
+    clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
@@ -54,6 +61,8 @@ test("clinical scale presentation policy defaults to the repo validation status"
   assert.equal(validationStatus.clinicalFacingScoresAllowed, false);
   assert.equal(clinicalFacingStatusEligible(), false);
   assert.equal(clinicalFacingScaleStatusEligible(undefined, "houseBrackmann"), false);
+  assert.equal(clinicalScaleValidationStandardEligible(), true);
+  assert.deepEqual(clinicalScaleValidationStandardBlockers(), []);
 
   const policy = clinicalScalePresentationPolicy();
 
@@ -85,9 +94,7 @@ test("clinical scale presentation policy switches copy only with complete releas
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
-    clinicalScaleMinimumStandard: {
-      minReviewedAssessments: 30,
-    },
+    clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
@@ -103,10 +110,50 @@ test("clinical scale presentation policy switches copy only with complete releas
 
   assert.equal(clinicalFacingStatusEligible(status), true);
   assert.equal(policy.mode, "clinical-facing-supported");
+  assert.equal(policy.validationStandardEligible, true);
   assert.equal(policy.badgeLabel, "Validated");
   assert.equal(policy.scaleNoun, "support value");
   assert.match(policy.shortNotice, /validation gate/);
   assert.match(policy.reportNotice, /clinician interpretation/);
+});
+
+test("clinical scale presentation policy fails closed when the runtime validation standard is weak", () => {
+  const passingStatus = reviewedClinicalScaleStatus({
+    houseBrackmann: { clinicalFacingScoresAllowed: true },
+    sunnybrook: { clinicalFacingScoresAllowed: true },
+    eface: { clinicalFacingScoresAllowed: true },
+  });
+
+  const weakStandards = [
+    { minReviewedAssessments: 29, blocker: /minReviewedAssessments/ },
+    { minDistinctClinicalCases: 9, blocker: /minDistinctClinicalCases/ },
+    { minAgreementRate: 0.79, blocker: /minAgreementRate/ },
+    { minAgreementWilsonLowerBound: 0.79, blocker: /minAgreementWilsonLowerBound/ },
+    { minUsableMovementCoverageRatio: 0.79, blocker: /minUsableMovementCoverageRatio/ },
+    { minHouseBrackmannSeverityBands: 2, blocker: /minHouseBrackmannSeverityBands/ },
+    { minAssessmentsPerSeverityBand: 2, blocker: /minAssessmentsPerSeverityBand/ },
+    { confidenceInterval: "wald-95", blocker: /confidenceInterval/ },
+    { clinicalScaleEstimateVersion: validationStatus.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion - 1, blocker: /clinicalScaleEstimateVersion/ },
+    { reviewProtocol: "docs/other-protocol.md", blocker: /reviewProtocol/ },
+  ];
+
+  for (const weakStandard of weakStandards) {
+    const { blocker, ...override } = weakStandard;
+    const status = {
+      ...passingStatus,
+      clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(override),
+    };
+    const policy = clinicalScalePresentationPolicy(status);
+
+    assert.equal(clinicalFacingStatusEligible(status), false);
+    assert.equal(clinicalScaleValidationStandardEligible(status), false);
+    assert.match(clinicalScaleValidationStandardBlockers(status).join("\n"), blocker);
+    assert.equal(policy.validationStandardEligible, false);
+    assert.match(policy.validationStandardBlockers.join("\n"), blocker);
+    assert.equal(policy.mode, "mirror-estimate");
+    assert.equal(policy.anyClinicalScaleSupportAllowed, false);
+    assert.equal(policy.badgeLabel, "Estimate");
+  }
 });
 
 test("clinical scale presentation policy requires explicit per-scale availability flags", () => {
@@ -115,9 +162,7 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
-    clinicalScaleMinimumStandard: {
-      minReviewedAssessments: 30,
-    },
+    clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
@@ -141,9 +186,7 @@ test("clinical scale presentation policy can keep individual scales as estimates
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
-    clinicalScaleMinimumStandard: {
-      minReviewedAssessments: 30,
-    },
+    clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
@@ -333,7 +376,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
-    clinicalScaleMinimumStandard: { minReviewedAssessments: 30 },
+    clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
@@ -351,7 +394,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
-    clinicalScaleMinimumStandard: { minReviewedAssessments: 30 },
+    clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],

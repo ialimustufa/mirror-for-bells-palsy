@@ -1,15 +1,72 @@
 import validationStatus from "../../docs/validation-status.json" with { type: "json" };
+import { CLINICAL_SCALE_ESTIMATE_VERSION, MIN_USABLE_ASSESSMENT_COVERAGE_RATIO } from "./clinicalScales.js";
 
 const DEFAULT_VALIDATION_STATUS = Object.freeze(validationStatus);
 const CLINICAL_SCALE_PRESENTATION_KEYS = Object.freeze(["houseBrackmann", "sunnybrook", "eface"]);
+const REQUIRED_MIN_REVIEWED_ASSESSMENTS = 30;
+const REQUIRED_MIN_DISTINCT_CLINICAL_CASES = 10;
+const REQUIRED_MIN_AGREEMENT_RATE = 0.8;
+const REQUIRED_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
+const REQUIRED_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
+const REQUIRED_MIN_ASSESSMENTS_PER_SEVERITY_BAND = 3;
+const REQUIRED_CONFIDENCE_INTERVAL = "wilson-95";
+const REQUIRED_REVIEW_PROTOCOL = "docs/clinical-scale-review-protocol.md";
+
+function numberAtLeast(value, minimum) {
+  return Number.isFinite(Number(value)) && Number(value) >= minimum;
+}
+
+function clinicalScaleValidationStandardBlockers(status = DEFAULT_VALIDATION_STATUS) {
+  const standard = status?.clinicalScaleMinimumStandard;
+  const blockers = [];
+  if (!standard || typeof standard !== "object") {
+    return ["missing clinical-scale minimum standard"];
+  }
+  if (!numberAtLeast(standard.minReviewedAssessments, REQUIRED_MIN_REVIEWED_ASSESSMENTS)) {
+    blockers.push(`minReviewedAssessments must be at least ${REQUIRED_MIN_REVIEWED_ASSESSMENTS}`);
+  }
+  if (!numberAtLeast(standard.minDistinctClinicalCases, REQUIRED_MIN_DISTINCT_CLINICAL_CASES)) {
+    blockers.push(`minDistinctClinicalCases must be at least ${REQUIRED_MIN_DISTINCT_CLINICAL_CASES}`);
+  }
+  if (!numberAtLeast(standard.minAgreementRate, REQUIRED_MIN_AGREEMENT_RATE)) {
+    blockers.push(`minAgreementRate must be at least ${REQUIRED_MIN_AGREEMENT_RATE}`);
+  }
+  if (!numberAtLeast(standard.minAgreementWilsonLowerBound, REQUIRED_MIN_AGREEMENT_WILSON_LOWER_BOUND)) {
+    blockers.push(`minAgreementWilsonLowerBound must be at least ${REQUIRED_MIN_AGREEMENT_WILSON_LOWER_BOUND}`);
+  }
+  if (!numberAtLeast(standard.minUsableMovementCoverageRatio, MIN_USABLE_ASSESSMENT_COVERAGE_RATIO)) {
+    blockers.push(`minUsableMovementCoverageRatio must be at least ${MIN_USABLE_ASSESSMENT_COVERAGE_RATIO}`);
+  }
+  if (!numberAtLeast(standard.minHouseBrackmannSeverityBands, REQUIRED_HOUSE_BRACKMANN_SEVERITY_BANDS)) {
+    blockers.push(`minHouseBrackmannSeverityBands must be at least ${REQUIRED_HOUSE_BRACKMANN_SEVERITY_BANDS}`);
+  }
+  if (!numberAtLeast(standard.minAssessmentsPerSeverityBand, REQUIRED_MIN_ASSESSMENTS_PER_SEVERITY_BAND)) {
+    blockers.push(`minAssessmentsPerSeverityBand must be at least ${REQUIRED_MIN_ASSESSMENTS_PER_SEVERITY_BAND}`);
+  }
+  if (standard.confidenceInterval !== REQUIRED_CONFIDENCE_INTERVAL) {
+    blockers.push(`confidenceInterval must be ${REQUIRED_CONFIDENCE_INTERVAL}`);
+  }
+  if (standard.clinicalScaleEstimateVersion !== CLINICAL_SCALE_ESTIMATE_VERSION) {
+    blockers.push(`clinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`);
+  }
+  if (standard.reviewProtocol !== REQUIRED_REVIEW_PROTOCOL) {
+    blockers.push(`reviewProtocol must be ${REQUIRED_REVIEW_PROTOCOL}`);
+  }
+  return blockers;
+}
+
+function clinicalScaleValidationStandardEligible(status = DEFAULT_VALIDATION_STATUS) {
+  return clinicalScaleValidationStandardBlockers(status).length === 0;
+}
 
 function clinicalFacingStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
   const standard = status?.clinicalScaleMinimumStandard ?? {};
   const minReviewedAssessments = Number.isInteger(standard.minReviewedAssessments)
     ? standard.minReviewedAssessments
-    : 30;
+    : REQUIRED_MIN_REVIEWED_ASSESSMENTS;
   return Boolean(
-    status?.clinicalFacingScoresAllowed === true
+    clinicalScaleValidationStandardEligible(status)
+      && status?.clinicalFacingScoresAllowed === true
       && status?.productionThresholdConstantsCalibrated === true
       && Number(status?.reviewedDatasetCount) > 0
       && Number(status?.reviewedFrameCount) > 0
@@ -75,6 +132,8 @@ function clinicalScalePresentationPolicy(status = DEFAULT_VALIDATION_STATUS) {
     clinicalFacingScoresAllowed,
     anyClinicalScaleSupportAllowed,
     mixedClinicalScaleSupport,
+    validationStandardEligible: clinicalScaleValidationStandardEligible(status),
+    validationStandardBlockers: clinicalScaleValidationStandardBlockers(status),
     primaryClinicalScaleSupportCount,
     primaryClinicalScaleCount: CLINICAL_SCALE_PRESENTATION_KEYS.length,
     scaleAvailability,
@@ -118,6 +177,8 @@ export {
   DEFAULT_VALIDATION_STATUS,
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleValidationStandardBlockers,
+  clinicalScaleValidationStandardEligible,
   compactClinicalScaleValueLabel,
   clinicalScaleAvailabilityPolicy,
   clinicalScalePresentationPolicy,
