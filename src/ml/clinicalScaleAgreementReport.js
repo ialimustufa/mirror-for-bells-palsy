@@ -109,6 +109,18 @@ function sourceValidationFrom(input, options) {
   return clinicalValidationReportFrom(input, options);
 }
 
+function excludedLabelReasonLines(validation = {}, readiness = {}) {
+  const reasons = validation.summary?.excludedClinicalLabelReasons ?? readiness.validationSummary?.excludedClinicalLabelReasons ?? {};
+  const entries = Object.entries(reasons).filter(([, count]) => Number(count) > 0);
+  if (!entries.length) return [];
+  return [
+    "",
+    "## Excluded Clinical-Label Rows",
+    "",
+    ...entries.map(([reason, count]) => `- ${reason}: ${count}`),
+  ];
+}
+
 function readinessFrom(input, options) {
   if (input?.kind === "mirror-clinical-scale-readiness-report") return input;
   return assessClinicalScaleReadiness(input, options);
@@ -145,12 +157,14 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     `- Assessment clinical-scale records: ${validation.summary?.assessmentClinicalScaleRecords ?? readiness.validationSummary?.assessmentClinicalScaleRecords ?? 0}`,
     `- Reviewed clinical-scale assessments: ${validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0}`,
+    `- Excluded clinical-label rows: ${validation.summary?.excludedClinicalLabelCount ?? readiness.validationSummary?.excludedClinicalLabelCount ?? 0}`,
     `- Assessments with Mirror estimates: ${validation.summary?.estimatedAssessmentCount ?? 0}`,
     `- Ready primary scales: ${readiness.validationSummary?.readyPrimaryScaleCount ?? 0}/${readiness.validationSummary?.primaryScaleCount ?? Object.keys(PRIMARY_SCALE_LABELS).length}`,
     "",
     "## Primary Scale Agreement",
     "",
     scaleTable(PRIMARY_SCALE_LABELS, readiness, validation),
+    ...excludedLabelReasonLines(validation, readiness),
   ];
 
   if (supplementaryScaleKeys.length) {

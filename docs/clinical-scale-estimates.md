@@ -78,6 +78,11 @@ default minimum standard is:
 - Sunnybrook composite: at least 80% within 10 points.
 - eFACE total: at least 80% within 10 points.
 - At least 30 reviewed assessment labels before any primary scale can pass.
+- Reviewed labels only count when the row has a recognized clinician or
+  adjudicated reviewer role, is not marked uncertain, and contains valid primary
+  HB, Sunnybrook, and eFACE total labels. Development rehearsal, user, patient,
+  caregiver, copied, incomplete, and out-of-range rows are excluded from the
+  readiness denominators and reported as excluded label rows.
 - A Wilson 95% binomial confidence interval is reported for each agreement rate
   so reviewers can see the uncertainty around the observed percentage.
 
@@ -90,9 +95,9 @@ reviewed local validation set.
 After `npm run validation:clinical-readiness`, use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
 to create the human-readable clinical-scale agreement report. That Markdown
-report packages the dataset summary, agreement table, Wilson intervals, missing
-estimate counts, blocking reasons, and mismatch samples that a release reviewer
-needs before any validation-status update.
+report packages the dataset summary, excluded-label reason counts, agreement
+table, Wilson intervals, missing estimate counts, blocking reasons, and mismatch
+samples that a release reviewer needs before any validation-status update.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

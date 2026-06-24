@@ -32,6 +32,8 @@ function clinicalValidationReport(overrides = {}) {
     summary: {
       assessmentClinicalScaleRecords: 30,
       reviewedAssessmentCount: 30,
+      excludedClinicalLabelCount: 0,
+      excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
       meetsMinimumStandard: true,
     },
@@ -80,6 +82,7 @@ test("clinical scale readiness reports observed standard without enabling clinic
   assert.equal(report.validationSummary.readyPrimaryScaleCount, 3);
   assert.equal(report.validationSummary.readyForClinicalFacingScoring, false);
   assert.equal(report.validationSummary.clinicalFacingScoresAllowedByReportAlone, false);
+  assert.equal(report.validationSummary.excludedClinicalLabelCount, 0);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 0.8);
   assert.deepEqual(report.thresholds.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
 });

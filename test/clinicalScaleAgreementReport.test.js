@@ -37,6 +37,8 @@ function validationReport(overrides = {}) {
     summary: {
       assessmentClinicalScaleRecords: 30,
       reviewedAssessmentCount: 30,
+      excludedClinicalLabelCount: 0,
+      excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
       meetsMinimumStandard: true,
     },
@@ -61,6 +63,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /eFACE total \| within 10 points/);
   assert.match(markdown, /eFACE static/);
   assert.match(markdown, /95% Wilson score interval/);
+  assert.match(markdown, /Excluded clinical-label rows: 0/);
   assert.match(markdown, /human-reviewed release decision/);
   assert.match(markdown, /TRIPOD\+AI/);
   assert.match(markdown, /STARD 2015/);
@@ -71,6 +74,8 @@ test("clinical scale agreement markdown includes blockers and mismatch review ro
     summary: {
       assessmentClinicalScaleRecords: 12,
       reviewedAssessmentCount: 12,
+      excludedClinicalLabelCount: 2,
+      excludedClinicalLabelReasons: { "missing clinician reviewer role": 2 },
       estimatedAssessmentCount: 12,
       meetsMinimumStandard: false,
     },
@@ -95,6 +100,8 @@ test("clinical scale agreement markdown includes blockers and mismatch review ro
 
   assert.match(markdown, /Status: needs-reviewed-clinical-scale-data/);
   assert.match(markdown, /needs at least 30 reviewed clinical-scale assessments/);
+  assert.match(markdown, /Excluded Clinical-Label Rows/);
+  assert.match(markdown, /missing clinician reviewer role: 2/);
   assert.match(markdown, /assessment-7:clinical-scale/);
   assert.match(markdown, /session-7/);
   assert.match(markdown, /-2\.00/);

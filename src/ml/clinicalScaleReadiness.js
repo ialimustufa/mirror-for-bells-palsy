@@ -86,6 +86,8 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
     },
     validationSummary: {
       reviewedAssessmentCount: clinicalValidation.summary?.reviewedAssessmentCount ?? 0,
+      excludedClinicalLabelCount: clinicalValidation.summary?.excludedClinicalLabelCount ?? 0,
+      excludedClinicalLabelReasons: clinicalValidation.summary?.excludedClinicalLabelReasons ?? {},
       assessmentClinicalScaleRecords: clinicalValidation.summary?.assessmentClinicalScaleRecords ?? 0,
       readyPrimaryScaleCount: Object.values(byScale).filter((scale) => scale.status === "meets-observed-standard").length,
       primaryScaleCount: PRIMARY_CLINICAL_SCALE_KEYS.length,

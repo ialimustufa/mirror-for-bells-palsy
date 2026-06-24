@@ -192,7 +192,8 @@ function clinicalRecord(id, estimate, label) {
         efaceStatic: label.efaceStatic ?? label.eface,
         efaceDynamic: label.efaceDynamic ?? label.eface,
         efaceSynkinesis: label.efaceSynkinesis ?? label.eface,
-        reviewerRole: "clinician",
+        clinicianConfidence: label.clinicianConfidence ?? "",
+        reviewerRole: label.reviewerRole ?? "clinician",
       },
     },
   };
@@ -240,4 +241,55 @@ test("clinical scale evaluation fails closed without enough reviewed assessments
   assert.equal(report.summary.meetsMinimumStandard, false);
   assert.match(report.blockingReasons.join("\n"), /needs at least 30 reviewed clinical-scale assessments/);
   assert.equal(report.byScale.houseBrackmann.meetsMinimumStandard, false);
+});
+
+test("clinical scale evaluation only counts eligible clinician-reviewed primary labels", () => {
+  const estimate = { hb: 3, sunnybrook: 72, eface: 70 };
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const records = [
+    clinicalRecord("assessment-dev:clinical-scale", estimate, { ...validLabel, reviewerRole: "developer rehearsal" }),
+    clinicalRecord("assessment-uncertain:clinical-scale", estimate, { ...validLabel, clinicianConfidence: "uncertain" }),
+    clinicalRecord("assessment-missing-primary:clinical-scale", estimate, { hb: "III", sunnybrook: 74, eface: "" }),
+    clinicalRecord("assessment-out-of-range:clinical-scale", estimate, { hb: "III", sunnybrook: 140, eface: 72 }),
+    clinicalRecord("assessment-all-invalid:clinical-scale", estimate, { hb: "VII", sunnybrook: 140, eface: -4 }),
+    clinicalRecord("assessment-adjudicated:clinical-scale", estimate, { ...validLabel, reviewerRole: "adjudicated clinician consensus" }),
+  ];
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+  });
+
+  assert.equal(report.summary.assessmentClinicalScaleRecords, 6);
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 5);
+  assert.equal(report.summary.excludedClinicalLabelReasons["reviewer role is marked non-clinical or rehearsal"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinician confidence is uncertain"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid houseBrackmann label"], 1);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid efaceTotal label"], 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing valid sunnybrookComposite label"], 2);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.summary.readyForClinicalFacingScoring, true);
+});
+
+test("clinical scale evaluation rejects filled labels that lack clinical reviewer roles", () => {
+  const records = clinicalAgreementRecords(30, 30).map((line) => ({
+    ...line,
+    record: {
+      ...line.record,
+      label: {
+        ...line.record.label,
+        reviewerRole: "",
+      },
+    },
+  }));
+
+  const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 0);
+  assert.equal(report.summary.excludedClinicalLabelCount, 30);
+  assert.equal(report.summary.excludedClinicalLabelReasons["missing clinician reviewer role"], 30);
+  assert.equal(report.summary.readyForClinicalFacingScoring, false);
+  assert.match(report.blockingReasons.join("\n"), /needs at least 30 reviewed clinical-scale assessments/);
 });

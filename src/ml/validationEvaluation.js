@@ -12,6 +12,18 @@ const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
   V: 5,
   VI: 6,
 });
+const PRIMARY_CLINICAL_SCALE_LABELS = Object.freeze(["houseBrackmann", "sunnybrookComposite", "efaceTotal"]);
+const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist|adjudicated|consensus)\b|\bent\b|\bslp\b/i;
+const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
+const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
+const CLINICAL_LABEL_SOURCE_FIELDS = Object.freeze([
+  "houseBrackmannGrade",
+  "sunnybrookComposite",
+  "efaceTotal",
+  "efaceStatic",
+  "efaceDynamic",
+  "efaceSynkinesis",
+]);
 const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
   minReviewedAssessments: 30,
@@ -148,6 +160,11 @@ function numericLabel(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function boundedNumericLabel(value, min = 0, max = 100) {
+  const number = numericLabel(value);
+  return number != null && number >= min && number <= max ? number : null;
+}
+
 function parseHouseBrackmannGrade(value) {
   if (value == null) return null;
   if (Number.isFinite(value)) {
@@ -165,11 +182,35 @@ function clinicalScaleLabels(record = {}) {
   const label = record.label ?? {};
   return {
     houseBrackmann: parseHouseBrackmannGrade(label.houseBrackmannGrade),
-    sunnybrookComposite: numericLabel(label.sunnybrookComposite),
-    efaceTotal: numericLabel(label.efaceTotal),
-    efaceStatic: numericLabel(label.efaceStatic),
-    efaceDynamic: numericLabel(label.efaceDynamic),
-    efaceSynkinesis: numericLabel(label.efaceSynkinesis),
+    sunnybrookComposite: boundedNumericLabel(label.sunnybrookComposite),
+    efaceTotal: boundedNumericLabel(label.efaceTotal),
+    efaceStatic: boundedNumericLabel(label.efaceStatic),
+    efaceDynamic: boundedNumericLabel(label.efaceDynamic),
+    efaceSynkinesis: boundedNumericLabel(label.efaceSynkinesis),
+  };
+}
+
+function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record)) {
+  const label = record.label ?? {};
+  const reviewerRole = String(label.reviewerRole ?? "").trim();
+  const confidence = String(label.clinicianConfidence ?? "").trim();
+  const reasons = [];
+  if (!reviewerRole) {
+    reasons.push("missing clinician reviewer role");
+  } else if (NON_CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
+    reasons.push("reviewer role is marked non-clinical or rehearsal");
+  } else if (!CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
+    reasons.push("reviewer role is not recognized as clinical/adjudicated");
+  }
+  if (confidence && UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN.test(confidence)) {
+    reasons.push("clinician confidence is uncertain");
+  }
+  for (const scale of PRIMARY_CLINICAL_SCALE_LABELS) {
+    if (labels[scale] == null) reasons.push(`missing valid ${scale} label`);
+  }
+  return {
+    eligible: reasons.length === 0,
+    reasons,
   };
 }
 
@@ -191,6 +232,11 @@ function clinicalScaleEstimate(record = {}) {
 
 function hasAnyClinicalLabel(labels = {}) {
   return Object.values(labels).some((value) => value != null);
+}
+
+function hasAnyRawClinicalLabel(record = {}) {
+  const label = record.label ?? {};
+  return CLINICAL_LABEL_SOURCE_FIELDS.some((field) => String(label[field] ?? "").trim());
 }
 
 function createAgreementAccumulator(scale, agreementLabel, tolerance) {
@@ -282,11 +328,22 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   };
   let reviewedAssessmentCount = 0;
   let estimatedAssessmentCount = 0;
+  let excludedClinicalLabelCount = 0;
+  const excludedClinicalLabelReasons = {};
   for (const record of assessmentRecords) {
     const labels = clinicalScaleLabels(record);
     const estimate = clinicalScaleEstimate(record);
-    if (hasAnyClinicalLabel(labels)) reviewedAssessmentCount += 1;
     if (Object.values(estimate).some((value) => value != null)) estimatedAssessmentCount += 1;
+    if (!hasAnyClinicalLabel(labels) && !hasAnyRawClinicalLabel(record)) continue;
+    const eligibility = clinicalLabelEligibility(record, labels);
+    if (!eligibility.eligible) {
+      excludedClinicalLabelCount += 1;
+      for (const reason of eligibility.reasons) {
+        excludedClinicalLabelReasons[reason] = (excludedClinicalLabelReasons[reason] ?? 0) + 1;
+      }
+      continue;
+    }
+    reviewedAssessmentCount += 1;
     for (const [scale, accumulator] of Object.entries(accumulators)) {
       recordAgreementCase(accumulator, record, estimate[scale], labels[scale]);
     }
@@ -295,7 +352,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const byScale = Object.fromEntries(
     Object.entries(accumulators).map(([scale, accumulator]) => [scale, summarizeAgreement(accumulator, agreementOptions)]),
   );
-  const primaryScales = ["houseBrackmann", "sunnybrookComposite", "efaceTotal"];
+  const primaryScales = PRIMARY_CLINICAL_SCALE_LABELS;
   const evaluatedPrimaryScales = primaryScales.filter((scale) => byScale[scale].labeledCount > 0);
   const readyPrimaryScales = primaryScales.filter((scale) => byScale[scale].meetsMinimumStandard);
   const blockingReasons = [];
@@ -323,6 +380,8 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     summary: {
       assessmentClinicalScaleRecords: assessmentRecords.length,
       reviewedAssessmentCount,
+      excludedClinicalLabelCount,
+      excludedClinicalLabelReasons,
       estimatedAssessmentCount,
       primaryScaleCount: primaryScales.length,
       evaluatedPrimaryScaleCount: evaluatedPrimaryScales.length,
