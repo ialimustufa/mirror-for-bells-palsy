@@ -226,7 +226,7 @@ function referenceStandardControlLines(validation = {}, readiness = {}) {
     `- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least ${Math.round(minUsableMovementCoverageRatio * 100)}% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.`,
     "- Independence control: counted labels require clinician-assigned or adjudicated `labelSource` metadata, not Mirror/copied/algorithmic labels.",
     "- Reviewer identity control: counted labels require a pseudonymous `reviewerId`; reviewer-agreement sheets must use distinct reviewer ids to support independent-review evidence.",
-    "- Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.",
+    "- Reviewer control: counted labels require a recognized clinical/adjudication role and `clinicianConfidence` set to high or medium; blank, low, or uncertain confidence rows are excluded.",
     "- Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.",
   ];
 }
@@ -310,6 +310,7 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
         confidenceLevel: readiness.thresholds?.confidenceInterval?.confidenceLevel ?? validation.standard?.confidenceInterval?.confidenceLevel ?? 0.95,
       },
       clinicalScaleEstimateVersion: readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? null,
+      requiresExplicitClinicalConfidence: validation.standard?.requiresExplicitClinicalConfidence === true,
     },
     summary: {
       assessmentClinicalScaleRecords: validation.summary?.assessmentClinicalScaleRecords ?? readiness.validationSummary?.assessmentClinicalScaleRecords ?? 0,
@@ -349,6 +350,7 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
       independentClinicianOrAdjudicatedLabelSource: true,
       pseudonymousReviewerId: true,
       recognizedClinicalReviewerRole: true,
+      explicitClinicalConfidence: true,
     },
     blockingReasons,
     note: "This report packages reviewed agreement evidence for Mirror clinical-scale estimates. It does not convert estimates into clinician-assigned grades and does not provide diagnosis, prognosis, or treatment advice.",
@@ -433,7 +435,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     "- Index estimate: Mirror standard-assessment clinical-scale estimates generated from local practice data.",
     "- Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from `docs/clinical-scale-review-protocol.md`.",
-    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier/coverage/input-provenance controls, `labelSource`, and clinical `reviewerRole` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.",
+    "- Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, estimator `version`, estimate evidence tier/coverage/input-provenance controls, `labelSource`, and clinical `reviewerRole` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.",
     "- Primary performance measures: tolerance-based agreement rate, missing-estimate count, mean absolute delta, and Wilson confidence interval.",
     "- Error review: out-of-tolerance assessment rows listed above for adjudication and scorer review.",
     "- Release control: this report alone cannot enable clinical-facing scores; `docs/validation-status.json` must be reviewed and updated separately.",

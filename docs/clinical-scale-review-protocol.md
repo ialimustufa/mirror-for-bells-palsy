@@ -82,8 +82,9 @@ fill the review metadata fields:
   must not contain the reviewer's name or contact information, but it must be
   stable within the review package.
 - `reviewerRole`: the clinical role or adjudication role.
-- `clinicianConfidence`: leave blank or use a confident/high-confidence value;
-  rows marked `uncertain` are excluded.
+- `clinicianConfidence`: use `high` or `medium` only when the reviewer is
+  confident enough for the row to count; rows left blank or marked `uncertain`
+  are excluded.
 
 ## Inclusion Criteria
 
@@ -107,7 +108,8 @@ An assessment can be used for clinical-scale agreement only when:
 
 Exclude an assessment row from clinical readiness counts when:
 
-- The reviewer marks confidence as `uncertain`.
+- The reviewer leaves `clinicianConfidence` blank or marks confidence as
+  `uncertain`/low.
 - The visible assessment is incomplete or not interpretable.
 - The reviewer could see Mirror's estimate before assigning the primary target.
 - The label was copied from the Mirror estimate rather than independently
@@ -126,7 +128,7 @@ Exclude an assessment row from clinical readiness counts when:
   `houseBrackmannGrade` I-VI/1-6, `sunnybrookComposite` 0-100, and
   `efaceTotal` 0-100. A missing or out-of-range target removes that specific
   scale from its denominator, but it does not remove other valid primary targets
-  on the same assessment. Validation label schema v7 records these columns as
+  on the same assessment. Validation label schema v8 records these columns as
   `primaryTargetFields` rather than all-or-nothing required fields.
 - The row is missing a stable assessment id, or the same assessment id appears
   more than once in the reviewed dataset or reviewer sheet. Duplicate ids can
@@ -198,9 +200,10 @@ Clinical-scale readiness uses the machine-readable standard in
 - At least three eligible labels in each represented House-Brackmann severity
   band.
 - Only eligible blinded, independently clinician-assigned or adjudicated rows
-  with a pseudonymous `reviewerId` and the current clinical-scale estimator
-  version count toward the reviewed-assessment floor. A valid primary target
-  then counts only for that scale's agreement denominator.
+  with `clinicianConfidence` explicitly set to `high` or `medium`, a
+  pseudonymous `reviewerId`, and the current clinical-scale estimator version
+  count toward the reviewed-assessment floor. A valid primary target then counts
+  only for that scale's agreement denominator.
 - The paired Mirror estimate must also be a current-version `status: estimated`
   row with a complete or minimum evidence tier, at least 80% usable movement
   coverage, used/omitted movement exercise IDs, and the usable-movements-only
@@ -271,10 +274,10 @@ If multiple reviewers label the same assessment:
   or the same reviewer id appearing in both raw reviewer sheets as sheet
   integrity blockers. Reviewer-agreement evidence only supports release when the
   two sheets use distinct pseudonymous reviewer ids.
-- Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
-  incomplete, or out-of-range reviewer rows as adjudication blockers. They should
-  be recollected from a blinded current-version sheet rather than resolved by
-  consensus.
+- Treat unblinded, non-independent, non-clinician, blank-confidence, uncertain,
+  copied, rehearsal, incomplete, or out-of-range reviewer rows as adjudication
+  blockers. They should be recollected from a blinded current-version sheet
+  rather than resolved by consensus.
 
 The reviewer-agreement report uses the same tolerance targets as the clinical
 validation gate: House-Brackmann within one grade, Sunnybrook composite within

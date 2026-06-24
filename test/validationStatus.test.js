@@ -147,13 +147,13 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 - Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer identity control: counted labels require a pseudonymous \`reviewerId\`; reviewer-agreement sheets must use distinct reviewer ids to support independent-review evidence.
-- Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
+- Reviewer control: counted labels require a recognized clinical/adjudication role and \`clinicianConfidence\` set to high or medium; blank, low, or uncertain confidence rows are excluded.
 - Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.
 
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage/input-provenance controls, \`labelSource\`, pseudonymous \`reviewerId\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, \`clinicianConfidence\`, estimator \`version\`, estimate evidence tier/coverage/input-provenance controls, \`labelSource\`, pseudonymous \`reviewerId\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -189,6 +189,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
         confidenceLevel: 0.95,
       },
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+      requiresExplicitClinicalConfidence: true,
     },
     summary: {
       reviewedClinicalScaleAssessmentCount: 30,
@@ -257,6 +258,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
       independentClinicianOrAdjudicatedLabelSource: true,
       pseudonymousReviewerId: true,
       recognizedClinicalReviewerRole: true,
+      explicitClinicalConfidence: true,
     },
     note: "This report packages reviewed agreement evidence for Mirror clinical-scale estimates. It does not convert estimates into clinician-assigned grades and does not provide diagnosis, prognosis, or treatment advice.",
   };
@@ -356,6 +358,7 @@ function passingClinicalReviewerAgreementReport({
       requiresV4RestingMetricProvenance: true,
       requiresHouseBrackmannRequiredInput: true,
       requiresV5ScaleInputProvenance: true,
+      requiresExplicitClinicalConfidence: true,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel: 0.95,
@@ -1060,6 +1063,55 @@ test("validation status artifacts reject structured clinical agreement reports w
       }),
     }),
     /referenceStandardControls\.reviewBlinded/,
+  );
+});
+
+test("validation status artifacts reject structured clinical agreement reports without explicit confidence controls", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      sunnybrook: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      eface: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+    },
+  };
+  const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport());
+  delete structuredReport.evidenceStandard.requiresExplicitClinicalConfidence;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: JSON.stringify(structuredReport),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /evidenceStandard\.requiresExplicitClinicalConfidence/,
+  );
+
+  const reportWithoutReferenceControl = JSON.parse(passingStructuredClinicalAgreementReport());
+  delete reportWithoutReferenceControl.referenceStandardControls.explicitClinicalConfidence;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: JSON.stringify(reportWithoutReferenceControl),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /referenceStandardControls\.explicitClinicalConfidence/,
   );
 });
 

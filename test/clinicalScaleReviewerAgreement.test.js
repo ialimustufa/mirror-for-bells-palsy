@@ -182,6 +182,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.requiresV4RestingMetricProvenance, true);
   assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
   assert.equal(report.standard.requiresV5ScaleInputProvenance, true);
+  assert.equal(report.standard.requiresExplicitClinicalConfidence, true);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.standard.minHouseBrackmannSeverityBands, 3);
   assert.equal(report.standard.minAssessmentsPerSeverityBand, 3);
@@ -771,6 +772,7 @@ test("clinical-scale reviewer agreement blocks unblinded or non-independent revi
       reviewBlinded: "no",
       labelSource: "copied from Mirror estimate",
       reviewerRole: "developer rehearsal",
+      clinicianConfidence: "",
     },
   ]);
   const reviewerB = reviewerCsv([
@@ -796,6 +798,7 @@ test("clinical-scale reviewer agreement blocks unblinded or non-independent revi
   assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 1);
   assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 1);
   assert.equal(report.summary.reviewerAIneligibleReasons["reviewer role is marked non-clinical or rehearsal"], 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["missing clinician confidence"], 1);
   assert.equal(report.summary.reviewerAIneligibleReasons["source label sheet was not generated in blinded mode"], 1);
   assert.equal(report.summary.reviewerAIneligibleReasons["review was not marked blinded to Mirror estimates"], 1);
   assert.equal(report.summary.reviewerAIneligibleReasons["label source is marked non-independent or copied"], 1);

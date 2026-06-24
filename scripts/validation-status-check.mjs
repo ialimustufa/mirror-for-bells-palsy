@@ -392,6 +392,10 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
     standard.clinicalScaleEstimateVersion === CLINICAL_SCALE_ESTIMATE_VERSION,
     `${artifactPath}.evidenceStandard.clinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
   );
+  assertCondition(
+    standard.requiresExplicitClinicalConfidence === true,
+    `${artifactPath}.evidenceStandard.requiresExplicitClinicalConfidence must be true`,
+  );
   const summary = report.summary;
   assertCondition(summary && typeof summary === "object", `${artifactPath} must include a summary object`);
   assertNonNegativeInteger(summary.reviewedClinicalScaleAssessmentCount, `${artifactPath}.summary.reviewedClinicalScaleAssessmentCount`);
@@ -428,6 +432,7 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
     "independentClinicianOrAdjudicatedLabelSource",
     "pseudonymousReviewerId",
     "recognizedClinicalReviewerRole",
+    "explicitClinicalConfidence",
   ]) {
     assertCondition(controls[controlKey] === true, `${artifactPath}.referenceStandardControls.${controlKey} must be true`);
   }
@@ -525,7 +530,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /valid in-range target for that specific primary scale/i, artifactPath, "the scale-specific primary target validity control");
   assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
   assertTextMatches(text, /Reviewer identity control:\s*counted labels require a pseudonymous `reviewerId`/i, artifactPath, "the pseudonymous reviewer identity control");
-  assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role/i, artifactPath, "the explicit reviewer-role control");
+  assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role and `clinicianConfidence` set to high or medium/i, artifactPath, "the explicit reviewer-role and confidence control");
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
   const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
   const distinctClinicalCaseCount = integerFromMatch(text, /Distinct validation cases:\s*(\d+)/i);
@@ -693,6 +698,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertCondition(report.standard.requiresV4RestingMetricProvenance === true, `${artifactPath}.standard.requiresV4RestingMetricProvenance must be true`);
   assertCondition(report.standard.requiresHouseBrackmannRequiredInput === true, `${artifactPath}.standard.requiresHouseBrackmannRequiredInput must be true`);
   assertCondition(report.standard.requiresV5ScaleInputProvenance === true, `${artifactPath}.standard.requiresV5ScaleInputProvenance must be true`);
+  assertCondition(report.standard.requiresExplicitClinicalConfidence === true, `${artifactPath}.standard.requiresExplicitClinicalConfidence must be true`);
   assertCondition(report.standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.standard.confidenceInterval.method must be wilson-score`);
   assertCondition(report.standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.standard.confidenceInterval.confidenceLevel must be 0.95`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);

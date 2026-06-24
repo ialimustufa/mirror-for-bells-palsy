@@ -71,13 +71,13 @@ checks for:
   House-Brackmann case-mix floors.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
-  from the current clinical-scale estimator version and a pseudonymous
-  `validationCaseId` plus `reviewerId`. Valid primary HB,
-  Sunnybrook, and eFACE total targets count scale by scale; stale-version,
-  missing-version, unblinded, copied, rehearsal, non-clinician, uncertain,
-  incomplete, duplicate-assessment-id, missing-assessment-id, missing-case-id,
-  missing-reviewer-id, or no-valid-primary-target rows are excluded and reported
-  separately.
+  from the current clinical-scale estimator version with `clinicianConfidence`
+  explicitly set to `high` or `medium`, plus a pseudonymous `validationCaseId`
+  and `reviewerId`. Valid primary HB, Sunnybrook, and eFACE total targets count
+  scale by scale; stale-version, missing-version, unblinded, copied, rehearsal,
+  non-clinician, blank-confidence, uncertain, incomplete, duplicate-assessment-id,
+  missing-assessment-id, missing-case-id, missing-reviewer-id, or
+  no-valid-primary-target rows are excluded and reported separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
@@ -135,9 +135,9 @@ checks for:
 - Reviewer-agreement reports must use
   `mirror-clinical-scale-reviewer-agreement-report` schema v1 and must also
   block unblinded, non-independent,
-  non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
-  reviewer rows, plus rows paired with insufficient estimate status, evidence
-  tier, usable-movement coverage, used/omitted movement provenance, or
+  non-clinician, blank-confidence, uncertain, copied, rehearsal, incomplete, or
+  out-of-range reviewer rows, plus rows paired with insufficient estimate status,
+  evidence tier, usable-movement coverage, used/omitted movement provenance, or
   scale-input/resting-metric provenance, before adjudication output can support
   readiness. Reviewer observed agreement rates must match the within-tolerance
   paired-label counts, and reviewer Wilson bounds must match those counts. The

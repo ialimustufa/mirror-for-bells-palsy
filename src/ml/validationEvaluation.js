@@ -39,6 +39,7 @@ const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
 });
 const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist|adjudicated|consensus)\b|\bent\b|\bslp\b/i;
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
+const ACCEPTED_CLINICAL_CONFIDENCE_PATTERN = /\b(high|medium|confident|adequate|sufficient)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
 const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const BLINDED_LABEL_SHEET_PATTERN = /^(blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
@@ -664,8 +665,12 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   } else if (!CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
     reasons.push("reviewer role is not recognized as clinical/adjudicated");
   }
-  if (confidence && UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN.test(confidence)) {
+  if (!confidence) {
+    reasons.push("missing clinician confidence");
+  } else if (UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN.test(confidence)) {
     reasons.push("clinician confidence is uncertain");
+  } else if (!ACCEPTED_CLINICAL_CONFIDENCE_PATTERN.test(confidence)) {
+    reasons.push("clinician confidence is not recognized as high or medium");
   }
   if (!BLINDED_LABEL_SHEET_PATTERN.test(sourceLabelSheetMode)) {
     reasons.push("source label sheet was not generated in blinded mode");
@@ -1038,6 +1043,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
       requiresV5ScaleInputProvenance: true,
+      requiresExplicitClinicalConfidence: true,
       caseMix: {
         houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
         minHouseBrackmannSeverityBands,

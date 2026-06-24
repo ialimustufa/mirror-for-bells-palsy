@@ -64,6 +64,7 @@ function validationReport(overrides = {}) {
       requiresV4RestingMetricProvenance: true,
       requiresHouseBrackmannRequiredInput: true,
       requiresV5ScaleInputProvenance: true,
+      requiresExplicitClinicalConfidence: true,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -156,8 +157,8 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /valid in-range target for that specific primary scale/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
   assert.match(markdown, /Reviewer identity control: counted labels require a pseudonymous `reviewerId`/);
-  assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role/);
-  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier\/coverage\/input-provenance controls, `labelSource`, and clinical `reviewerRole`/);
+  assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role and `clinicianConfidence` set to high or medium/);
+  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, estimator `version`, estimate evidence tier\/coverage\/input-provenance controls, `labelSource`, and clinical `reviewerRole`/);
   assert.match(markdown, /Primary target fields then count only for the scale where a valid target is present/);
   assert.match(markdown, /human-reviewed release decision/);
   assert.match(markdown, /TRIPOD\+AI/);
@@ -178,6 +179,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.evidenceStandard.minDistinctClinicalCases, 10);
   assert.equal(report.evidenceStandard.minUsableMovementCoverageRatio, 0.8);
   assert.equal(report.evidenceStandard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.evidenceStandard.requiresExplicitClinicalConfidence, true);
   assert.equal(report.summary.reviewedClinicalScaleAssessmentCount, 30);
   assert.equal(report.summary.distinctClinicalCaseCount, 30);
   assert.equal(report.summary.eligibleBlindedIndependentLabelCount, 30);
@@ -188,6 +190,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.houseBrackmannCaseMix.minimumLabelsPerRepresentedSeverityBand, 10);
   assert.equal(report.referenceStandardControls.pseudonymousValidationCaseId, true);
   assert.equal(report.referenceStandardControls.sourceLabelSheetModeBlinded, true);
+  assert.equal(report.referenceStandardControls.explicitClinicalConfidence, true);
   assert.equal(report.referenceStandardControls.houseBrackmannRequiredInput, true);
   assert.equal(report.referenceStandardControls.minUsableMovementCoverageRatio, 0.8);
   assert.equal(report.clinicalScaleAvailabilityRecommendation.houseBrackmann.evidenceMeetsMinimum, true);

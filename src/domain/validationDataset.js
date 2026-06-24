@@ -2,7 +2,7 @@ import { summarizeAssessmentSession } from "./assessment";
 
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 7;
+const VALIDATION_LABEL_SCHEMA_VERSION = 8;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
@@ -12,7 +12,15 @@ const HOUSE_BRACKMANN_LABELS = ["I", "II", "III", "IV", "V", "VI"];
 const STANDARD_REVIEWER_ROLES = ["clinician", "user", "developer"];
 const FRAME_LABEL_REQUIRED_FIELDS = ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"];
 const ASSESSMENT_CLINICAL_PRIMARY_TARGET_FIELDS = ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"];
-const ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS = [];
+const ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS = [
+  "validationCaseId",
+  "clinicianConfidence",
+  "sourceLabelSheetMode",
+  "reviewBlinded",
+  "labelSource",
+  "reviewerId",
+  "reviewerRole",
+];
 
 function recordArray(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
@@ -124,6 +132,9 @@ function buildAssessmentClinicalLabelFields() {
     efaceDynamic: { type: "number|null", range: [0, 100], default: null },
     efaceSynkinesis: { type: "number|null", range: [0, 100], default: null },
     clinicianConfidence: { type: "enum|null", values: CLINICIAN_CONFIDENCE_LABELS, default: null },
+    sourceLabelSheetMode: { type: "blinded|mirror-hidden|unblinded|null", default: null },
+    reviewBlinded: { type: "yes|no|boolean|string|null", default: null },
+    labelSource: { type: "clinician-assigned|adjudicated-consensus|string|null", default: null },
     reviewerId: { type: "pseudonymous-string|null", default: null },
     reviewerRole: { type: "clinician|user|developer|null", values: STANDARD_REVIEWER_ROLES, default: null },
     reviewedAt: { type: "iso-date-time|null", default: null },
@@ -193,6 +204,9 @@ function buildAssessmentClinicalLabelTemplate() {
     efaceDynamic: null,
     efaceSynkinesis: null,
     clinicianConfidence: null,
+    sourceLabelSheetMode: null,
+    reviewBlinded: null,
+    labelSource: null,
     reviewerId: null,
     reviewerRole: null,
     reviewedAt: null,

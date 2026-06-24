@@ -1008,10 +1008,10 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
   flag plus used and omitted movement exercise IDs. It lists
   `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
   target fields rather than required fields because valid targets count
-  scale-by-scale. Label schema v7 adds `validationCaseId`, a pseudonymous case
-  identifier used to distinguish distinct validation cases from repeated
-  assessments of the same case, and `reviewerId`, a pseudonymous reviewer or
-  adjudication-panel identifier.
+  scale-by-scale. Label schema v8 requires review metadata for rows intended to
+  count: `validationCaseId`, explicit high/medium `clinicianConfidence`,
+  `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`, `reviewerId`, and
+  `reviewerRole`.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
@@ -1020,9 +1020,10 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - A `label` template on each assessment clinical-scale row with
   `validationCaseId`, `houseBrackmannGrade`, `sunnybrookComposite`,
   `efaceTotal`, optional eFACE domain scores, reviewer confidence, reviewer
-  id, reviewer role, review time, and notes. At least one valid primary target
-  is needed for a row to count, and each valid primary target counts only for
-  its own scale.
+  id, reviewer role, independent-source metadata, review time, and notes. At
+  least one valid primary target is needed for a row to count, and each valid
+  primary target counts only for its own scale after the row passes the
+  confidence, blinding, source, and reviewer-identity gates.
 
 Label fields start empty except for values Mirror can infer locally, such as the
 sample's intended exercise and the profile affected side. A reviewed validation set
@@ -1080,7 +1081,9 @@ labels are supplied. The clinical-scale gate also requires House-Brackmann label
 to cover HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete,
 with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
-version; stale or missing estimator-version rows are excluded and reported. This
+version and must set clinician confidence to high or medium; stale, missing
+estimator-version, blank-confidence, low-confidence, or uncertain-confidence
+rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
 "estimated"` with a complete/minimum v5 evidence tier and at least 80% usable
 movement coverage. For v5, counted rows must also preserve used/omitted movement

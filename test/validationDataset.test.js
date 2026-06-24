@@ -79,9 +79,17 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.summary.assessmentClinicalScaleRecords, 1);
   assert.deepEqual(manifest.summary.exercises, ["eye-close"]);
   assert.equal(manifest.summary.containsLandmarks, true);
-  assert.equal(manifest.labelSchema.version, 7);
+  assert.equal(manifest.labelSchema.version, 8);
   assert.deepEqual(manifest.labelSchema.requiredFields, ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"]);
-  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, []);
+  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, [
+    "validationCaseId",
+    "clinicianConfidence",
+    "sourceLabelSheetMode",
+    "reviewBlinded",
+    "labelSource",
+    "reviewerId",
+    "reviewerRole",
+  ]);
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.primaryTargetFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
   assert.equal(manifest.labelSchema.assessmentClinicalScale.minimumValidPrimaryTargetsForCounting, 1);
   assert.equal(manifest.labelSchema.assessmentClinicalScale.targetCounting, "scale-by-scale");
@@ -105,6 +113,10 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateMissingRestingMetricKeys.default, "record.estimate.evidence.missingRestingMetricKeys");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateCalculationUsesCompleteRestingMetrics.default, "record.estimate.evidence.calculationUsesCompleteRestingMetrics");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.validationCaseId.type, "pseudonymous-string|null");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.clinicianConfidence.type, "enum|null");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.sourceLabelSheetMode.type, "blinded|mirror-hidden|unblinded|null");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.reviewBlinded.type, "yes|no|boolean|string|null");
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.labelSource.type, "clinician-assigned|adjudicated-consensus|string|null");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.reviewerId.type, "pseudonymous-string|null");
   assert.deepEqual(manifest.sections, ["sessionContext", "assessmentClinicalScale", "frameSample"]);
   assert.deepEqual(sessions.map((session) => session.id), ["session-a"]);
@@ -132,6 +144,10 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(clinicalScaleAssessments[0].sourceSummary.estimateCalculationUsesCompleteRestingMetrics, false);
   assert.equal(clinicalScaleAssessments[0].label.houseBrackmannGrade, null);
   assert.equal(clinicalScaleAssessments[0].label.validationCaseId, null);
+  assert.equal(clinicalScaleAssessments[0].label.clinicianConfidence, null);
+  assert.equal(clinicalScaleAssessments[0].label.sourceLabelSheetMode, null);
+  assert.equal(clinicalScaleAssessments[0].label.reviewBlinded, null);
+  assert.equal(clinicalScaleAssessments[0].label.labelSource, null);
   assert.equal(clinicalScaleAssessments[0].label.reviewerId, null);
   assert.deepEqual(samples.map((sample) => sample.id), ["sample-calibrate", "sample-hold"]);
   assert.equal(samples[1].label.intendedMovement, "eye-close");
