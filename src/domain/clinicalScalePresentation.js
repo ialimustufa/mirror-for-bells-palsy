@@ -12,9 +12,14 @@ const REQUIRED_MIN_ASSESSMENTS_PER_SEVERITY_BAND = 3;
 const REQUIRED_CONFIDENCE_INTERVAL = "wilson-95";
 const REQUIRED_REVIEW_PROTOCOL = "docs/clinical-scale-review-protocol.md";
 const CLINICAL_SCALE_RELEASE_STATUS = "clinical-scale-agreement-reviewed";
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function numberAtLeast(value, minimum) {
   return Number.isFinite(Number(value)) && Number(value) >= minimum;
+}
+
+function nonEmptyStringArray(value) {
+  return Array.isArray(value) && value.some((item) => typeof item === "string" && item.length > 0);
 }
 
 function clinicalScaleValidationStandardBlockers(status = DEFAULT_VALIDATION_STATUS) {
@@ -70,25 +75,37 @@ function clinicalScaleReleaseStatusEligible(status = DEFAULT_VALIDATION_STATUS) 
   return clinicalScaleReleaseStatusBlockers(status).length === 0;
 }
 
-function clinicalFacingStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
+function clinicalScaleReleaseEvidenceBlockers(status = DEFAULT_VALIDATION_STATUS) {
   const standard = status?.clinicalScaleMinimumStandard ?? {};
   const minReviewedAssessments = Number.isInteger(standard.minReviewedAssessments)
     ? standard.minReviewedAssessments
     : REQUIRED_MIN_REVIEWED_ASSESSMENTS;
+  const blockers = [];
+  if (status?.schemaVersion !== 1) blockers.push("schemaVersion must be 1");
+  if (typeof status?.updatedAt !== "string" || !ISO_DATE_RE.test(status.updatedAt)) blockers.push("updatedAt must use YYYY-MM-DD");
+  if (status?.clinicalFacingScoresAllowed !== true) blockers.push("clinicalFacingScoresAllowed must be true");
+  if (status?.productionThresholdConstantsCalibrated !== true) blockers.push("productionThresholdConstantsCalibrated must be true");
+  if (!numberAtLeast(status?.reviewedDatasetCount, 1)) blockers.push("reviewedDatasetCount must be greater than 0");
+  if (!numberAtLeast(status?.reviewedFrameCount, 1)) blockers.push("reviewedFrameCount must be greater than 0");
+  if (!numberAtLeast(status?.readyExerciseCount, 1)) blockers.push("readyExerciseCount must be greater than 0");
+  if (!numberAtLeast(status?.reviewedClinicalScaleAssessmentCount, minReviewedAssessments)) {
+    blockers.push(`reviewedClinicalScaleAssessmentCount must be at least ${minReviewedAssessments}`);
+  }
+  if (!nonEmptyStringArray(status?.clinicalScaleAgreementReports)) blockers.push("clinicalScaleAgreementReports must list at least one report");
+  if (!nonEmptyStringArray(status?.clinicalScaleReviewerAgreementReports)) blockers.push("clinicalScaleReviewerAgreementReports must list at least one report");
+  if (!nonEmptyStringArray(status?.thresholdCalibrationReports)) blockers.push("thresholdCalibrationReports must list at least one report");
+  return blockers;
+}
+
+function clinicalScaleReleaseEvidenceEligible(status = DEFAULT_VALIDATION_STATUS) {
+  return clinicalScaleReleaseEvidenceBlockers(status).length === 0;
+}
+
+function clinicalFacingStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
   return Boolean(
     clinicalScaleValidationStandardEligible(status)
       && clinicalScaleReleaseStatusEligible(status)
-      && status?.clinicalFacingScoresAllowed === true
-      && status?.productionThresholdConstantsCalibrated === true
-      && Number(status?.reviewedDatasetCount) > 0
-      && Number(status?.reviewedFrameCount) > 0
-      && Number(status?.reviewedClinicalScaleAssessmentCount) >= minReviewedAssessments
-      && Array.isArray(status?.clinicalScaleAgreementReports)
-      && status.clinicalScaleAgreementReports.length > 0
-      && Array.isArray(status?.clinicalScaleReviewerAgreementReports)
-      && status.clinicalScaleReviewerAgreementReports.length > 0
-      && Array.isArray(status?.thresholdCalibrationReports)
-      && status.thresholdCalibrationReports.length > 0
+      && clinicalScaleReleaseEvidenceEligible(status)
   );
 }
 
@@ -148,6 +165,8 @@ function clinicalScalePresentationPolicy(status = DEFAULT_VALIDATION_STATUS) {
     validationStandardBlockers: clinicalScaleValidationStandardBlockers(status),
     validationReleaseStatusEligible: clinicalScaleReleaseStatusEligible(status),
     validationReleaseStatusBlockers: clinicalScaleReleaseStatusBlockers(status),
+    validationReleaseEvidenceEligible: clinicalScaleReleaseEvidenceEligible(status),
+    validationReleaseEvidenceBlockers: clinicalScaleReleaseEvidenceBlockers(status),
     primaryClinicalScaleSupportCount,
     primaryClinicalScaleCount: CLINICAL_SCALE_PRESENTATION_KEYS.length,
     scaleAvailability,
@@ -191,6 +210,8 @@ export {
   DEFAULT_VALIDATION_STATUS,
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleReleaseEvidenceBlockers,
+  clinicalScaleReleaseEvidenceEligible,
   clinicalScaleReleaseStatusBlockers,
   clinicalScaleReleaseStatusEligible,
   clinicalScaleValidationStandardBlockers,

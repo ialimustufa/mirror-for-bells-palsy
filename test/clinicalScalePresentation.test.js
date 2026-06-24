@@ -4,6 +4,8 @@ import validationStatus from "../docs/validation-status.json" with { type: "json
 import {
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleReleaseEvidenceBlockers,
+  clinicalScaleReleaseEvidenceEligible,
   clinicalScaleReleaseStatusBlockers,
   clinicalScaleReleaseStatusEligible,
   clinicalScaleValidationStandardBlockers,
@@ -44,10 +46,13 @@ function clinicalScaleMinimumStandard(overrides = {}) {
 
 function reviewedClinicalScaleStatus(clinicalScaleAvailability) {
   return {
+    schemaVersion: 1,
+    updatedAt: "2026-06-24",
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
@@ -92,10 +97,13 @@ test("clinical scale presentation policy does not switch copy for a boolean-only
 
 test("clinical scale presentation policy switches copy only with complete release status evidence", () => {
   const status = {
+    schemaVersion: 1,
+    updatedAt: "2026-06-24",
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
@@ -113,11 +121,50 @@ test("clinical scale presentation policy switches copy only with complete releas
   assert.equal(clinicalFacingStatusEligible(status), true);
   assert.equal(policy.mode, "clinical-facing-supported");
   assert.equal(policy.validationReleaseStatusEligible, true);
+  assert.equal(policy.validationReleaseEvidenceEligible, true);
   assert.equal(policy.validationStandardEligible, true);
   assert.equal(policy.badgeLabel, "Validated");
   assert.equal(policy.scaleNoun, "support value");
   assert.match(policy.shortNotice, /validation gate/);
   assert.match(policy.reportNotice, /clinician interpretation/);
+});
+
+test("clinical scale presentation policy fails closed when release evidence is incomplete", () => {
+  const passingStatus = reviewedClinicalScaleStatus({
+    houseBrackmann: { clinicalFacingScoresAllowed: true },
+    sunnybrook: { clinicalFacingScoresAllowed: true },
+    eface: { clinicalFacingScoresAllowed: true },
+  });
+
+  const weakEvidence = [
+    { schemaVersion: 2, blocker: /schemaVersion/ },
+    { updatedAt: "06-24-2026", blocker: /updatedAt/ },
+    { reviewedDatasetCount: 0, blocker: /reviewedDatasetCount/ },
+    { reviewedFrameCount: 0, blocker: /reviewedFrameCount/ },
+    { readyExerciseCount: 0, blocker: /readyExerciseCount/ },
+    { reviewedClinicalScaleAssessmentCount: 29, blocker: /reviewedClinicalScaleAssessmentCount/ },
+    { clinicalScaleAgreementReports: [], blocker: /clinicalScaleAgreementReports/ },
+    { clinicalScaleReviewerAgreementReports: [], blocker: /clinicalScaleReviewerAgreementReports/ },
+    { thresholdCalibrationReports: [], blocker: /thresholdCalibrationReports/ },
+  ];
+
+  for (const weakStatusFields of weakEvidence) {
+    const { blocker, ...override } = weakStatusFields;
+    const status = {
+      ...passingStatus,
+      ...override,
+    };
+    const policy = clinicalScalePresentationPolicy(status);
+
+    assert.equal(clinicalFacingStatusEligible(status), false);
+    assert.equal(clinicalScaleReleaseEvidenceEligible(status), false);
+    assert.match(clinicalScaleReleaseEvidenceBlockers(status).join("\n"), blocker);
+    assert.equal(policy.validationReleaseEvidenceEligible, false);
+    assert.match(policy.validationReleaseEvidenceBlockers.join("\n"), blocker);
+    assert.equal(policy.mode, "mirror-estimate");
+    assert.equal(policy.anyClinicalScaleSupportAllowed, false);
+    assert.equal(policy.badgeLabel, "Estimate");
+  }
 });
 
 test("clinical scale presentation policy fails closed when release status is contradictory", () => {
@@ -183,10 +230,13 @@ test("clinical scale presentation policy fails closed when the runtime validatio
 
 test("clinical scale presentation policy requires explicit per-scale availability flags", () => {
   const status = {
+    schemaVersion: 1,
+    updatedAt: "2026-06-24",
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
@@ -207,10 +257,13 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
 
 test("clinical scale presentation policy can keep individual scales as estimates", () => {
   const status = {
+    schemaVersion: 1,
+    updatedAt: "2026-06-24",
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
@@ -398,10 +451,13 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook input: 4\/5 standard movements used; omitted Gentle eye closure/);
 
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
+    schemaVersion: 1,
+    updatedAt: "2026-06-24",
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
@@ -417,10 +473,13 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(supportedRows[0], /House-Brackmann support value/);
 
   const mixedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
+    schemaVersion: 1,
+    updatedAt: "2026-06-24",
     status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
     clinicalScaleMinimumStandard: clinicalScaleMinimumStandard(),
     clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
     clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],

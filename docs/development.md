@@ -59,9 +59,11 @@ checks for:
 - Runtime clinical-scale presentation policy, which reads `docs/validation-status.json`
   before app panels or reports can use clinical-facing wording and fails closed
   unless the status is explicitly `clinical-scale-agreement-reviewed`; it also
-  fails closed if the status file weakens the documented 30-assessment, 10-case,
-  80% observed-agreement, 80% Wilson lower-bound,
-  80% usable-movement-coverage, Wilson-confidence-interval,
+  fails closed without schema-v1 dated status metadata, reviewed dataset/frame
+  coverage, ready exercise coverage, clinical and reviewer agreement report
+  paths, threshold report paths, or if the status file weakens the documented
+  30-assessment, 10-case, 80% observed-agreement, 80% Wilson lower-bound, 80%
+  usable-movement-coverage, Wilson-confidence-interval,
   current-estimator-version, review-protocol, or House-Brackmann case-mix
   floors.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
