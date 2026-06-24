@@ -6,6 +6,8 @@ const DEFAULT_STATUS_PATH = "docs/validation-status.json";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const PRIMARY_CLINICAL_SCALE_COUNT = 3;
+const DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
+const DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND = 3;
 
 function assertCondition(condition, message) {
   if (!condition) throw new Error(message);
@@ -29,6 +31,14 @@ function assertClinicalScaleMinimumStandard(value) {
     Number.isInteger(value.minReviewedAssessments) && value.minReviewedAssessments >= DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS,
     `clinicalScaleMinimumStandard.minReviewedAssessments must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
   );
+  assertCondition(
+    value.minHouseBrackmannSeverityBands === DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS,
+    `clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands must be ${DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS}`,
+  );
+  assertCondition(
+    Number.isInteger(value.minAssessmentsPerSeverityBand) && value.minAssessmentsPerSeverityBand >= DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND,
+    `clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand must be at least ${DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND}`,
+  );
   assertCondition(value.confidenceInterval === "wilson-95", "clinicalScaleMinimumStandard.confidenceInterval must be wilson-95");
   assertCondition(value.reviewProtocol === "docs/clinical-scale-review-protocol.md", "clinicalScaleMinimumStandard.reviewProtocol must reference docs/clinical-scale-review-protocol.md");
 }
@@ -50,6 +60,10 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
   assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
   assertTextMatches(text, /eFACE total\s*\|/i, artifactPath, "eFACE total agreement row");
+  assertTextMatches(text, /## House-Brackmann Case Mix/i, artifactPath, "the House-Brackmann case-mix section");
+  assertTextMatches(text, /HB I-II mild\/normal\s*\|/i, artifactPath, "mild House-Brackmann case-mix row");
+  assertTextMatches(text, /HB III-IV moderate\s*\|/i, artifactPath, "moderate House-Brackmann case-mix row");
+  assertTextMatches(text, /HB V-VI severe\/complete\s*\|/i, artifactPath, "severe House-Brackmann case-mix row");
   assertTextMatches(text, /Wilson/i, artifactPath, "Wilson confidence interval reporting");
   assertTextMatches(text, /Reference standard:\s*blinded clinician-assigned/i, artifactPath, "the blinded clinician reference-standard statement");
   assertTextMatches(text, /## Reference Standard Controls/i, artifactPath, "the reference-standard controls section");
@@ -60,11 +74,22 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
   const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
   const eligibleBlindedIndependentLabelCount = integerFromMatch(text, /Eligible blinded independent clinical labels:\s*(\d+)/i);
+  const minimumLabelsPerRepresentedSeverityBand = integerFromMatch(text, /Minimum labels per represented band:\s*(\d+)/i);
+  const representedHouseBrackmannSeverityBandCount = integerFromMatch(text, /Represented severity bands:\s*(\d+)/i);
+  const houseBrackmannSeverityBandCounts = [
+    integerFromMatch(text, /HB I-II mild\/normal\s*\|\s*(\d+)\s*\|\s*yes/i),
+    integerFromMatch(text, /HB III-IV moderate\s*\|\s*(\d+)\s*\|\s*yes/i),
+    integerFromMatch(text, /HB V-VI severe\/complete\s*\|\s*(\d+)\s*\|\s*yes/i),
+  ];
+  const minimumHouseBrackmannSeverityBandLabelCount = Math.min(...houseBrackmannSeverityBandCounts.map((count) => count ?? 0));
   const readyPrimaryScaleCount = integerFromMatch(text, /Ready primary scales:\s*(\d+)\/\d+/i);
   return {
     path: artifactPath,
     reviewedClinicalScaleAssessmentCount,
     eligibleBlindedIndependentLabelCount,
+    minimumLabelsPerRepresentedSeverityBand,
+    representedHouseBrackmannSeverityBandCount,
+    minimumHouseBrackmannSeverityBandLabelCount,
     readyPrimaryScaleCount,
   };
 }
@@ -150,20 +175,17 @@ async function validateStatusArtifacts(status, options = {}) {
     thresholdCalibrationReports.push(validateThresholdCalibrationReportText(text, artifactPath));
   }
   if (status.clinicalScaleAgreementReports.length > 0) {
-    const maxReviewedAssessments = Math.max(0, ...clinicalAgreementReports.map((report) => report.reviewedClinicalScaleAssessmentCount ?? 0));
-    const maxEligibleBlindedIndependentLabels = Math.max(0, ...clinicalAgreementReports.map((report) => report.eligibleBlindedIndependentLabelCount ?? 0));
-    const maxReadyPrimaryScales = Math.max(0, ...clinicalAgreementReports.map((report) => report.readyPrimaryScaleCount ?? 0));
+    const reportMeetingMinimum = clinicalAgreementReports.find((report) => (
+      (report.reviewedClinicalScaleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.eligibleBlindedIndependentLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.representedHouseBrackmannSeverityBandCount ?? 0) >= status.clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands
+      && (report.minimumLabelsPerRepresentedSeverityBand ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
+      && (report.minimumHouseBrackmannSeverityBandLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
+      && (report.readyPrimaryScaleCount ?? 0) >= PRIMARY_CLINICAL_SCALE_COUNT
+    ));
     assertCondition(
-      maxReviewedAssessments >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
-      "clinical scale agreement report artifacts must document reviewed assessment coverage meeting the minimum standard",
-    );
-    assertCondition(
-      maxEligibleBlindedIndependentLabels >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
-      "clinical scale agreement report artifacts must document eligible blinded independent clinical labels meeting the minimum standard",
-    );
-    assertCondition(
-      maxReadyPrimaryScales >= PRIMARY_CLINICAL_SCALE_COUNT,
-      `clinical scale agreement report artifacts must document ${PRIMARY_CLINICAL_SCALE_COUNT}/${PRIMARY_CLINICAL_SCALE_COUNT} ready primary scales`,
+      reportMeetingMinimum,
+      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, House-Brackmann severity-band case mix, and 3/3 ready primary scales meeting the minimum standard",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

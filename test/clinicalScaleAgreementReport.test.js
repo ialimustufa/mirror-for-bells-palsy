@@ -48,6 +48,20 @@ function validationReport(overrides = {}) {
       efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 24 }),
       efaceStatic: scaleReport({ labeledCount: 30, withinToleranceCount: 25 }),
     },
+    caseMix: {
+      scale: "houseBrackmann",
+      minHouseBrackmannSeverityBands: 3,
+      minAssessmentsPerSeverityBand: 3,
+      severityBands: {
+        mild: { label: "HB I-II mild/normal", min: 1, max: 2, count: 10, meetsMinimum: true },
+        moderate: { label: "HB III-IV moderate", min: 3, max: 4, count: 10, meetsMinimum: true },
+        severe: { label: "HB V-VI severe/complete", min: 5, max: 6, count: 10, meetsMinimum: true },
+      },
+      representedSeverityBands: ["mild", "moderate", "severe"],
+      representedSeverityBandCount: 3,
+      meetsMinimumStandard: true,
+      blockingReasons: [],
+    },
     blockingReasons: [],
     ...overrides,
   };
@@ -64,6 +78,11 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /eFACE static/);
   assert.match(markdown, /95% Wilson score interval/);
   assert.match(markdown, /Excluded clinical-label rows: 0/);
+  assert.match(markdown, /House-Brackmann Case Mix/);
+  assert.match(markdown, /Required severity bands: 3/);
+  assert.match(markdown, /HB I-II mild\/normal \| 10 \| yes/);
+  assert.match(markdown, /HB III-IV moderate \| 10 \| yes/);
+  assert.match(markdown, /HB V-VI severe\/complete \| 10 \| yes/);
   assert.match(markdown, /Reference Standard Controls/);
   assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
   assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);

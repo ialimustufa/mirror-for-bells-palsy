@@ -65,6 +65,9 @@ checks for:
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section and an eligible blinded independent label count meeting the
   minimum reviewed-assessment floor.
+- Referenced clinical-scale agreement reports must also include the
+  House-Brackmann case-mix section with HB I-II, HB III-IV, and HB V-VI severity
+  bands represented by at least three eligible labels per represented band.
 
 Backup compatibility must remain rollback-safe:
 

@@ -121,6 +121,26 @@ function excludedLabelReasonLines(validation = {}, readiness = {}) {
   ];
 }
 
+function caseMixLines(validation = {}, readiness = {}) {
+  const caseMix = validation.caseMix ?? readiness.validationSummary?.caseMix;
+  if (!caseMix?.severityBands) return [];
+  const rows = [
+    "",
+    "## House-Brackmann Case Mix",
+    "",
+    `- Required severity bands: ${caseMix.minHouseBrackmannSeverityBands ?? "n/a"}`,
+    `- Minimum labels per represented band: ${caseMix.minAssessmentsPerSeverityBand ?? "n/a"}`,
+    `- Represented severity bands: ${caseMix.representedSeverityBandCount ?? 0}`,
+    "",
+    "| Band | Labels | Minimum met |",
+    "| --- | ---: | --- |",
+  ];
+  for (const [key, band] of Object.entries(caseMix.severityBands)) {
+    rows.push(`| ${markdownEscape(band.label ?? key)} | ${band.count ?? 0} | ${band.meetsMinimum ? "yes" : "no"} |`);
+  }
+  return rows;
+}
+
 function referenceStandardControlLines(validation = {}, readiness = {}) {
   return [
     "## Reference Standard Controls",
@@ -176,6 +196,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "## Primary Scale Agreement",
     "",
     scaleTable(PRIMARY_SCALE_LABELS, readiness, validation),
+    ...caseMixLines(validation, readiness),
     "",
     ...referenceStandardControlLines(validation, readiness),
     ...excludedLabelReasonLines(validation, readiness),

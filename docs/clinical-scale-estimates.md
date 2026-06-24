@@ -5,6 +5,7 @@ Mirror can now derive optional clinical-scale estimates from a completed standar
 ## Source Basis
 
 - House-Brackmann is a 6-grade global facial nerve scale. University of Iowa's protocol summarizes grades I-VI and notes that HB evaluates the facial nerve trunk rather than distal branch-specific deficits: https://iowaprotocols.medicine.uiowa.edu/protocols/house-brackmann-facial-paralysis-scale
+- The local HB case-mix gate groups the NCBI severity descriptions into I-II mild/normal, III-IV moderate, and V-VI severe/complete bands: https://www.ncbi.nlm.nih.gov/sites/books/NBK549815/table/article-21555.table1/
 - Sunnybrook Facial Grading System combines rest, voluntary movement, and synkinesis. The one-page Sunnybrook form scores five standard expressions, weights voluntary movement by 4, weights resting symmetry by 5, and subtracts synkinesis from the composite: https://ehandboken.ous-hf.no/api/File/GetFile?entityId=230422&isLastVersion=false
 - Reliability literature supports Sunnybrook as more granular than HB. A 2024 comparison reported moderate HB reliability and high Sunnybrook reliability, while noting that subjective clinician assessment still matters: https://pmc.ncbi.nlm.nih.gov/articles/PMC10895858/
 - Video assessment literature describes Sunnybrook as a regional weighted 0-100 scale and notes that video-based synkinesis/resting components can be less reliable than voluntary movement: https://www.jmir.org/2019/4/e11109/PDF
@@ -82,6 +83,9 @@ default minimum standard is:
 - Sunnybrook composite: at least 80% within 10 points.
 - eFACE total: at least 80% within 10 points.
 - At least 30 reviewed assessment labels before any primary scale can pass.
+- House-Brackmann case mix must cover all three local severity bands with at
+  least three eligible labels in each band: HB I-II mild/normal, HB III-IV
+  moderate, and HB V-VI severe/complete.
 - Reviewed labels only count when the row preserves `sourceLabelSheetMode:
   blinded`, is explicitly marked blinded to Mirror estimates, has an independent
   clinician-assigned or adjudicated `labelSource`,
@@ -104,11 +108,12 @@ After `npm run validation:clinical-readiness`, use
 to create the human-readable clinical-scale agreement report. That Markdown
 report packages the dataset summary, excluded-label reason counts, agreement
 table, Wilson intervals, missing estimate counts, reference-standard control
-statements, blocking reasons, and mismatch samples that a release reviewer needs
-before any validation-status update. The release status artifact checker requires
-the report to document the eligible blinded independent label count and the
-`sourceLabelSheetMode`/`reviewBlinded`/`labelSource` controls before a clinical
-agreement artifact can support clinical-facing score availability.
+statements, House-Brackmann case-mix table, blocking reasons, and mismatch
+samples that a release reviewer needs before any validation-status update. The
+release status artifact checker requires the report to document the eligible
+blinded independent label count, all three House-Brackmann severity bands, and
+the `sourceLabelSheetMode`/`reviewBlinded`/`labelSource` controls before a
+clinical agreement artifact can support clinical-facing score availability.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

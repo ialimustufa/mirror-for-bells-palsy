@@ -121,6 +121,10 @@ Clinical-scale readiness uses the machine-readable standard in
 - At least 80% House-Brackmann agreement within one grade.
 - At least 80% Sunnybrook composite agreement within 10 points.
 - At least 80% eFACE total agreement within 10 points.
+- All three local House-Brackmann severity bands represented by eligible labels:
+  HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete.
+- At least three eligible labels in each represented House-Brackmann severity
+  band.
 - Only eligible blinded, independently clinician-assigned or adjudicated rows
   with valid primary labels count toward the reviewed-assessment floor and
   per-scale agreement denominators.
@@ -128,7 +132,9 @@ Clinical-scale readiness uses the machine-readable standard in
 
 The Wilson interval is reported because a raw observed percentage can hide
 uncertainty in small validation sets. The 30-assessment floor is a local release
-gate, not a universal clinical sample-size claim.
+gate, not a universal clinical sample-size claim. The House-Brackmann case-mix
+gate is a local applicability control so a passing agreement rate cannot come
+only from one severity range.
 
 ## Adjudication
 
@@ -156,6 +162,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - A clinical-scale validation report from `npm run validate:dataset`.
 - A clinical-scale readiness report from
   `npm run validation:clinical-readiness`.
+- A House-Brackmann case-mix section showing all three severity bands with the
+  required minimum labels per represented band.
 - Documentation of whether labels were blinded and whether adjudication was used.
 - A human-reviewed update to `docs/validation-status.json` referencing the
   agreement report artifacts.
@@ -167,14 +175,18 @@ The release gate runs `npm run validation:status`, which verifies that reference
 clinical-scale agreement reports exist and contain a passing observed-standard
 status, all three primary scale rows, Wilson interval reporting, explicit
 reference-standard controls, an eligible blinded independent label count meeting
-the minimum reviewed-assessment floor, and release-control text. A status update
-that only changes counts or report paths without matching artifacts must fail the
-release check.
+the minimum reviewed-assessment floor, a House-Brackmann case-mix section meeting
+the severity-band minimum, and release-control text. A status update that only
+changes counts or report paths without matching artifacts must fail the release
+check.
 
 ## References
 
 - House-Brackmann protocol summary: https://iowaprotocols.medicine.uiowa.edu/protocols/house-brackmann-facial-paralysis-scale
+- NCBI House-Brackmann severity table: https://www.ncbi.nlm.nih.gov/sites/books/NBK549815/table/article-21555.table1/
 - Sunnybrook scoring form: https://ehandboken.ous-hf.no/api/File/GetFile?entityId=230422&isLastVersion=false
 - eFACE validation abstract: https://pubmed.ncbi.nlm.nih.gov/26218397/
 - Wilson score interval: https://www.tandfonline.com/doi/abs/10.1080/01621459.1927.10502953
 - External validation sample-size guidance: https://www.bmj.com/content/384/bmj-2023-074821
+- STARD 2015 diagnostic-accuracy reporting guidance: https://www.equator-network.org/reporting-guidelines/stard/
+- TRIPOD+AI prediction-model reporting guidance: https://www.equator-network.org/reporting-guidelines/tripod-statement/

@@ -13,6 +13,11 @@ const HOUSE_BRACKMANN_GRADE_NUMBERS = Object.freeze({
   VI: 6,
 });
 const PRIMARY_CLINICAL_SCALE_LABELS = Object.freeze(["houseBrackmann", "sunnybrookComposite", "efaceTotal"]);
+const HOUSE_BRACKMANN_SEVERITY_BANDS = Object.freeze({
+  mild: { label: "HB I-II mild/normal", min: 1, max: 2 },
+  moderate: { label: "HB III-IV moderate", min: 3, max: 4 },
+  severe: { label: "HB V-VI severe/complete", min: 5, max: 6 },
+});
 const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist|adjudicated|consensus)\b|\bent\b|\bslp\b/i;
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
@@ -31,6 +36,8 @@ const CLINICAL_LABEL_SOURCE_FIELDS = Object.freeze([
 const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
   minReviewedAssessments: 30,
+  minHouseBrackmannSeverityBands: 3,
+  minAssessmentsPerSeverityBand: 3,
   confidenceLevel: 0.95,
 });
 const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
@@ -182,6 +189,17 @@ function parseHouseBrackmannGrade(value) {
   return Number.isFinite(number) && number >= 1 && number <= 6 ? Math.round(number) : null;
 }
 
+function houseBrackmannSeverityBand(grade) {
+  for (const [key, band] of Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS)) {
+    if (Number.isFinite(grade) && grade >= band.min && grade <= band.max) return key;
+  }
+  return null;
+}
+
+function createHouseBrackmannCaseMixCounts() {
+  return Object.fromEntries(Object.keys(HOUSE_BRACKMANN_SEVERITY_BANDS).map((key) => [key, 0]));
+}
+
 function clinicalScaleLabels(record = {}) {
   const label = record.label ?? {};
   return {
@@ -330,6 +348,41 @@ function summarizeAgreement(accumulator, options = {}) {
   };
 }
 
+function summarizeHouseBrackmannCaseMix(counts = {}, options = {}) {
+  const minHouseBrackmannSeverityBands = Math.min(
+    Object.keys(HOUSE_BRACKMANN_SEVERITY_BANDS).length,
+    Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
+  );
+  const minAssessmentsPerSeverityBand = Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand));
+  const severityBands = Object.fromEntries(
+    Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [
+      key,
+      {
+        ...band,
+        count: counts[key] ?? 0,
+        meetsMinimum: (counts[key] ?? 0) >= minAssessmentsPerSeverityBand,
+      },
+    ]),
+  );
+  const representedSeverityBands = Object.entries(severityBands)
+    .filter(([, band]) => band.meetsMinimum)
+    .map(([key]) => key);
+  const blockingReasons = [];
+  if (representedSeverityBands.length < minHouseBrackmannSeverityBands) {
+    blockingReasons.push(`needs at least ${minHouseBrackmannSeverityBands} House-Brackmann severity bands with at least ${minAssessmentsPerSeverityBand} reviewed labels each`);
+  }
+  return {
+    scale: "houseBrackmann",
+    minHouseBrackmannSeverityBands,
+    minAssessmentsPerSeverityBand,
+    severityBands,
+    representedSeverityBands,
+    representedSeverityBandCount: representedSeverityBands.length,
+    meetsMinimumStandard: blockingReasons.length === 0,
+    blockingReasons,
+  };
+}
+
 function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const assessmentRecords = extractAssessmentClinicalScaleRecords(records);
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
@@ -337,7 +390,13 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const sunnybrookTolerance = Number.isFinite(options.sunnybrookTolerance) ? options.sunnybrookTolerance : 10;
   const efaceTolerance = Number.isFinite(options.efaceTolerance) ? options.efaceTolerance : 10;
+  const minHouseBrackmannSeverityBands = Math.min(
+    Object.keys(HOUSE_BRACKMANN_SEVERITY_BANDS).length,
+    Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
+  );
+  const minAssessmentsPerSeverityBand = Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand));
   const agreementOptions = { minAgreementRate, minReviewedAssessments, confidenceLevel };
+  const caseMixOptions = { minHouseBrackmannSeverityBands, minAssessmentsPerSeverityBand };
   const accumulators = {
     houseBrackmann: createAgreementAccumulator("houseBrackmann", "within-one-grade agreement", 1),
     sunnybrookComposite: createAgreementAccumulator("sunnybrookComposite", `within-${sunnybrookTolerance}-point agreement`, sunnybrookTolerance),
@@ -350,6 +409,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   let estimatedAssessmentCount = 0;
   let excludedClinicalLabelCount = 0;
   const excludedClinicalLabelReasons = {};
+  const houseBrackmannCaseMixCounts = createHouseBrackmannCaseMixCounts();
   for (const record of assessmentRecords) {
     const labels = clinicalScaleLabels(record);
     const estimate = clinicalScaleEstimate(record);
@@ -364,6 +424,8 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       continue;
     }
     reviewedAssessmentCount += 1;
+    const severityBand = houseBrackmannSeverityBand(labels.houseBrackmann);
+    if (severityBand) houseBrackmannCaseMixCounts[severityBand] += 1;
     for (const [scale, accumulator] of Object.entries(accumulators)) {
       recordAgreementCase(accumulator, record, estimate[scale], labels[scale]);
     }
@@ -375,9 +437,13 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const primaryScales = PRIMARY_CLINICAL_SCALE_LABELS;
   const evaluatedPrimaryScales = primaryScales.filter((scale) => byScale[scale].labeledCount > 0);
   const readyPrimaryScales = primaryScales.filter((scale) => byScale[scale].meetsMinimumStandard);
+  const caseMix = summarizeHouseBrackmannCaseMix(houseBrackmannCaseMixCounts, caseMixOptions);
   const blockingReasons = [];
   if (reviewedAssessmentCount < minReviewedAssessments) {
     blockingReasons.push(`needs at least ${minReviewedAssessments} reviewed clinical-scale assessments`);
+  }
+  if (!caseMix.meetsMinimumStandard) {
+    blockingReasons.push(`caseMix: ${caseMix.blockingReasons.join("; ")}`);
   }
   for (const scale of primaryScales) {
     if (!byScale[scale].meetsMinimumStandard) blockingReasons.push(`${scale}: ${byScale[scale].blockingReasons.join("; ")}`);
@@ -396,6 +462,11 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       houseBrackmannAgreement: "estimate must be within one House-Brackmann grade of the reviewed label",
       sunnybrookTolerance,
       efaceTolerance,
+      caseMix: {
+        houseBrackmannSeverityBands: Object.fromEntries(Object.entries(HOUSE_BRACKMANN_SEVERITY_BANDS).map(([key, band]) => [key, band.label])),
+        minHouseBrackmannSeverityBands,
+        minAssessmentsPerSeverityBand,
+      },
     },
     summary: {
       assessmentClinicalScaleRecords: assessmentRecords.length,
@@ -411,6 +482,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     },
     blockingReasons,
     byScale,
+    caseMix,
     note: "This report evaluates Mirror estimates against reviewed clinical labels. It does not make the estimates clinician-assigned grades.",
   };
 }
@@ -585,6 +657,7 @@ function calibrateThresholdsFromValidationSamples(samples = [], options = {}) {
 
 export {
   DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD,
+  HOUSE_BRACKMANN_SEVERITY_BANDS,
   calibrateThresholdsFromValidationSamples,
   evaluateClinicalScaleEstimates,
   evaluateValidationFrameSamples,

@@ -203,13 +203,27 @@ function clinicalRecord(id, estimate, label) {
 }
 
 function clinicalAgreementRecords(total, successCount) {
+  const caseProfiles = [
+    {
+      estimate: { hb: 2, sunnybrook: 88, eface: 86 },
+      successLabel: { hb: "II", sunnybrook: 90, eface: 88 },
+      failLabel: { hb: "IV", sunnybrook: 66, eface: 64 },
+    },
+    {
+      estimate: { hb: 3, sunnybrook: 72, eface: 70 },
+      successLabel: { hb: "III", sunnybrook: 74, eface: 72 },
+      failLabel: { hb: "V", sunnybrook: 55, eface: 52 },
+    },
+    {
+      estimate: { hb: 5, sunnybrook: 35, eface: 38 },
+      successLabel: { hb: "V", sunnybrook: 32, eface: 35 },
+      failLabel: { hb: "III", sunnybrook: 56, eface: 59 },
+    },
+  ];
   return Array.from({ length: total }, (_, index) => {
     const success = index < successCount;
-    const estimate = { hb: 3, sunnybrook: 72, eface: 70 };
-    const label = success
-      ? { hb: "III", sunnybrook: 74, eface: 72 }
-      : { hb: "V", sunnybrook: 55, eface: 52 };
-    return clinicalRecord(`assessment-${index + 1}:clinical-scale`, estimate, label);
+    const profile = caseProfiles[index % caseProfiles.length];
+    return clinicalRecord(`assessment-${index + 1}:clinical-scale`, profile.estimate, success ? profile.successLabel : profile.failLabel);
   });
 }
 
@@ -223,6 +237,10 @@ test("clinical scale evaluation reports 80 percent reviewed agreement across 30 
   assert.equal(report.summary.reviewedAssessmentCount, 30);
   assert.equal(report.summary.meetsMinimumStandard, true);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
+  assert.equal(report.caseMix.representedSeverityBandCount, 3);
+  assert.equal(report.caseMix.severityBands.mild.count, 8);
+  assert.equal(report.caseMix.severityBands.moderate.count, 12);
+  assert.equal(report.caseMix.severityBands.severe.count, 10);
   assert.equal(report.standard.minReviewedAssessments, 30);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
@@ -235,6 +253,21 @@ test("clinical scale evaluation reports 80 percent reviewed agreement across 30 
   assert.equal(report.byScale.sunnybrookComposite.agreementRate, 0.8);
   assert.equal(report.byScale.efaceTotal.withinToleranceCount, 24);
   assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
+});
+
+test("clinical scale evaluation fails closed when reviewed labels do not span HB case mix", () => {
+  const estimate = { hb: 3, sunnybrook: 72, eface: 70 };
+  const label = { hb: "III", sunnybrook: 74, eface: 72 };
+  const records = Array.from({ length: 30 }, (_, index) => clinicalRecord(`assessment-${index + 1}:clinical-scale`, estimate, label));
+
+  const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 30);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.caseMix.representedSeverityBandCount, 1);
+  assert.equal(report.caseMix.meetsMinimumStandard, false);
+  assert.equal(report.summary.meetsMinimumStandard, false);
+  assert.match(report.blockingReasons.join("\n"), /House-Brackmann severity bands/);
 });
 
 test("clinical scale evaluation fails closed without enough reviewed assessments", () => {
@@ -264,6 +297,8 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
   });
 
   assert.equal(report.summary.assessmentClinicalScaleRecords, 9);

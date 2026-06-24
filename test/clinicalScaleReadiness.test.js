@@ -42,6 +42,20 @@ function clinicalValidationReport(overrides = {}) {
       sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 24 }),
       efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 24 }),
     },
+    caseMix: {
+      scale: "houseBrackmann",
+      minHouseBrackmannSeverityBands: 3,
+      minAssessmentsPerSeverityBand: 3,
+      severityBands: {
+        mild: { label: "HB I-II mild/normal", min: 1, max: 2, count: 10, meetsMinimum: true },
+        moderate: { label: "HB III-IV moderate", min: 3, max: 4, count: 10, meetsMinimum: true },
+        severe: { label: "HB V-VI severe/complete", min: 5, max: 6, count: 10, meetsMinimum: true },
+      },
+      representedSeverityBands: ["mild", "moderate", "severe"],
+      representedSeverityBandCount: 3,
+      meetsMinimumStandard: true,
+      blockingReasons: [],
+    },
     ...overrides,
   };
 }
@@ -74,6 +88,13 @@ test("clinical scale readiness accepts a raw clinical scale validation report", 
   assert.equal(report, source);
 });
 
+test("clinical scale readiness fails closed without House-Brackmann case-mix evidence", () => {
+  const report = assessClinicalScaleReadiness(clinicalValidationReport({ caseMix: null }), { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.match(report.blockingReasons.join("\n"), /severity-band coverage/);
+});
+
 test("clinical scale readiness reports observed standard without enabling clinical-facing scores by itself", () => {
   const report = assessClinicalScaleReadiness(clinicalValidationReport(), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
@@ -83,6 +104,7 @@ test("clinical scale readiness reports observed standard without enabling clinic
   assert.equal(report.validationSummary.readyForClinicalFacingScoring, false);
   assert.equal(report.validationSummary.clinicalFacingScoresAllowedByReportAlone, false);
   assert.equal(report.validationSummary.excludedClinicalLabelCount, 0);
+  assert.equal(report.validationSummary.caseMix.representedSeverityBandCount, 3);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 0.8);
   assert.deepEqual(report.thresholds.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
 });

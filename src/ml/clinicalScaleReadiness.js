@@ -10,6 +10,8 @@ function normalizeThresholds(options = {}) {
   return {
     minAgreementRate: options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate,
     minReviewedAssessments: Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments)),
+    minHouseBrackmannSeverityBands: Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
+    minAssessmentsPerSeverityBand: Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand)),
     confidenceLevel: options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel,
   };
 }
@@ -62,6 +64,11 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   if ((clinicalValidation.summary?.reviewedAssessmentCount ?? 0) < thresholds.minReviewedAssessments) {
     blockingReasons.push(`needs at least ${thresholds.minReviewedAssessments} reviewed clinical-scale assessments`);
   }
+  if (!clinicalValidation.caseMix) {
+    blockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
+  } else if (clinicalValidation.caseMix.blockingReasons?.length) {
+    blockingReasons.push(`caseMix: ${clinicalValidation.caseMix.blockingReasons.join("; ")}`);
+  }
   for (const scaleKey of PRIMARY_CLINICAL_SCALE_KEYS) {
     const scale = byScale[scaleKey];
     if (scale.blockingReasons.length) blockingReasons.push(`${scaleKey}: ${scale.blockingReasons.join("; ")}`);
@@ -79,6 +86,10 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       houseBrackmannAgreement: "within one grade",
       sunnybrookTolerance: clinicalValidation.standard?.sunnybrookTolerance ?? 10,
       efaceTolerance: clinicalValidation.standard?.efaceTolerance ?? 10,
+      caseMix: clinicalValidation.standard?.caseMix ?? {
+        minHouseBrackmannSeverityBands: thresholds.minHouseBrackmannSeverityBands,
+        minAssessmentsPerSeverityBand: thresholds.minAssessmentsPerSeverityBand,
+      },
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel: thresholds.confidenceLevel,
@@ -91,6 +102,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       assessmentClinicalScaleRecords: clinicalValidation.summary?.assessmentClinicalScaleRecords ?? 0,
       readyPrimaryScaleCount: Object.values(byScale).filter((scale) => scale.status === "meets-observed-standard").length,
       primaryScaleCount: PRIMARY_CLINICAL_SCALE_KEYS.length,
+      caseMix: clinicalValidation.caseMix ?? null,
       readyForClinicalFacingScoring: false,
       clinicalFacingScoresAllowedByReportAlone: false,
     },

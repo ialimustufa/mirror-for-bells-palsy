@@ -13,6 +13,8 @@ const BASE_STATUS = {
   clinicalScaleMinimumStandard: {
     minAgreementRate: 0.8,
     minReviewedAssessments: 30,
+    minHouseBrackmannSeverityBands: 3,
+    minAssessmentsPerSeverityBand: 3,
     confidenceInterval: "wilson-95",
     reviewProtocol: "docs/clinical-scale-review-protocol.md",
   },
@@ -22,7 +24,7 @@ const BASE_STATUS = {
   clinicalFacingScoresAllowed: false,
 };
 
-function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales = 3 } = {}) {
+function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales = 3, representedSeverityBands = 3 } = {}) {
   return `# Mirror Clinical Scale Agreement Report
 
 Generated: 2026-06-24T00:00:00.000Z
@@ -41,6 +43,18 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 | House-Brackmann | within one grade | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 0.5 | meets-observed-standard |
 | Sunnybrook composite | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
 | eFACE total | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
+
+## House-Brackmann Case Mix
+
+- Required severity bands: 3
+- Minimum labels per represented band: 3
+- Represented severity bands: ${representedSeverityBands}
+
+| Band | Labels | Minimum met |
+| --- | ---: | --- |
+| HB I-II mild/normal | 10 | yes |
+| HB III-IV moderate | 10 | yes |
+| HB V-VI severe/complete | 10 | yes |
 
 ## Reference Standard Controls
 
@@ -137,6 +151,7 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.status.clinicalFacingScoresAllowed, true);
   assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
 
@@ -157,6 +172,8 @@ test("validation status rejects weak clinical scale minimum standards", () => {
       clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
         minReviewedAssessments: 12,
+        minHouseBrackmannSeverityBands: 3,
+        minAssessmentsPerSeverityBand: 3,
         confidenceInterval: "wilson-95",
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
@@ -172,10 +189,43 @@ test("validation status rejects missing clinical scale review protocol", () => {
       clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
         minReviewedAssessments: 30,
+        minHouseBrackmannSeverityBands: 3,
+        minAssessmentsPerSeverityBand: 3,
         confidenceInterval: "wilson-95",
       },
     }),
     /reviewProtocol/,
+  );
+});
+
+test("validation status rejects weak clinical scale case-mix standards", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        minAgreementRate: 0.8,
+        minReviewedAssessments: 30,
+        minHouseBrackmannSeverityBands: 2,
+        minAssessmentsPerSeverityBand: 3,
+        confidenceInterval: "wilson-95",
+        reviewProtocol: "docs/clinical-scale-review-protocol.md",
+      },
+    }),
+    /minHouseBrackmannSeverityBands/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        minAgreementRate: 0.8,
+        minReviewedAssessments: 30,
+        minHouseBrackmannSeverityBands: 3,
+        minAssessmentsPerSeverityBand: 2,
+        confidenceInterval: "wilson-95",
+        reviewProtocol: "docs/clinical-scale-review-protocol.md",
+      },
+    }),
+    /minAssessmentsPerSeverityBand/,
   );
 });
 
@@ -301,7 +351,57 @@ test("validation status artifacts reject clinical agreement reports with too few
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),
     }),
-    /eligible blinded independent clinical labels/,
+    /clinical scale agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports with incomplete HB case mix", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport({ representedSeverityBands: 2 }),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports with too few labels in a required HB band", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("HB I-II mild/normal | 10 | yes", "HB I-II mild/normal | 2 | no"),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale agreement report artifacts/,
   );
 });
 
