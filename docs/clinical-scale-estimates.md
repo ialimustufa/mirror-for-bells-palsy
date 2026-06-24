@@ -45,9 +45,13 @@ The tier appears in assessment panels and printable reports so a 4/5 movement
 estimate is not presented with the same evidence strength as a complete 5/5
 assessment.
 
-The current clinical-scale estimator is v2. v2 records evidence tiers and clamps
-eFACE-style proxy scores to the 0-100 range, so validation labels generated from
-older v1 estimates are stale and do not count toward the release agreement gate.
+The current clinical-scale estimator is v3. v3 records evidence tiers, clamps
+eFACE-style proxy scores to the 0-100 range, and excludes missing or weak-capture
+movements from the scale formulas. Minimum-standard 4/5 estimates report omitted
+movement IDs in `evidence.omittedMovementExerciseIds` and normalize
+Sunnybrook voluntary/synkinesis totals from usable movements only. Validation
+labels generated from older v1 or v2 estimates are stale and do not count toward
+the release agreement gate.
 
 ## Implemented Estimates
 
@@ -129,7 +133,7 @@ default minimum standard is:
   or adjudicated reviewer role, is not marked uncertain, and contains a valid
   target for the primary scale being counted. Missing another primary target does
   not remove the valid target from its own denominator.
-  The paired Mirror estimate must also have `status: estimated`, a v2
+  The paired Mirror estimate must also have `status: estimated`, a v3
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
   and at least 80% usable movement coverage. Missing or invalid estimates are
   reported as missing estimates in that scale's denominator rather than

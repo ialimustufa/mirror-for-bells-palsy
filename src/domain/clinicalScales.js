@@ -1,4 +1,4 @@
-const CLINICAL_SCALE_ESTIMATE_VERSION = 2;
+const CLINICAL_SCALE_ESTIMATE_VERSION = 3;
 const MIN_USABLE_ASSESSMENT_COVERAGE_RATIO = 0.8;
 
 const STANDARD_SCALE_MOVEMENTS = Object.freeze([
@@ -129,6 +129,9 @@ function assessmentCoverage(scores = []) {
 }
 
 function estimateEvidence(coverage, hasRestingMetrics, reasons = []) {
+  const estimatedMovementExerciseIds = coverage.movementItems
+    .filter((item) => item.usable)
+    .map((item) => item.exerciseId);
   const tier = reasons.length
     ? "insufficient-standard-evidence"
     : coverage.usableMovementCount === coverage.requiredMovementCount
@@ -147,6 +150,9 @@ function estimateEvidence(coverage, hasRestingMetrics, reasons = []) {
     completeMovementCoverageRatio: 1,
     usableMovementCount: coverage.usableMovementCount,
     requiredMovementCount: coverage.requiredMovementCount,
+    estimatedMovementExerciseIds,
+    omittedMovementExerciseIds: coverage.unusableExerciseIds,
+    calculationUsesOnlyUsableMovements: true,
     restingMetricsAvailable: hasRestingMetrics,
     limitations: reasons,
   };
@@ -179,7 +185,23 @@ function efaceStaticItem(metric) {
   return compactNumber(clamp(100 - asymmetry * 220, 0, 100), 1);
 }
 
-function buildSunnybrookEstimate(movementItems, restingMetrics) {
+function movementInputCompleteness(movementItems, coverage) {
+  return {
+    usedMovementCount: movementItems.length,
+    requiredMovementCount: coverage.requiredMovementCount,
+    usedExerciseIds: movementItems.map((item) => item.exerciseId),
+    omittedExerciseIds: coverage.unusableExerciseIds,
+    complete: movementItems.length === coverage.requiredMovementCount,
+    calculationUsesOnlyUsableMovements: true,
+  };
+}
+
+function normalizedMovementTotal(rawTotal, observedCount, expectedCount, multiplier = 1) {
+  if (!observedCount || !expectedCount) return 0;
+  return (rawTotal / observedCount) * expectedCount * multiplier;
+}
+
+function buildSunnybrookEstimate(movementItems, restingMetrics, coverage) {
   const restingItems = {
     eye: restingLevel(restingMetric(restingMetrics, "palpebralFissure"), 0.08, 0.2, 1),
     cheek: restingLevel(restingMetric(restingMetrics, "nasolabialMidface"), 0.1, 0.3, 2),
@@ -189,6 +211,7 @@ function buildSunnybrookEstimate(movementItems, restingMetrics) {
   const restingSymmetryScore = restingRawTotal * 5;
   const voluntaryItems = {};
   let voluntaryRawTotal = 0;
+  const expectedMovementCount = coverage.requiredMovementCount;
   for (const item of movementItems) {
     const movementLevel = movementLevelFromRatio(item.ratio);
     voluntaryItems[item.sunnybrookKey] = {
@@ -201,7 +224,7 @@ function buildSunnybrookEstimate(movementItems, restingMetrics) {
     voluntaryRawTotal += movementLevel.level;
   }
   const synkinesisItems = {};
-  let synkinesisScore = 0;
+  let synkinesisRawTotal = 0;
   for (const item of movementItems) {
     synkinesisItems[item.sunnybrookKey] = {
       exerciseId: item.exerciseId,
@@ -210,9 +233,10 @@ function buildSunnybrookEstimate(movementItems, restingMetrics) {
       levelLabel: coactivationLabel(item.synkinesisLevel),
       risk: item.synkinesisRisk,
     };
-    synkinesisScore += item.synkinesisLevel;
+    synkinesisRawTotal += item.synkinesisLevel;
   }
-  const voluntaryMovementScore = voluntaryRawTotal * 4;
+  const voluntaryMovementScore = compactNumber(normalizedMovementTotal(voluntaryRawTotal, movementItems.length, expectedMovementCount, 4), 1);
+  const synkinesisScore = compactNumber(normalizedMovementTotal(synkinesisRawTotal, movementItems.length, expectedMovementCount), 1);
   const compositeScore = clamp(voluntaryMovementScore - restingSymmetryScore - synkinesisScore, 0, 100);
   return {
     kind: "sunnybrook-estimate",
@@ -223,11 +247,14 @@ function buildSunnybrookEstimate(movementItems, restingMetrics) {
     voluntaryItems,
     restingItems,
     synkinesisItems,
-    formula: "voluntaryMovementScore - restingSymmetryScore - synkinesisScore",
+    inputCompleteness: movementInputCompleteness(movementItems, coverage),
+    formula: movementItems.length === expectedMovementCount
+      ? "voluntaryMovementScore - restingSymmetryScore - synkinesisScore"
+      : "usable-movement average normalized to five standard movements, then voluntaryMovementScore - restingSymmetryScore - synkinesisScore",
   };
 }
 
-function buildHouseBrackmannEstimate(sunnybrook, movementItems) {
+function buildHouseBrackmannEstimate(sunnybrook, movementItems, coverage) {
   const eyeItem = sunnybrook.voluntaryItems.gentleEyeClosure;
   const movementLevels = Object.values(sunnybrook.voluntaryItems).map((item) => item.level);
   const minMovementLevel = Math.min(...movementLevels);
@@ -267,10 +294,11 @@ function buildHouseBrackmannEstimate(sunnybrook, movementItems) {
       synkinesisScore: synkinesis,
       averageMovementPercent: ratioToPercent(averageMovementRatio),
     },
+    inputCompleteness: movementInputCompleteness(movementItems, coverage),
   };
 }
 
-function buildEfaceEstimate(movementItems, restingMetrics) {
+function buildEfaceEstimate(movementItems, restingMetrics, coverage) {
   const staticItems = {
     palpebralFissure: efaceStaticItem(restingMetric(restingMetrics, "palpebralFissure")),
     nasolabialFold: efaceStaticItem(restingMetric(restingMetrics, "nasolabialMidface")),
@@ -309,6 +337,7 @@ function buildEfaceEstimate(movementItems, restingMetrics) {
     staticItems,
     dynamicItems,
     synkinesisItems,
+    inputCompleteness: movementInputCompleteness(movementItems, coverage),
     coverageNote: "Mirror maps available standard-assessment proxies into eFACE-like static, dynamic, and synkinesis domains; it is not a clinician-entered eFACE form.",
   };
 }
@@ -348,18 +377,18 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
   };
   if (reasons.length) return { ...base, reasons, scales: null };
 
-  const usableMovementItems = coverage.movementItems.map((item) => ({
+  const usableMovementItems = coverage.movementItems.filter((item) => item.usable).map((item) => ({
     ...item,
-    ratio: Number.isFinite(item.ratio) ? item.ratio : 0,
+    ratio: item.ratio,
   }));
-  const sunnybrook = buildSunnybrookEstimate(usableMovementItems, restingMetrics);
+  const sunnybrook = buildSunnybrookEstimate(usableMovementItems, restingMetrics, coverage);
   return {
     ...base,
     reasons: [],
     scales: {
-      houseBrackmann: buildHouseBrackmannEstimate(sunnybrook, usableMovementItems),
+      houseBrackmann: buildHouseBrackmannEstimate(sunnybrook, usableMovementItems, coverage),
       sunnybrook,
-      eface: buildEfaceEstimate(usableMovementItems, restingMetrics),
+      eface: buildEfaceEstimate(usableMovementItems, restingMetrics, coverage),
     },
   };
 }

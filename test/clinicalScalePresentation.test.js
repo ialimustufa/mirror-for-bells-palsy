@@ -183,6 +183,22 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(rows[1], /Sunnybrook estimate/);
   assert.match(rows.join(" "), /Evidence tier: Complete standard-assessment evidence/);
 
+  const minimumRows = clinicalScaleEstimateRows({
+    ...clinicalScales,
+    coverage: {
+      usableMovementCount: 4,
+      requiredMovementCount: 5,
+      ratio: 0.8,
+      unusableExerciseIds: ["pucker"],
+    },
+    evidence: {
+      tier: "minimum-standard-assessment",
+      label: "Minimum standard-assessment evidence",
+      omittedMovementExerciseIds: ["pucker"],
+    },
+  });
+  assert.match(minimumRows.join(" "), /Omitted from scale formulas: Lip pucker/);
+
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,

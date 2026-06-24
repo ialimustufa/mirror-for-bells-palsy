@@ -1,5 +1,6 @@
 import { COMFORT_DOSING } from "../domain/config";
 import { summarizeAssessmentSession } from "../domain/assessment";
+import { STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales";
 import { clinicalScalePresentationPolicy, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { summarizeSessionDiagnostics } from "../domain/sessionDiagnostics";
 import { formatClock, todayISO } from "../domain/session";
@@ -29,6 +30,13 @@ function escapeHtml(str) {
 
 function formatRatioPct(value) {
   return Number.isFinite(value) ? `${Math.round(value * 100)}%` : "n/a";
+}
+
+const STANDARD_SCALE_MOVEMENT_LABELS = Object.fromEntries(STANDARD_SCALE_MOVEMENTS.map((movement) => [movement.exerciseId, movement.label]));
+
+function omittedClinicalScaleMovementLabels(clinicalScales) {
+  const ids = clinicalScales?.evidence?.omittedMovementExerciseIds ?? clinicalScales?.coverage?.unusableExerciseIds ?? [];
+  return ids.map((id) => STANDARD_SCALE_MOVEMENT_LABELS[id] ?? id);
 }
 
 function formatRestMetricValue(value) {
@@ -65,11 +73,15 @@ function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScaleP
     return [`Clinical scale estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
   }
   const scales = clinicalScales.scales ?? {};
+  const omittedMovements = omittedClinicalScaleMovementLabels(clinicalScales);
   return [
     scales.houseBrackmann ? `House-Brackmann ${scaleNounForClinicalScale(presentation, "houseBrackmann")}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
     scales.sunnybrook ? `Sunnybrook ${scaleNounForClinicalScale(presentation, "sunnybrook")}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
     scales.eface ? `eFACE-style ${scaleNounForClinicalScale(presentation, "eface")}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
     `Evidence standard: ${clinicalScales.coverage?.usableMovementCount ?? 0}/${clinicalScales.coverage?.requiredMovementCount ?? 0} standard movements usable (${formatRatioPct(clinicalScales.coverage?.ratio)}).`,
+    omittedMovements.length
+      ? `Omitted from scale formulas: ${omittedMovements.join(", ")}.`
+      : null,
     clinicalScales.evidence?.label ? `Evidence tier: ${clinicalScales.evidence.label}.` : null,
   ].filter(Boolean);
 }

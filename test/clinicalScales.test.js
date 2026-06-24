@@ -83,6 +83,34 @@ test("clinical scale estimates distinguish minimum from complete standard eviden
   assert.equal(result.evidence.tier, "minimum-standard-assessment");
   assert.equal(result.evidence.label, "Minimum standard-assessment evidence");
   assert.deepEqual(result.coverage.missingExerciseIds, ["pucker"]);
+  assert.deepEqual(result.evidence.estimatedMovementExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
+  assert.deepEqual(result.evidence.omittedMovementExerciseIds, ["pucker"]);
+  assert.equal(result.scales.sunnybrook.inputCompleteness.complete, false);
+  assert.deepEqual(result.scales.sunnybrook.inputCompleteness.omittedExerciseIds, ["pucker"]);
+});
+
+test("clinical scale estimates do not use weak-capture movements in minimum evidence formulas", () => {
+  const result = estimateClinicalScaleGrades({
+    restingMetrics: RESTING_METRICS,
+    scores: [
+      movementScore("eyebrow-raise", 0.5),
+      movementScore("eye-close", 0.5),
+      movementScore("open-smile", 0.5),
+      movementScore("nose-wrinkle", 0.5),
+      movementScore("pucker", 1, { captureQuality: { key: "weak" } }),
+    ],
+  });
+
+  assert.equal(result.status, "estimated");
+  assert.equal(result.coverage.usableMovementCount, 4);
+  assert.equal(result.evidence.tier, "minimum-standard-assessment");
+  assert.deepEqual(result.coverage.unusableExerciseIds, ["pucker"]);
+  assert.equal(result.evidence.calculationUsesOnlyUsableMovements, true);
+  assert.deepEqual(result.evidence.estimatedMovementExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
+  assert.equal(result.scales.sunnybrook.voluntaryItems.lipPucker, undefined);
+  assert.equal(result.scales.eface.dynamicItems.lipPucker, undefined);
+  assert.equal(result.scales.sunnybrook.voluntaryMovementScore, 60);
+  assert.equal(result.scales.eface.dynamicScore, 50);
 });
 
 test("clinical scale estimates clamp score outputs to clinical score ranges", () => {

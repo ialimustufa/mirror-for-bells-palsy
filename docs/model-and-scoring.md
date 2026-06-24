@@ -866,8 +866,8 @@ landmarks are not stored as part of the assessment summary.
 
 Clinical-scale estimates are stored with explicit status and caveats:
 
-- `version: 2` for the current estimator. Reviewed v1 clinical-scale labels are
-  stale after the v2 evidence-tier and 0-100 score-range change and cannot support
+- `version: 3` for the current estimator. Reviewed v1/v2 clinical-scale labels
+  are stale after the v3 usable-movement-only formula change and cannot support
   the clinical-facing release gate.
 - `status: "estimated"` only when the 80% evidence standard is met.
 - `status: "insufficient-data"` when movement coverage or resting metrics are missing.
@@ -875,11 +875,17 @@ Clinical-scale estimates are stored with explicit status and caveats:
   movements are usable, `"minimum-standard-assessment"` when the local 4/5
   movement floor is met, or `"insufficient-standard-evidence"` when estimates
   are blocked.
+- Scale formulas use only movements that meet the usable movement/capture-quality
+  gate. Missing or weak-capture movements are omitted from calculations and
+  listed in `evidence.omittedMovementExerciseIds`.
 - House-Brackmann is a conservative global estimate derived from the Sunnybrook estimate, eye-closure level, resting asymmetry, and coactivation.
 - Sunnybrook estimates the documented rest, voluntary movement, and synkinesis components from Mirror's standard assessment movements.
 - eFACE is represented as an eFACE-style domain estimate from available static,
   dynamic, and synkinesis proxies, with proxy scores clamped to 0-100; it is not
   a clinician-entered eFACE form.
+- Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
+  Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
+  treat missing or weak-capture movement rows as zero movement.
 
 These values are not clinical-facing validated grades while
 `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
@@ -1040,7 +1046,7 @@ with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
 version; stale or missing estimator-version rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
-"estimated"` with a complete/minimum v2 evidence tier and at least 80% usable
+"estimated"` with a complete/minimum v3 evidence tier and at least 80% usable
 movement coverage. Valid primary targets count scale by scale; a missing or
 invalid estimate is reported as a missing estimate for that scale rather than
 excluding other valid targets on the row. This report does not make Mirror
