@@ -1248,9 +1248,12 @@ reference-standard controls, and release-control text. When all three primary
 scales are enabled, the report status must also be the passing
 confidence-standard status. Structured clinical agreement JSON artifacts must be
 `mirror-clinical-scale-agreement-report` schema v1 before they can be used as
-machine release evidence. Clinical reviewer-agreement report paths must point to
-JSON `mirror-clinical-scale-reviewer-agreement-report` schema-v1 artifacts with
-current-version eligible reviewer sheets, complete/minimum estimate evidence and 80%
+machine release evidence, and observed agreement rates must match the reported
+within-tolerance counts and label denominators. Clinical reviewer-agreement
+report paths must point to JSON
+`mirror-clinical-scale-reviewer-agreement-report` schema-v1 artifacts with
+current-version eligible reviewer sheets, within-tolerance rates that match the
+reported paired-label counts, complete/minimum estimate evidence and 80%
 usable-movement coverage provenance, scale-specific input provenance, complete
 resting-metric provenance, no excluded reviewer-pair, metadata, or
 estimate-evidence blockers, zero incomplete scale-specific estimate-input skips

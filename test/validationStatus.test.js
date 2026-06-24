@@ -432,7 +432,9 @@ function houseBrackmannOnlyClinicalReviewerAgreementReport() {
   for (const scaleKey of ["sunnybrookComposite", "efaceTotal"]) {
     report.byScale[scaleKey] = {
       ...report.byScale[scaleKey],
+      exactMatchCount: 20,
       withinToleranceCount: 20,
+      exactAgreementRate: 0.6667,
       withinToleranceRate: 0.6667,
       withinToleranceConfidenceInterval: {
         method: "wilson-score",
@@ -786,6 +788,30 @@ test("validation status artifacts reject unversioned clinical reviewer agreement
       }),
     }),
     /clinical-scale-reviewer-agreement-2026-06-24\.json\.schemaVersion must be 1/,
+  );
+});
+
+test("validation status rejects structured clinical agreement rates that do not match counts", () => {
+  const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport());
+  structuredReport.primaryScaleAgreementRows.houseBrackmann.withinToleranceCount = 24;
+  structuredReport.primaryScaleAgreementRows.houseBrackmann.agreementRate = 1;
+
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(JSON.stringify(structuredReport), STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH),
+    /primaryScaleAgreementRows\.houseBrackmann\.agreementRate must match 24\/30/,
+  );
+});
+
+test("validation status rejects reviewer agreement rates that do not match counts", () => {
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.byScale.houseBrackmannGrade.withinToleranceCount = 24;
+  reviewerReport.byScale.houseBrackmannGrade.exactMatchCount = 24;
+  reviewerReport.byScale.houseBrackmannGrade.exactAgreementRate = 0.8;
+  reviewerReport.byScale.houseBrackmannGrade.withinToleranceRate = 1;
+
+  assert.throws(
+    () => validateClinicalScaleReviewerAgreementReportText(JSON.stringify(reviewerReport), REVIEWER_AGREEMENT_REPORT_PATH),
+    /byScale\.houseBrackmannGrade\.withinToleranceRate must match 24\/30/,
   );
 });
 

@@ -94,7 +94,8 @@ checks for:
   clinical-scale agreement JSON must use schema v1. The JSON format is preferred
   for status updates because `npm run validation:status` can validate the
   counts, Wilson intervals, House-Brackmann case mix, and reference-standard
-  controls without parsing tables.
+  controls without parsing tables. Reported observed agreement rates must match
+  their within-tolerance numerator and label denominator.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
@@ -121,7 +122,8 @@ checks for:
   reviewer rows, plus rows paired with insufficient estimate status, evidence
   tier, usable-movement coverage, used/omitted movement provenance, or
   scale-input/resting-metric provenance, before adjudication output can support
-  readiness.
+  readiness. Reviewer observed agreement rates must match the within-tolerance
+  paired-label counts.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, zero incomplete
