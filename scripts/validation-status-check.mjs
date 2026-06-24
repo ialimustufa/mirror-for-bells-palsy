@@ -637,6 +637,7 @@ function validateThresholdCalibrationReportText(text, artifactPath) {
     throw new Error(`${artifactPath} must be a JSON threshold calibration report: ${error.message}`);
   }
   assertCondition(report?.kind === "mirror-threshold-calibration-report", `${artifactPath} must be a mirror-threshold-calibration-report`);
+  assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
   assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
   assertSha256(report.sourceDatasetSha256, `${artifactPath}.sourceDatasetSha256`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);

@@ -1288,9 +1288,10 @@ enabled scales must carry `sourceDatasetSha256`, and those values must match one
 of the listed passed review package verification reports so release evidence
 traces back to the blinded source dataset package.
 Threshold calibration report paths must point to JSON
-`mirror-threshold-calibration-report` artifacts with `sourceDatasetSha256` and
-ready-exercise coverage that matches the status claim. The status file must list
-those hashes in `thresholdCalibrationSourceDatasetSha256s`.
+`mirror-threshold-calibration-report` schema-v1 artifacts with
+`sourceDatasetSha256` and ready-exercise coverage that matches the status claim.
+The status file must list those hashes in
+`thresholdCalibrationSourceDatasetSha256s`.
 
 The neutral baseline image is captured at the end of session calibration. During the
 just-completed summary screen, each exercise keeps that `baselineSnapshot` alongside

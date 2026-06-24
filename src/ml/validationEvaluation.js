@@ -1261,6 +1261,7 @@ function calibrateThresholdsFromValidationSamples(samples = [], options = {}) {
 
   return {
     kind: "mirror-threshold-calibration-report",
+    schemaVersion: 1,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     sourceDatasetSha256,
     minPositive,

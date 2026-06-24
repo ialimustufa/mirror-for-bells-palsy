@@ -163,6 +163,7 @@ test("threshold calibration recommends bands from reviewed positive and negative
   });
   const exercise = report.exercises[0];
 
+  assert.equal(report.schemaVersion, 1);
   assert.equal(report.sourceDatasetSha256, SOURCE_DATASET_SHA256);
   assert.equal(report.summary.readyExercises, 1);
   assert.equal(exercise.status, "ready");

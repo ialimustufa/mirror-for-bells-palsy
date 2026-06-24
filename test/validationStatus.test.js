@@ -286,6 +286,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
 function passingThresholdReport({ readyExercises = 5, sourceDatasetSha256 = SOURCE_DATASET_SHA256 } = {}) {
   return JSON.stringify({
     kind: "mirror-threshold-calibration-report",
+    schemaVersion: 1,
     generatedAt: "2026-06-24T00:00:00.000Z",
     sourceDatasetSha256,
     summary: {
@@ -1020,6 +1021,16 @@ test("validation status rejects reviewer and threshold artifacts without ISO gen
   assert.throws(
     () => validateThresholdCalibrationReportText(JSON.stringify(thresholdReport), THRESHOLD_CALIBRATION_REPORT_PATH),
     /generatedAt must be a UTC ISO timestamp/,
+  );
+});
+
+test("validation status rejects unversioned threshold calibration reports", () => {
+  const thresholdReport = JSON.parse(passingThresholdReport());
+  delete thresholdReport.schemaVersion;
+
+  assert.throws(
+    () => validateThresholdCalibrationReportText(JSON.stringify(thresholdReport), THRESHOLD_CALIBRATION_REPORT_PATH),
+    /threshold-calibration-2026-06-23\.json\.schemaVersion must be 1/,
   );
 });
 

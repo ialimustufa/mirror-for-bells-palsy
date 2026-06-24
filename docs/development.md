@@ -106,8 +106,9 @@ checks for:
   must not precede any referenced artifact generation date. Agreement artifacts
   must also include `sourceDatasetSha256` so status validation can tie the
   reviewed labels back to a listed passed review-package verification report.
-  Threshold calibration reports must also include `sourceDatasetSha256`, and
-  calibrated status must list matching hashes in
+  Threshold calibration reports must use `mirror-threshold-calibration-report`
+  schema v1, include `sourceDatasetSha256`, and calibrated status must list
+  matching hashes in
   `thresholdCalibrationSourceDatasetSha256s`.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` and review-package verification JSON
