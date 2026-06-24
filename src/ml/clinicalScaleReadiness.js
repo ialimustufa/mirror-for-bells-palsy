@@ -14,6 +14,7 @@ function normalizeThresholds(options = {}) {
     minHouseBrackmannSeverityBands: Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
     minAssessmentsPerSeverityBand: Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand)),
     confidenceLevel: options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel,
+    clinicalScaleEstimateVersion: options.clinicalScaleEstimateVersion ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion,
   };
 }
 
@@ -69,6 +70,9 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   if ((clinicalValidation.summary?.reviewedAssessmentCount ?? 0) < thresholds.minReviewedAssessments) {
     blockingReasons.push(`needs at least ${thresholds.minReviewedAssessments} reviewed clinical-scale assessments`);
   }
+  if (clinicalValidation.standard?.clinicalScaleEstimateVersion !== thresholds.clinicalScaleEstimateVersion) {
+    blockingReasons.push(`clinicalScaleEstimateVersion: needs validation report for estimator v${thresholds.clinicalScaleEstimateVersion}`);
+  }
   if (!clinicalValidation.caseMix) {
     blockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
   } else if (clinicalValidation.caseMix.blockingReasons?.length) {
@@ -105,6 +109,8 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       excludedClinicalLabelCount: clinicalValidation.summary?.excludedClinicalLabelCount ?? 0,
       excludedClinicalLabelReasons: clinicalValidation.summary?.excludedClinicalLabelReasons ?? {},
       assessmentClinicalScaleRecords: clinicalValidation.summary?.assessmentClinicalScaleRecords ?? 0,
+      estimateVersionCounts: clinicalValidation.summary?.estimateVersionCounts ?? {},
+      currentClinicalScaleEstimateVersionAssessmentCount: clinicalValidation.summary?.currentClinicalScaleEstimateVersionAssessmentCount ?? 0,
       readyPrimaryScaleCount: Object.values(byScale).filter((scale) => scale.status === "meets-confidence-standard").length,
       primaryScaleCount: PRIMARY_CLINICAL_SCALE_KEYS.length,
       caseMix: clinicalValidation.caseMix ?? null,

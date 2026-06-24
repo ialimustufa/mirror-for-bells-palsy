@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { assessClinicalScaleReadiness, clinicalValidationReportFrom } from "../src/ml/clinicalScaleReadiness.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, lower = 0.82, upper = 1 }) {
   return {
@@ -29,6 +30,7 @@ function clinicalValidationReport(overrides = {}) {
       minReviewedAssessments: 30,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
+      clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
     },
     summary: {
       assessmentClinicalScaleRecords: 30,
@@ -36,6 +38,8 @@ function clinicalValidationReport(overrides = {}) {
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
+      estimateVersionCounts: { v1: 30 },
+      currentClinicalScaleEstimateVersionAssessmentCount: 30,
       meetsMinimumStandard: true,
     },
     byScale: {
@@ -109,6 +113,22 @@ test("clinical scale readiness fails closed when observed agreement passes but W
   assert.match(report.blockingReasons.join("\n"), /Wilson lower bound/);
 });
 
+test("clinical scale readiness fails closed without current estimator-version evidence", () => {
+  const report = assessClinicalScaleReadiness(clinicalValidationReport({
+    standard: {
+      minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
+      minReviewedAssessments: 30,
+      sunnybrookTolerance: 10,
+      efaceTolerance: 10,
+      clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1,
+    },
+  }), { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.match(report.blockingReasons.join("\n"), /validation report for estimator v1/);
+});
+
 test("clinical scale readiness reports confidence standard without enabling clinical-facing scores by itself", () => {
   const report = assessClinicalScaleReadiness(clinicalValidationReport(), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
@@ -120,5 +140,6 @@ test("clinical scale readiness reports confidence standard without enabling clin
   assert.equal(report.validationSummary.excludedClinicalLabelCount, 0);
   assert.equal(report.validationSummary.caseMix.representedSeverityBandCount, 3);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.thresholds.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.deepEqual(report.thresholds.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
 });

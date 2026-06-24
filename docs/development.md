@@ -59,12 +59,13 @@ checks for:
 - Runtime clinical-scale presentation policy, which reads `docs/validation-status.json` before app panels or reports can use clinical-facing wording.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
-  with valid primary HB, Sunnybrook, and eFACE total targets; unblinded, copied,
-  rehearsal, non-clinician, uncertain, incomplete, or out-of-range rows are
-  excluded and reported separately.
+  from the current clinical-scale estimator version with valid primary HB,
+  Sunnybrook, and eFACE total targets; stale-version, missing-version, unblinded,
+  copied, rehearsal, non-clinician, uncertain, incomplete, or out-of-range rows
+  are excluded and reported separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
-  controls section and an eligible blinded independent label count meeting the
-  minimum reviewed-assessment floor.
+  controls section, current estimator-version evidence, and an eligible blinded
+  independent label count meeting the minimum reviewed-assessment floor.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced
   clinical-scale agreement reports must have 95% Wilson lower bounds meeting the
   configured 80% agreement floor.

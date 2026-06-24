@@ -8,6 +8,7 @@ import {
   extractValidationFrameRecords,
   movementClassFromLabel,
 } from "../src/ml/validationEvaluation.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const LEFT_SMILE = [61, 84, 91, 146, 78, 95, 88, 178, 39, 40, 181];
 const RIGHT_SMILE = [291, 314, 321, 375, 308, 324, 318, 402, 269, 270, 405];
@@ -174,6 +175,7 @@ function clinicalRecord(id, estimate, label) {
       kind: "assessment-clinical-scale",
       estimate: {
         status: "estimated",
+        version: estimate.version ?? CLINICAL_SCALE_ESTIMATE_VERSION,
         scales: {
           houseBrackmann: { numericGrade: estimate.hb, grade: ["I", "II", "III", "IV", "V", "VI"][estimate.hb - 1] },
           sunnybrook: { compositeScore: estimate.sunnybrook },
@@ -244,6 +246,9 @@ test("clinical scale evaluation passes only when Wilson lower-bound agreement cl
   assert.equal(report.standard.minAgreementRate, 0.8);
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.standard.minReviewedAssessments, 30);
+  assert.equal(report.standard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.summary.estimateVersionCounts.v1, 30);
+  assert.equal(report.summary.currentClinicalScaleEstimateVersionAssessmentCount, 30);
   assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.byScale.houseBrackmann.labeledCount, 30);
   assert.equal(report.byScale.houseBrackmann.withinToleranceCount, 30);
@@ -341,6 +346,36 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
   assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
+});
+
+test("clinical scale evaluation excludes stale or missing estimator-version labels", () => {
+  const estimate = { hb: 3, sunnybrook: 72, eface: 70 };
+  const validLabel = { hb: "III", sunnybrook: 74, eface: 72 };
+  const records = [
+    clinicalRecord("assessment-current:clinical-scale", estimate, validLabel),
+    clinicalRecord("assessment-stale:clinical-scale", { ...estimate, version: CLINICAL_SCALE_ESTIMATE_VERSION - 1 }, validLabel),
+    clinicalRecord("assessment-missing:clinical-scale", { ...estimate, version: null }, validLabel),
+  ];
+  delete records[2].record.estimate.version;
+
+  const report = evaluateClinicalScaleEstimates(records, {
+    generatedAt: "2026-06-23T00:00:00.000Z",
+    minReviewedAssessments: 1,
+    minAgreementWilsonLowerBound: 0,
+    minHouseBrackmannSeverityBands: 1,
+    minAssessmentsPerSeverityBand: 1,
+  });
+
+  assert.equal(report.summary.assessmentClinicalScaleRecords, 3);
+  assert.equal(report.summary.reviewedAssessmentCount, 1);
+  assert.equal(report.summary.excludedClinicalLabelCount, 2);
+  assert.equal(report.summary.excludedClinicalLabelReasons["clinical scale estimate version is missing or stale"], 2);
+  assert.equal(report.summary.estimateVersionCounts.v1, 1);
+  assert.equal(report.summary.estimateVersionCounts.v0, 1);
+  assert.equal(report.summary.estimateVersionCounts.missing, 1);
+  assert.equal(report.summary.currentClinicalScaleEstimateVersionAssessmentCount, 1);
+  assert.equal(report.byScale.houseBrackmann.labeledCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
 });
 
 test("clinical scale evaluation rejects filled labels that lack clinical reviewer roles", () => {

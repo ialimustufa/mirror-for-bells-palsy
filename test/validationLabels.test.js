@@ -36,6 +36,7 @@ function sampleRecords() {
         kind: "assessment-clinical-scale",
         estimate: {
           status: "estimated",
+          version: 1,
           scales: {
             houseBrackmann: { grade: "III", numericGrade: 3 },
             sunnybrook: { compositeScore: 72 },
@@ -68,6 +69,7 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "III");
   assert.equal(rows[1].estimatedSunnybrookComposite, 72);
+  assert.equal(rows[1].clinicalScaleEstimateVersion, 1);
   assert.equal(rows[1].sourceLabelSheetMode, "unblinded");
   assert.equal(rows[1].reviewBlinded, "");
   assert.equal(rows[1].labelSource, "");
@@ -87,6 +89,7 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].rowType, "assessmentClinicalScale");
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].estimateStatus, "");
+  assert.equal(rows[1].clinicalScaleEstimateVersion, 1);
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "");
   assert.equal(rows[1].estimatedSunnybrookComposite, "");
   assert.equal(rows[1].houseBrackmannGrade, "");
@@ -94,6 +97,7 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].reviewBlinded, "");
   assert.equal(rows[1].labelSource, "");
   assert.equal(clinicalRow[index.estimatedHouseBrackmannGrade], "");
+  assert.equal(clinicalRow[index.clinicalScaleEstimateVersion], "1");
   assert.equal(clinicalRow[index.estimatedSunnybrookComposite], "");
   assert.equal(clinicalRow[index.houseBrackmannGrade], "");
   assert.equal(clinicalRow[index.sourceLabelSheetMode], "blinded");

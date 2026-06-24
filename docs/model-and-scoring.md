@@ -1021,7 +1021,9 @@ grade, Sunnybrook composite within 10 points, and eFACE total within 10 points.
 eFACE static, dynamic, and synkinesis domain agreement is reported when those
 labels are supplied. The clinical-scale gate also requires House-Brackmann labels
 to cover HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete,
-with at least three eligible labels in each represented severity band. This
+with at least three eligible labels in each represented severity band. Counted
+clinical-scale labels must also reference the current clinical-scale estimator
+version; stale or missing estimator-version rows are excluded and reported. This
 report does not make Mirror estimates clinician-assigned grades; it only
 documents agreement against reviewed target labels for the local validation set.
 
@@ -1046,18 +1048,20 @@ report, or clinical-scale validation report and writes a release decision for th
 clinical-scale estimates. It requires the primary House-Brackmann, Sunnybrook
 composite, and eFACE total checks to meet the 30-assessment, 80% observed
 agreement, and 80% Wilson lower-bound standard, plus the House-Brackmann
-severity-band case-mix gate. Passing this report still does not flip
-`clinicalFacingScoresAllowed`; a human-reviewed status update is required because
-Mirror values remain estimates rather than clinician-assigned grades. The full
-review protocol is documented in `docs/clinical-scale-review-protocol.md`.
+severity-band case-mix gate and current clinical-scale estimator-version
+evidence. Passing this report still does not flip `clinicalFacingScoresAllowed`;
+a human-reviewed status update is required because Mirror values remain estimates
+rather than clinician-assigned grades. The full review protocol is documented in
+`docs/clinical-scale-review-protocol.md`.
 
 The clinical-report command converts a reviewed dataset, clinical validation
 report, or clinical-readiness report into a Markdown clinical-scale agreement
 report. It records the dataset summary, primary-scale agreement table, Wilson
 confidence intervals, House-Brackmann case-mix table, missing estimate counts,
-blocking reasons, and a sample of out-of-tolerance assessment rows for
-adjudication. The report is designed for the release reviewer to attach under
-`docs/validation/` before any status update.
+estimator-version counts, blocking reasons, reference-standard controls, and a
+sample of out-of-tolerance assessment rows for adjudication. The report is
+designed for the release reviewer to attach under `docs/validation/` before any
+status update.
 
 When two clinicians review the same blinded clinical-scale labels, the
 reviewer-agreement command compares the two CSVs before merge. It reports
@@ -1077,7 +1081,8 @@ enabled by changing only a UI component.
 report artifacts. Clinical agreement report paths must point to Markdown reports
 with the Mirror clinical-scale agreement heading, a passing confidence-standard
 status, primary House-Brackmann/Sunnybrook/eFACE rows, primary Wilson lower
-bounds meeting the configured standard, House-Brackmann case-mix coverage, and
+bounds meeting the configured standard, House-Brackmann case-mix coverage,
+current estimator-version evidence, explicit reference-standard controls, and
 release-control text. Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

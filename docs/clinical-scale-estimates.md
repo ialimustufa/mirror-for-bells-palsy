@@ -11,6 +11,9 @@ Mirror can now derive optional clinical-scale estimates from a completed standar
 - Video assessment literature describes Sunnybrook as a regional weighted 0-100 scale and notes that video-based synkinesis/resting components can be less reliable than voluntary movement: https://www.jmir.org/2019/4/e11109/PDF
 - eFACE is a clinician-graded electronic facial paralysis assessment with static, dynamic, and synkinesis domains. Mirror only maps available standard-assessment proxies into an eFACE-style domain estimate; it does not replace the clinician-entered eFACE form.
 - Wilson's score interval is used for binomial agreement uncertainty reporting rather than relying on a raw percentage alone: https://www.tandfonline.com/doi/abs/10.1080/01621459.1927.10502953
+- TRIPOD+AI describes transparent reporting for studies that develop or evaluate prediction models, including machine-learning models: https://pubmed.ncbi.nlm.nih.gov/38626948/
+- FDA Good Machine Learning Practice guidance describes lifecycle considerations for AI/ML medical devices: https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles
+- FDA/Health Canada/MHRA PCCP guidance describes bounded algorithm changes with verification, validation, monitoring, and performance criteria: https://www.fda.gov/medical-devices/software-medical-device-samd/predetermined-change-control-plans-machine-learning-enabled-medical-devices-guiding-principles
 - BMJ guidance on external model validation emphasizes sample sizes large enough to estimate performance precisely and warns against simplistic rules of thumb: https://www.bmj.com/content/384/bmj-2023-074821
 
 ## Evidence Standard
@@ -91,11 +94,13 @@ default minimum standard is:
 - Reviewed labels only count when the row preserves `sourceLabelSheetMode:
   blinded`, is explicitly marked blinded to Mirror estimates, has an independent
   clinician-assigned or adjudicated `labelSource`,
-  has a recognized clinician or adjudicated reviewer role, is not marked
-  uncertain, and contains valid primary HB, Sunnybrook, and eFACE total labels.
+  has the current clinical-scale estimator `version`, has a recognized clinician
+  or adjudicated reviewer role, is not marked uncertain, and contains valid
+  primary HB, Sunnybrook, and eFACE total labels.
   Development rehearsal, user, patient, caregiver, copied, algorithmic,
-  unblinded, incomplete, and out-of-range rows are excluded from the readiness
-  denominators and reported as excluded label rows.
+  stale-version, missing-version, unblinded, incomplete, and out-of-range rows
+  are excluded from the readiness denominators and reported as excluded label
+  rows.
 - A Wilson 95% binomial confidence interval is reported for each agreement rate
   and the lower bound is a blocking release gate, so a raw 80% observed rate on
   a small validation set cannot pass by itself.
@@ -111,14 +116,16 @@ After `npm run validation:clinical-readiness`, use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
 to create the human-readable clinical-scale agreement report. That Markdown
 report packages the dataset summary, excluded-label reason counts, agreement
-table, Wilson intervals, missing estimate counts, reference-standard control
-statements, House-Brackmann case-mix table, blocking reasons, and mismatch
-samples that a release reviewer needs before any validation-status update. The
-release status artifact checker requires the report to document the eligible
-blinded independent label count, all three House-Brackmann severity bands, the
-primary-scale Wilson lower bounds, and the
-`sourceLabelSheetMode`/`reviewBlinded`/`labelSource` controls before a clinical
-agreement artifact can support clinical-facing score availability.
+table, Wilson intervals, missing estimate counts, estimator-version counts,
+reference-standard control statements, House-Brackmann case-mix table, blocking
+reasons, and mismatch samples that a release reviewer needs before any
+validation-status update. The release status artifact checker requires the report
+to document the eligible blinded independent label count, all three
+House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
+current clinical-scale estimator version, and the
+`sourceLabelSheetMode`/`reviewBlinded`/estimator `version`/`labelSource`
+controls before a clinical agreement artifact can support clinical-facing score
+availability.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns
@@ -126,3 +133,9 @@ against relying on small rule-of-thumb validation sets and recommends sample
 sizes large enough to estimate performance precisely. Mirror therefore reports
 confidence intervals and keeps `clinicalFacingScoresAllowed` disabled until a
 reviewed dataset is actually available.
+
+Estimator-version provenance follows current AI/ML medical-software lifecycle
+guidance: TRIPOD+AI emphasizes transparent model evaluation reporting, while FDA
+GMLP and PCCP guidance describe validation, monitoring, and change control across
+algorithm updates. A reviewed agreement report therefore applies only to the
+clinical-scale estimator version it names.

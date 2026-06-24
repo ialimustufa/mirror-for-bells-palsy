@@ -13,6 +13,7 @@
     "minHouseBrackmannSeverityBands": 3,
     "minAssessmentsPerSeverityBand": 3,
     "confidenceInterval": "wilson-95",
+    "clinicalScaleEstimateVersion": 1,
     "reviewProtocol": "docs/clinical-scale-review-protocol.md"
   },
   "clinicalScaleAgreementReports": [],

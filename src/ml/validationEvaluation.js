@@ -1,4 +1,5 @@
 import { replayFrameSamples } from "./frameSampleReplay.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../domain/clinicalScales.js";
 
 const POSITIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["trace", "low", "moderate", "strong"]);
 const NEGATIVE_VISIBLE_MOVEMENT_LEVELS = new Set(["none"]);
@@ -40,6 +41,7 @@ const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
   confidenceLevel: 0.95,
+  clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
 });
 const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
   0.9: 1.6448536269514722,
@@ -213,14 +215,39 @@ function clinicalScaleLabels(record = {}) {
   };
 }
 
-function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record)) {
+function clinicalScaleEstimateVersion(record = {}) {
+  const estimate = record.estimate ?? record.clinicalScales ?? {};
+  const version = Number(
+    estimate.version
+    ?? record.clinicalScaleEstimateVersion
+    ?? record.sourceSummary?.clinicalScaleEstimateVersion,
+  );
+  return Number.isInteger(version) ? version : null;
+}
+
+function estimateVersionCountKey(version) {
+  return version == null ? "missing" : `v${version}`;
+}
+
+function incrementEstimateVersionCount(counts, version) {
+  const key = estimateVersionCountKey(version);
+  counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(record), options = {}) {
   const label = record.label ?? {};
   const reviewerRole = String(label.reviewerRole ?? "").trim();
   const confidence = String(label.clinicianConfidence ?? "").trim();
   const sourceLabelSheetMode = String(label.sourceLabelSheetMode ?? "").trim();
   const reviewBlinded = String(label.reviewBlinded ?? "").trim();
   const labelSource = String(label.labelSource ?? "").trim();
+  const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
+    ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
+  const estimateVersion = clinicalScaleEstimateVersion(record);
   const reasons = [];
+  if (estimateVersion !== requiredClinicalScaleEstimateVersion) {
+    reasons.push("clinical scale estimate version is missing or stale");
+  }
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
   } else if (NON_CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
@@ -415,13 +442,20 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   let estimatedAssessmentCount = 0;
   let excludedClinicalLabelCount = 0;
   const excludedClinicalLabelReasons = {};
+  const estimateVersionCounts = {};
+  const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
+    ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
   const houseBrackmannCaseMixCounts = createHouseBrackmannCaseMixCounts();
   for (const record of assessmentRecords) {
     const labels = clinicalScaleLabels(record);
     const estimate = clinicalScaleEstimate(record);
-    if (Object.values(estimate).some((value) => value != null)) estimatedAssessmentCount += 1;
+    const estimateVersion = clinicalScaleEstimateVersion(record);
+    if (Object.values(estimate).some((value) => value != null)) {
+      estimatedAssessmentCount += 1;
+      incrementEstimateVersionCount(estimateVersionCounts, estimateVersion);
+    }
     if (!hasAnyClinicalLabel(labels) && !hasAnyRawClinicalLabel(record)) continue;
-    const eligibility = clinicalLabelEligibility(record, labels);
+    const eligibility = clinicalLabelEligibility(record, labels, { clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion });
     if (!eligibility.eligible) {
       excludedClinicalLabelCount += 1;
       for (const reason of eligibility.reasons) {
@@ -474,6 +508,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
         minHouseBrackmannSeverityBands,
         minAssessmentsPerSeverityBand,
       },
+      clinicalScaleEstimateVersion: requiredClinicalScaleEstimateVersion,
     },
     summary: {
       assessmentClinicalScaleRecords: assessmentRecords.length,
@@ -481,6 +516,8 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       excludedClinicalLabelCount,
       excludedClinicalLabelReasons,
       estimatedAssessmentCount,
+      estimateVersionCounts,
+      currentClinicalScaleEstimateVersionAssessmentCount: estimateVersionCounts[estimateVersionCountKey(requiredClinicalScaleEstimateVersion)] ?? 0,
       primaryScaleCount: primaryScales.length,
       evaluatedPrimaryScaleCount: evaluatedPrimaryScales.length,
       readyPrimaryScaleCount: readyPrimaryScales.length,

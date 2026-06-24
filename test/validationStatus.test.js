@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { validateStatus, validateStatusArtifacts } from "../scripts/validation-status-check.mjs";
+import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const BASE_STATUS = {
   schemaVersion: 1,
@@ -17,6 +18,7 @@ const BASE_STATUS = {
     minHouseBrackmannSeverityBands: 3,
     minAssessmentsPerSeverityBand: 3,
     confidenceInterval: "wilson-95",
+    clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
     reviewProtocol: "docs/clinical-scale-review-protocol.md",
   },
   clinicalScaleAgreementReports: [],
@@ -31,6 +33,10 @@ function passingClinicalAgreementReport({ reviewedCount = 30, readyPrimaryScales
 Generated: 2026-06-24T00:00:00.000Z
 Status: meets-clinical-scale-confidence-standard
 Recommendation: allow-controlled-estimate-availability-after-human-review
+
+## Evidence Standard
+
+- Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}
 
 ## Dataset Summary
 
@@ -61,6 +67,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 
 - Eligible blinded independent clinical labels: ${reviewedCount}
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
+- Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
 - Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.
@@ -68,7 +75,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -152,6 +159,7 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.status.clinicalFacingScoresAllowed, true);
   assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
@@ -177,6 +185,7 @@ test("validation status rejects weak clinical scale minimum standards", () => {
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
         confidenceInterval: "wilson-95",
+        clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
     }),
@@ -195,9 +204,23 @@ test("validation status rejects missing clinical scale review protocol", () => {
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
         confidenceInterval: "wilson-95",
+        clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       },
     }),
     /reviewProtocol/,
+  );
+});
+
+test("validation status rejects stale clinical scale estimator standard", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        ...BASE_STATUS.clinicalScaleMinimumStandard,
+        clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1,
+      },
+    }),
+    /clinicalScaleEstimateVersion/,
   );
 });
 
@@ -212,6 +235,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
         confidenceInterval: "wilson-95",
+        clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
     }),
@@ -227,6 +251,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minHouseBrackmannSeverityBands: 2,
         minAssessmentsPerSeverityBand: 3,
         confidenceInterval: "wilson-95",
+        clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
     }),
@@ -242,10 +267,36 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 2,
         confidenceInterval: "wilson-95",
+        clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
       },
     }),
     /minAssessmentsPerSeverityBand/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports for stale estimator versions", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replaceAll(`v${CLINICAL_SCALE_ESTIMATE_VERSION}`, `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical-scale estimator version/,
   );
 });
 

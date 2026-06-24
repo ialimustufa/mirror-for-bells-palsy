@@ -128,15 +128,19 @@ Clinical-scale readiness uses the machine-readable standard in
 - At least three eligible labels in each represented House-Brackmann severity
   band.
 - Only eligible blinded, independently clinician-assigned or adjudicated rows
-  with valid primary labels count toward the reviewed-assessment floor and
-  per-scale agreement denominators.
+  with the current clinical-scale estimator version and valid primary labels
+  count toward the reviewed-assessment floor and per-scale agreement
+  denominators.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson lower-bound gate is used because a raw observed percentage can hide
 uncertainty in small validation sets. The 30-assessment floor is a local release
 gate, not a universal clinical sample-size claim. The House-Brackmann case-mix
 gate is a local applicability control so a passing agreement rate cannot come
-only from one severity range.
+only from one severity range. The estimator-version gate is a local change-control
+measure: if the House-Brackmann/Sunnybrook/eFACE estimator changes, stale or
+missing-version label rows are excluded until the reviewed agreement evidence is
+regenerated for the current estimator version.
 
 ## Adjudication
 
@@ -168,6 +172,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
   80% standard.
+- Documentation that the agreement report applies to the current clinical-scale
+  estimator version.
 - Documentation of whether labels were blinded and whether adjudication was used.
 - A human-reviewed update to `docs/validation-status.json` referencing the
   agreement report artifacts.
@@ -180,9 +186,9 @@ clinical-scale agreement reports exist and contain a passing confidence-standard
 status, all three primary scale rows, Wilson lower-bound agreement meeting the
 minimum, explicit reference-standard controls, an eligible blinded independent
 label count meeting the minimum reviewed-assessment floor, a House-Brackmann
-case-mix section meeting the severity-band minimum, and release-control text. A
-status update that only changes counts or report paths without matching
-artifacts must fail the release check.
+case-mix section meeting the severity-band minimum, current estimator-version
+evidence, and release-control text. A status update that only changes counts or
+report paths without matching artifacts must fail the release check.
 
 ## References
 
@@ -191,6 +197,9 @@ artifacts must fail the release check.
 - Sunnybrook scoring form: https://ehandboken.ous-hf.no/api/File/GetFile?entityId=230422&isLastVersion=false
 - eFACE validation abstract: https://pubmed.ncbi.nlm.nih.gov/26218397/
 - Wilson score interval: https://www.tandfonline.com/doi/abs/10.1080/01621459.1927.10502953
+- TRIPOD+AI reporting guidance: https://pubmed.ncbi.nlm.nih.gov/38626948/
+- FDA Good Machine Learning Practice guiding principles: https://www.fda.gov/medical-devices/software-medical-device-samd/good-machine-learning-practice-medical-device-development-guiding-principles
+- FDA/Health Canada/MHRA PCCP guiding principles for ML-enabled devices: https://www.fda.gov/medical-devices/software-medical-device-samd/predetermined-change-control-plans-machine-learning-enabled-medical-devices-guiding-principles
 - External validation sample-size guidance: https://www.bmj.com/content/384/bmj-2023-074821
 - STARD 2015 diagnostic-accuracy reporting guidance: https://www.equator-network.org/reporting-guidelines/stard/
 - TRIPOD+AI prediction-model reporting guidance: https://www.equator-network.org/reporting-guidelines/tripod-statement/
