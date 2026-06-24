@@ -14,7 +14,7 @@
     "minAssessmentsPerSeverityBand": 3,
     "minUsableMovementCoverageRatio": 0.8,
     "confidenceInterval": "wilson-95",
-    "clinicalScaleEstimateVersion": 4,
+    "clinicalScaleEstimateVersion": 5,
     "reviewProtocol": "docs/clinical-scale-review-protocol.md"
   },
   "clinicalScaleAgreementReports": [],
@@ -36,7 +36,7 @@
   "notes": [
     "Validation export, label-sheet, merge, frame evaluation, clinical-scale agreement evaluation, threshold calibration, and model-readiness report tooling are implemented.",
     "No clinician-reviewed validation dataset is committed in this repository.",
-    "House-Brackmann, Sunnybrook, and eFACE-style estimates remain Mirror estimates until reviewed assessment labels from current v4 estimates with at least 80% usable movement coverage and complete resting-metric provenance meet the documented 80% observed agreement, 80% Wilson lower-bound agreement, and House-Brackmann case-mix standard.",
+    "House-Brackmann, Sunnybrook, and eFACE-style estimates remain Mirror estimates until reviewed assessment labels from current v5 estimates with at least 80% usable movement coverage, complete resting-metric provenance, and no inferred House-Brackmann eye-closure input meet the documented 80% observed agreement, 80% Wilson lower-bound agreement, and House-Brackmann case-mix standard.",
     "Primary clinical-scale target assignment should use the blinded label sheet workflow in docs/clinical-scale-review-protocol.md.",
     "Production threshold constants should not be changed from calibration reports until reviewed datasets are available."
   ]

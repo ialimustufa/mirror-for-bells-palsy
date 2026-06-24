@@ -92,6 +92,32 @@ test("clinical scale estimates distinguish minimum from complete standard eviden
   assert.deepEqual(result.evidence.omittedMovementExerciseIds, ["pucker"]);
   assert.equal(result.scales.sunnybrook.inputCompleteness.complete, false);
   assert.deepEqual(result.scales.sunnybrook.inputCompleteness.omittedExerciseIds, ["pucker"]);
+  assert.equal(result.scales.houseBrackmann.grade, "IV");
+  assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, true);
+});
+
+test("clinical scale estimates omit House-Brackmann when eye closure is missing", () => {
+  const result = estimateClinicalScaleGrades({
+    restingMetrics: RESTING_METRICS,
+    scores: [
+      movementScore("eyebrow-raise", 0.95),
+      movementScore("open-smile", 0.7),
+      movementScore("nose-wrinkle", 0.5),
+      movementScore("pucker", 0.3),
+    ],
+  });
+
+  assert.equal(result.status, "estimated");
+  assert.equal(result.coverage.usableMovementCount, 4);
+  assert.equal(result.evidence.tier, "minimum-standard-assessment");
+  assert.deepEqual(result.evidence.omittedMovementExerciseIds, ["eye-close"]);
+  assert.equal(result.scales.houseBrackmann, undefined);
+  assert.ok(result.scales.sunnybrook);
+  assert.ok(result.scales.eface);
+  assert.equal(result.scales.sunnybrook.voluntaryItems.gentleEyeClosure, undefined);
+  assert.equal(result.scales.eface.dynamicItems.gentleEyeClosure, undefined);
+  assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, false);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.houseBrackmann.missingRequiredExerciseIds, ["eye-close"]);
 });
 
 test("clinical scale estimates do not use weak-capture movements in minimum evidence formulas", () => {

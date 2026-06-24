@@ -58,7 +58,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 
 - Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}
 - Minimum usable movement coverage: 80.0%
-- Estimator input provenance: counted v4 rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.
+- Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.
 
 ## Dataset Summary
 
@@ -876,7 +876,7 @@ test("validation status artifacts reject clinical agreement reports without esti
       readArtifactText: artifactReader({
         "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport()
           .replace("- Minimum usable movement coverage: 80.0%\n", "")
-          .replace("- Estimator input provenance: counted v4 rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.\n", "")
+          .replace("- Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.\n", "")
           .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, complete resting-metric keys, and the complete-resting-metrics calculation flag. Scale-specific rows with missing or invalid estimates are reported in that scale's denominator as missing estimates.\n", ""),
         "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),

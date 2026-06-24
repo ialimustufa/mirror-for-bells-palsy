@@ -118,7 +118,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
     commonBlockingReasons.push("estimateMovementProvenance: needs validation report with used/omitted movement input controls");
   }
   if (clinicalValidation.standard?.requiresV4RestingMetricProvenance !== true) {
-    commonBlockingReasons.push("estimateRestingMetricProvenance: needs validation report with v4 complete resting-metric input controls");
+    commonBlockingReasons.push("estimateRestingMetricProvenance: needs validation report with complete resting-metric input controls");
   }
   if (!clinicalValidation.caseMix) {
     commonBlockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");

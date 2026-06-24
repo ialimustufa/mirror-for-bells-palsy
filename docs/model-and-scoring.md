@@ -866,8 +866,8 @@ landmarks are not stored as part of the assessment summary.
 
 Clinical-scale estimates are stored with explicit status and caveats:
 
-- `version: 4` for the current estimator. Reviewed v1/v2/v3 clinical-scale
-  labels are stale after the v4 complete-resting-metrics evidence-gate change
+- `version: 5` for the current estimator. Reviewed v1/v2/v3/v4 clinical-scale
+  labels are stale after the v5 House-Brackmann eye-closure input guard
   and cannot support the clinical-facing release gate.
 - `status: "estimated"` only when the 80% evidence standard is met.
 - `status: "insufficient-data"` when movement coverage or complete resting
@@ -879,7 +879,7 @@ Clinical-scale estimates are stored with explicit status and caveats:
 - Scale formulas use only movements that meet the usable movement/capture-quality
   gate. Missing or weak-capture movements are omitted from calculations and
   listed in `evidence.omittedMovementExerciseIds`.
-- House-Brackmann is a conservative global estimate derived from the Sunnybrook estimate, eye-closure level, resting asymmetry, and coactivation.
+- House-Brackmann is a conservative global estimate derived from the Sunnybrook estimate, eye-closure level, resting asymmetry, and coactivation. If gentle eye closure is the omitted movement in a minimum-standard assessment, Mirror omits the HB estimate instead of inferring an eye-closure level.
 - Sunnybrook estimates the documented rest, voluntary movement, and synkinesis components from Mirror's standard assessment movements.
 - eFACE is represented as an eFACE-style domain estimate from available static,
   dynamic, and synkinesis proxies, with proxy scores clamped to 0-100; it is not
@@ -887,7 +887,7 @@ Clinical-scale estimates are stored with explicit status and caveats:
 - Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
   Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
   treat missing or weak-capture movement rows as zero movement.
-- v4 estimates also record required, available, and missing resting metric keys
+- v5 estimates also record required, available, and missing resting metric keys
   and require `estimateCalculationUsesCompleteRestingMetrics: true`.
 
 These values are not clinical-facing validated grades while
@@ -1058,8 +1058,8 @@ with at least three eligible labels in each represented severity band. Counted
 clinical-scale labels must also reference the current clinical-scale estimator
 version; stale or missing estimator-version rows are excluded and reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
-"estimated"` with a complete/minimum v4 evidence tier and at least 80% usable
-movement coverage. For v4, counted rows must also preserve used/omitted movement
+"estimated"` with a complete/minimum v5 evidence tier and at least 80% usable
+movement coverage. For v5, counted rows must also preserve used/omitted movement
 exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`, required,
 available, and missing resting metric keys, and
 `estimateCalculationUsesCompleteRestingMetrics: true`; inconsistent or missing

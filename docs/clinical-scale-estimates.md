@@ -46,15 +46,17 @@ The tier appears in assessment panels and printable reports so a 4/5 movement
 estimate is not presented with the same evidence strength as a complete 5/5
 assessment.
 
-The current clinical-scale estimator is v4. v4 records evidence tiers, clamps
+The current clinical-scale estimator is v5. v5 records evidence tiers, clamps
 eFACE-style proxy scores to the 0-100 range, excludes missing or weak-capture
 movements from the scale formulas, and fails closed unless all required
 resting/static metrics are present. Minimum-standard 4/5 estimates report omitted
 movement IDs in `evidence.omittedMovementExerciseIds`, normalize Sunnybrook
 voluntary/synkinesis totals from usable movements only, and preserve
-required/available/missing resting metric keys in the evidence record. Validation
-labels generated from older v1, v2, or v3 estimates are stale and do not count
-toward the release agreement gate.
+required/available/missing resting metric keys in the evidence record. v5 also
+omits the House-Brackmann estimate when gentle eye closure is the omitted
+movement, rather than treating a missing eye-closure input as severe eye
+closure. Validation labels generated from older v1, v2, v3, or v4 estimates are
+stale and do not count toward the release agreement gate.
 
 ## Implemented Estimates
 
@@ -65,6 +67,8 @@ toward the release agreement gate.
 - Resting asymmetry score.
 - Coactivation/synkinesis estimate.
 - Average standard-movement availability.
+- A usable gentle-eye-closure movement is required; otherwise the HB estimate is
+  omitted while other eligible scale estimates can still be shown.
 
 `clinicalScales.scales.sunnybrook` estimates:
 
@@ -121,7 +125,7 @@ provenance columns for `estimateStatus`, `estimateEvidenceTier`,
 `estimateMissingRestingMetricKeys`,
 `estimateCalculationUsesCompleteRestingMetrics`, and
 `clinicalScaleEstimateVersion` so release tooling can prove the row came from
-qualifying current-version evidence with the exact v4 estimator inputs.
+qualifying current-version evidence with the exact v5 estimator inputs.
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -142,7 +146,7 @@ default minimum standard is:
   or adjudicated reviewer role, is not marked uncertain, and contains a valid
   target for the primary scale being counted. Missing another primary target does
   not remove the valid target from its own denominator.
-  The paired Mirror estimate must also have `status: estimated`, a v4
+  The paired Mirror estimate must also have `status: estimated`, a v5
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
   at least 80% usable movement coverage, used/omitted movement exercise IDs that
   match the coverage counts, and

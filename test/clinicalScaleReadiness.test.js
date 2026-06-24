@@ -162,14 +162,14 @@ test("clinical scale readiness fails closed without movement provenance controls
   assert.match(report.blockingReasons.join("\n"), /used\/omitted movement input controls/);
 });
 
-test("clinical scale readiness fails closed without v4 resting-metric provenance controls", () => {
+test("clinical scale readiness fails closed without resting-metric provenance controls", () => {
   const source = clinicalValidationReport();
   delete source.standard.requiresV4RestingMetricProvenance;
 
   const report = assessClinicalScaleReadiness(source, { generatedAt: "2026-06-24T00:00:00.000Z" });
 
   assert.equal(report.status, "needs-reviewed-clinical-scale-data");
-  assert.match(report.blockingReasons.join("\n"), /v4 complete resting-metric input controls/);
+  assert.match(report.blockingReasons.join("\n"), /complete resting-metric input controls/);
 });
 
 test("clinical scale readiness reports confidence standard without enabling clinical-facing scores by itself", () => {

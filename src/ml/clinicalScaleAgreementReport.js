@@ -233,7 +233,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     `- Confidence interval: ${Math.round((readiness.thresholds?.confidenceInterval?.confidenceLevel ?? validation.standard?.confidenceInterval?.confidenceLevel ?? 0.95) * 100)}% Wilson score interval`,
     `- Clinical-scale estimator version: v${readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? "n/a"}`,
     `- Minimum usable movement coverage: ${formatPercent(readiness.thresholds?.minUsableMovementCoverageRatio ?? validation.standard?.minUsableMovementCoverageRatio ?? 0.8)}`,
-    "- Estimator input provenance: counted v4 rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.",
+    "- Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.",
     "",
     "## Dataset Summary",
     "",

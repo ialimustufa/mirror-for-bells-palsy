@@ -1,4 +1,4 @@
-const CLINICAL_SCALE_ESTIMATE_VERSION = 4;
+const CLINICAL_SCALE_ESTIMATE_VERSION = 5;
 const MIN_USABLE_ASSESSMENT_COVERAGE_RATIO = 0.8;
 
 const STANDARD_SCALE_MOVEMENTS = Object.freeze([
@@ -18,6 +18,7 @@ const REQUIRED_RESTING_METRICS = Object.freeze([
 ]);
 const REQUIRED_RESTING_METRIC_KEYS = Object.freeze(REQUIRED_RESTING_METRICS.map((metric) => metric.key));
 const REQUIRED_RESTING_METRIC_LABELS = Object.freeze(Object.fromEntries(REQUIRED_RESTING_METRICS.map((metric) => [metric.key, metric.label])));
+const HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS = Object.freeze(["eye-close"]);
 
 const HOUSE_BRACKMANN_LABELS = Object.freeze({
   1: "Normal",
@@ -247,6 +248,18 @@ function movementInputCompleteness(movementItems, coverage) {
   };
 }
 
+function scaleMovementInputCompleteness(movementItems, requiredExerciseIds = []) {
+  const usedExerciseIds = movementItems.map((item) => item.exerciseId);
+  const usedSet = new Set(usedExerciseIds);
+  const missingRequiredExerciseIds = requiredExerciseIds.filter((exerciseId) => !usedSet.has(exerciseId));
+  return {
+    requiredExerciseIds,
+    usedExerciseIds,
+    missingRequiredExerciseIds,
+    complete: missingRequiredExerciseIds.length === 0,
+  };
+}
+
 function normalizedMovementTotal(rawTotal, observedCount, expectedCount, multiplier = 1) {
   if (!observedCount || !expectedCount) return 0;
   return (rawTotal / observedCount) * expectedCount * multiplier;
@@ -434,11 +447,21 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
     ratio: item.ratio,
   }));
   const sunnybrook = buildSunnybrookEstimate(usableMovementItems, restingMetrics, coverage);
+  const houseBrackmannInputCompleteness = scaleMovementInputCompleteness(usableMovementItems, HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS);
+  const houseBrackmann = houseBrackmannInputCompleteness.complete
+    ? buildHouseBrackmannEstimate(sunnybrook, usableMovementItems, coverage)
+    : null;
   return {
     ...base,
+    evidence: {
+      ...base.evidence,
+      scaleInputCompleteness: {
+        houseBrackmann: houseBrackmannInputCompleteness,
+      },
+    },
     reasons: [],
     scales: {
-      houseBrackmann: buildHouseBrackmannEstimate(sunnybrook, usableMovementItems, coverage),
+      ...(houseBrackmann ? { houseBrackmann } : {}),
       sunnybrook,
       eface: buildEfaceEstimate(usableMovementItems, restingMetrics, coverage),
     },

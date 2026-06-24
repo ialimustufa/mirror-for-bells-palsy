@@ -173,8 +173,8 @@ If multiple reviewers label the same assessment:
   a different omitted movement is a different estimator input. Required,
   available, and missing resting metric keys must also prove complete rest input
   coverage, with the complete-resting-metrics calculation flag set. Old reviewer
-  sheets without the v4 movement and resting-metric provenance columns should be
-  recollected from a current blinded sheet. Both raw reviewer sheets and the
+  sheets without the current movement and resting-metric provenance columns
+  should be recollected from a current blinded sheet. Both raw reviewer sheets and the
   final adjudicated row must preserve the current qualifying estimate provenance
   before labels can count.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
