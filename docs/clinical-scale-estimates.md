@@ -273,9 +273,10 @@ machine checking. Clinical-report requires saved readiness artifacts to be
 schema-v1 and to retain their source validation report. The agreement report
 packages the dataset summary, excluded-label reason counts, agreement
 table/rows, Wilson intervals, missing estimate counts,
-scale-specific label gaps, duplicate/missing assessment-id counts,
-estimator-version counts, distinct validation-case counts, reference-standard
-control statements, House-Brackmann case-mix table, agreement sample plan,
+scale-specific label and estimate gap reason counts, duplicate/missing
+assessment-id counts, estimator-version counts, distinct validation-case counts,
+reference-standard control statements, House-Brackmann case-mix table,
+agreement sample plan,
 scale-specific availability recommendations, blocking reasons, and mismatch
 samples that a release reviewer needs before any validation-status update. The
 release status artifact checker requires the Markdown or JSON report
@@ -283,7 +284,8 @@ to document the eligible blinded independent label count, all three
 House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
 current clinical-scale estimator version, the 80% usable-movement coverage
 floor, the complete/minimum estimate evidence-tier gate, complete resting-metric
-provenance, and the `sourceLabelSheetMode`/`reviewBlinded`/estimator
+provenance, scale-specific label/estimate gap counters, and the
+`sourceLabelSheetMode`/`reviewBlinded`/estimator
 `version`/`labelSource`/`validationCaseId`/`reviewerId`/`reviewedAt` controls,
 plus `sourceDatasetSha256` matching a verified blinded clinical review package,
 before a clinical agreement artifact can support clinical-facing score

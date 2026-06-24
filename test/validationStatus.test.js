@@ -171,6 +171,16 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 - Review timestamp control: counted labels require \`reviewedAt\` as a UTC ISO timestamp.
 - Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.
 
+## Primary Scale Label And Estimate Gaps
+
+Primary target label gaps:
+
+- None
+
+Primary estimate gaps:
+
+- None
+
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
@@ -221,6 +231,8 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
       eligibleBlindedIndependentLabelCount: 30,
       duplicateClinicalScaleAssessmentIdCount: 0,
       missingClinicalScaleAssessmentIdCount: 0,
+      primaryScaleLabelIssueReasons: {},
+      primaryScaleEstimateIssueReasons: {},
       readyPrimaryScaleCount: 3,
     },
     primaryScaleAgreementRows: {
@@ -1220,6 +1232,24 @@ test("validation status rejects structured clinical agreement Wilson bounds that
   assert.throws(
     () => validateClinicalScaleAgreementReportText(JSON.stringify(structuredReport), STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH),
     /primaryScaleAgreementRows\.houseBrackmann\.agreementConfidenceInterval\.lower must match Wilson score lower bound for 30\/30/,
+  );
+});
+
+test("validation status rejects structured clinical agreement reports without scale gap counters", () => {
+  const missingLabelIssueCounters = JSON.parse(passingStructuredClinicalAgreementReport());
+  delete missingLabelIssueCounters.summary.primaryScaleLabelIssueReasons;
+
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(JSON.stringify(missingLabelIssueCounters), STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH),
+    /summary\.primaryScaleLabelIssueReasons must be an object/,
+  );
+
+  const missingEstimateIssueCounters = JSON.parse(passingStructuredClinicalAgreementReport());
+  delete missingEstimateIssueCounters.summary.primaryScaleEstimateIssueReasons;
+
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(JSON.stringify(missingEstimateIssueCounters), STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH),
+    /summary\.primaryScaleEstimateIssueReasons must be an object/,
   );
 });
 

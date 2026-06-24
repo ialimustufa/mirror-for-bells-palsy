@@ -104,13 +104,16 @@ checks for:
   for status updates because `npm run validation:status` can validate the
   counts, Wilson intervals, House-Brackmann case mix, and reference-standard
   controls without parsing tables. Reported observed agreement rates must match
-  their within-tolerance numerator and label denominator, and Wilson bounds must
-  match those same counts. Each referenced agreement artifact must include a UTC
-  ISO `generatedAt` timestamp for auditability, and the status `updatedAt` date
-  must not precede any referenced artifact generation date. Agreement artifacts
-  must also include `sourceDatasetSha256` so status validation can tie the
-  reviewed labels back to a listed passed review-package verification report,
-  and clinical-facing status must list those hashes in
+  their within-tolerance numerator and label denominator, Wilson bounds must
+  match those same counts, and structured JSON must carry
+  `primaryScaleLabelIssueReasons` plus `primaryScaleEstimateIssueReasons` so
+  missing target labels and missing or incomplete estimates are auditable by
+  scale. Each referenced agreement artifact must include a UTC ISO
+  `generatedAt` timestamp for auditability, and the status `updatedAt` date must
+  not precede any referenced artifact generation date. Agreement artifacts must
+  also include `sourceDatasetSha256` so status validation can tie the reviewed
+  labels back to a listed passed review-package verification report, and
+  clinical-facing status must list those hashes in
   `clinicalScaleAgreementSourceDatasetSha256s`,
   `clinicalScaleReviewerAgreementSourceDatasetSha256s`, and
   `clinicalScaleReviewPackageVerificationSourceDatasetSha256s`. The artifact

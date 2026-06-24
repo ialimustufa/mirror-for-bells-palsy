@@ -146,10 +146,10 @@ Exclude an assessment row from clinical readiness counts when:
 The evaluator enforces row-level provenance exclusions before counting reviewed
 clinical-scale assessments. Valid primary targets then count scale by scale.
 Duplicate or missing assessment ids are reported separately and block release
-readiness so one assessment cannot be counted twice. Excluded label rows and
-scale-specific label gaps are reported separately with reason counts so a failed
-readiness gate can be audited without treating rehearsal data as clinical
-evidence.
+readiness so one assessment cannot be counted twice. Excluded label rows,
+scale-specific target-label gaps, and missing/incomplete estimate gaps are
+reported separately with reason counts so a failed readiness gate can be audited
+without treating rehearsal data as clinical evidence.
 
 ## Review Process
 
@@ -217,9 +217,9 @@ Clinical-scale readiness uses the machine-readable standard in
   Sunnybrook and eFACE primary-scale comparisons require that provenance to show
   complete scale-specific movement input; normalized 4/5 estimates remain
   auditable Mirror estimates but count as missing estimates for those release
-  denominators. A
-  missing or invalid estimate is reported in that scale's denominator as a
-  missing estimate rather than excluding other valid scale labels on the row.
+  denominators. A missing, incomplete-input, or invalid estimate is reported in
+  that scale's denominator as a missing estimate rather than excluding other
+  valid scale labels on the row.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson lower-bound gate is used because a raw observed percentage can hide

@@ -78,6 +78,8 @@ function validationReport(overrides = {}) {
       distinctClinicalCaseCount: 30,
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
+      primaryScaleLabelIssueReasons: {},
+      primaryScaleEstimateIssueReasons: {},
       estimatedAssessmentCount: 30,
       estimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: 30 },
       meetsMinimumStandard: true,
@@ -135,6 +137,9 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /eFACE static/);
   assert.match(markdown, /95% Wilson score interval/);
   assert.match(markdown, /Excluded clinical-label rows: 0/);
+  assert.match(markdown, /Primary Scale Label And Estimate Gaps/);
+  assert.match(markdown, /Primary target label gaps:\s+- None/);
+  assert.match(markdown, /Primary estimate gaps:\s+- None/);
   assert.match(markdown, /Unique assessment clinical-scale records: 30/);
   assert.match(markdown, /Duplicate assessment IDs: 0/);
   assert.match(markdown, /Rows missing assessment IDs: 0/);
@@ -192,6 +197,8 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.summary.reviewedClinicalScaleAssessmentCount, 30);
   assert.equal(report.summary.distinctClinicalCaseCount, 30);
   assert.equal(report.summary.eligibleBlindedIndependentLabelCount, 30);
+  assert.deepEqual(report.summary.primaryScaleLabelIssueReasons, {});
+  assert.deepEqual(report.summary.primaryScaleEstimateIssueReasons, {});
   assert.equal(report.primaryScaleAgreementRows.houseBrackmann.labeledCount, 30);
   assert.equal(report.primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound, 0.887);
   assert.equal(report.primaryScaleAgreementRows.sunnybrookComposite.status, "meets-confidence-standard");

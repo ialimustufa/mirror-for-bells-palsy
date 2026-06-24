@@ -201,6 +201,35 @@ function excludedLabelReasonLines(validation = {}, readiness = {}) {
   ];
 }
 
+function reasonCountRows(reasons = {}) {
+  const entries = Object.entries(reasons).filter(([, count]) => Number(count) > 0);
+  if (!entries.length) return ["- None"];
+  return entries
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([reason, count]) => `- ${reason}: ${count}`);
+}
+
+function scaleIssueReasonLines(validation = {}, readiness = {}) {
+  const primaryScaleLabelIssueReasons = validation.summary?.primaryScaleLabelIssueReasons
+    ?? readiness.validationSummary?.primaryScaleLabelIssueReasons
+    ?? {};
+  const primaryScaleEstimateIssueReasons = validation.summary?.primaryScaleEstimateIssueReasons
+    ?? readiness.validationSummary?.primaryScaleEstimateIssueReasons
+    ?? {};
+  return [
+    "",
+    "## Primary Scale Label And Estimate Gaps",
+    "",
+    "Primary target label gaps:",
+    "",
+    ...reasonCountRows(primaryScaleLabelIssueReasons),
+    "",
+    "Primary estimate gaps:",
+    "",
+    ...reasonCountRows(primaryScaleEstimateIssueReasons),
+  ];
+}
+
 function caseMixLines(validation = {}, readiness = {}) {
   const caseMix = validation.caseMix ?? readiness.validationSummary?.caseMix;
   if (!caseMix?.severityBands) return [];
@@ -341,6 +370,8 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
       eligibleBlindedIndependentLabelCount: validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0,
       excludedClinicalLabelCount: validation.summary?.excludedClinicalLabelCount ?? readiness.validationSummary?.excludedClinicalLabelCount ?? 0,
       excludedClinicalLabelReasons: validation.summary?.excludedClinicalLabelReasons ?? readiness.validationSummary?.excludedClinicalLabelReasons ?? {},
+      primaryScaleLabelIssueReasons: validation.summary?.primaryScaleLabelIssueReasons ?? readiness.validationSummary?.primaryScaleLabelIssueReasons ?? {},
+      primaryScaleEstimateIssueReasons: validation.summary?.primaryScaleEstimateIssueReasons ?? readiness.validationSummary?.primaryScaleEstimateIssueReasons ?? {},
       estimatedAssessmentCount: validation.summary?.estimatedAssessmentCount ?? 0,
       estimateVersionCounts: validation.summary?.estimateVersionCounts ?? readiness.validationSummary?.estimateVersionCounts ?? {},
       readyPrimaryScaleCount: readiness.validationSummary?.readyPrimaryScaleCount ?? 0,
@@ -437,6 +468,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     ...referenceStandardControlLines(validation, readiness),
     ...excludedLabelReasonLines(validation, readiness),
+    ...scaleIssueReasonLines(validation, readiness),
   ];
 
   if (supplementaryScaleKeys.length) {

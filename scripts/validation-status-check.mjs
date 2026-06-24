@@ -146,6 +146,14 @@ function assertRatioBetweenZeroAndOne(value, field) {
   assertCondition(value >= 0 && value <= 1, `${field} must be between 0 and 1`);
 }
 
+function assertReasonCountObject(value, field) {
+  assertCondition(value && typeof value === "object" && !Array.isArray(value), `${field} must be an object`);
+  for (const [reason, count] of Object.entries(value)) {
+    assertCondition(typeof reason === "string" && reason.length > 0, `${field} keys must be non-empty strings`);
+    assertNonNegativeInteger(count, `${field}.${reason}`);
+  }
+}
+
 function assertRatioMatchesCounts(value, numerator, denominator, field) {
   assertRatioBetweenZeroAndOne(value, field);
   assertCondition(Number.isInteger(denominator) && denominator > 0, `${field} denominator must be a positive integer`);
@@ -485,6 +493,8 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   assertNonNegativeInteger(summary.eligibleBlindedIndependentLabelCount, `${artifactPath}.summary.eligibleBlindedIndependentLabelCount`);
   assertNonNegativeInteger(summary.duplicateClinicalScaleAssessmentIdCount, `${artifactPath}.summary.duplicateClinicalScaleAssessmentIdCount`);
   assertNonNegativeInteger(summary.missingClinicalScaleAssessmentIdCount, `${artifactPath}.summary.missingClinicalScaleAssessmentIdCount`);
+  assertReasonCountObject(summary.primaryScaleLabelIssueReasons, `${artifactPath}.summary.primaryScaleLabelIssueReasons`);
+  assertReasonCountObject(summary.primaryScaleEstimateIssueReasons, `${artifactPath}.summary.primaryScaleEstimateIssueReasons`);
   const caseMix = report.houseBrackmannCaseMix;
   assertCondition(caseMix && typeof caseMix === "object", `${artifactPath} must include houseBrackmannCaseMix`);
   assertNonNegativeInteger(caseMix.representedSeverityBandCount, `${artifactPath}.houseBrackmannCaseMix.representedSeverityBandCount`);
@@ -620,6 +630,9 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /Reviewer identity control:\s*counted labels require a pseudonymous `reviewerId`/i, artifactPath, "the pseudonymous reviewer identity control");
   assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role and `clinicianConfidence` set to high or medium/i, artifactPath, "the explicit reviewer-role and confidence control");
   assertTextMatches(text, /Review timestamp control:\s*counted labels require `reviewedAt` as a UTC ISO timestamp/i, artifactPath, "the explicit review timestamp control");
+  assertTextMatches(text, /## Primary Scale Label And Estimate Gaps/i, artifactPath, "the scale-specific label and estimate gap section");
+  assertTextMatches(text, /Primary target label gaps:/i, artifactPath, "the primary target label gap reason counts");
+  assertTextMatches(text, /Primary estimate gaps:/i, artifactPath, "the primary estimate gap reason counts");
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
   const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
   const distinctClinicalCaseCount = integerFromMatch(text, /Distinct validation cases:\s*(\d+)/i);

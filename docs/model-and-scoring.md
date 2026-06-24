@@ -1161,9 +1161,10 @@ Saved readiness reports must also include the source validation report so
 agreement evidence remains traceable to the reviewed inputs.
 It records the dataset summary, primary-scale agreement table or rows, Wilson
 confidence intervals, House-Brackmann case-mix table, missing estimate counts,
-estimator-version counts, a scale-specific availability recommendation table,
-distinct validation-case counts, blocking reasons, reference-standard controls,
-and a sample of out-of-tolerance assessment rows for adjudication. The JSON
+scale-specific target-label and estimate-gap reason counts, estimator-version
+counts, a scale-specific availability recommendation table, distinct
+validation-case counts, blocking reasons, reference-standard controls, and a
+sample of out-of-tolerance assessment rows for adjudication. The JSON
 artifact is preferred for machine release checks because `npm run
 validation:status` can validate the counts and controls without parsing
 Markdown tables. The report is designed for the release reviewer to attach under
@@ -1261,12 +1262,14 @@ coverage, an agreement sample plan, current estimator-version evidence, the 80%
 usable-movement coverage floor, complete/minimum estimate evidence-tier controls,
 unique assessment-id controls, explicit distinct validation-case controls,
 explicit movement, scale-input, and resting-metric provenance controls, explicit
-reference-standard controls, and release-control text. When all three primary
-scales are enabled, the report status must also be the passing
+reference-standard controls, scale-specific label/estimate gap counters, and
+release-control text. When all three primary scales are enabled, the report
+status must also be the passing
 confidence-standard status. Structured clinical agreement JSON artifacts must be
 `mirror-clinical-scale-agreement-report` schema v1 before they can be used as
-machine release evidence, and observed agreement rates must match the reported
-within-tolerance counts, label denominators, and Wilson score intervals. Every
+machine release evidence, observed agreement rates must match the reported
+within-tolerance counts, label denominators, and Wilson score intervals, and the
+summary must include primary-scale issue-counter objects. Every
 clinical agreement, reviewer-agreement, clinical review package verification,
 and threshold calibration artifact must include a UTC ISO `generatedAt`
 timestamp that is not later than the validation status `updatedAt` date.
