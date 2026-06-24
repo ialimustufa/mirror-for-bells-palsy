@@ -46,6 +46,8 @@ function sampleRecords() {
           houseBrackmannGrade: null,
           sunnybrookComposite: null,
           efaceTotal: null,
+          reviewBlinded: null,
+          labelSource: null,
           notes: "",
         },
       },
@@ -66,6 +68,8 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "III");
   assert.equal(rows[1].estimatedSunnybrookComposite, 72);
+  assert.equal(rows[1].reviewBlinded, "");
+  assert.equal(rows[1].labelSource, "");
   assert.equal(parsed[0][0], "rowType");
   assert.equal(parsed[1][0], "frameSample");
   assert.equal(parsed[2][0], "assessmentClinicalScale");
@@ -85,16 +89,20 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "");
   assert.equal(rows[1].estimatedSunnybrookComposite, "");
   assert.equal(rows[1].houseBrackmannGrade, "");
+  assert.equal(rows[1].reviewBlinded, "");
+  assert.equal(rows[1].labelSource, "");
   assert.equal(clinicalRow[index.estimatedHouseBrackmannGrade], "");
   assert.equal(clinicalRow[index.estimatedSunnybrookComposite], "");
   assert.equal(clinicalRow[index.houseBrackmannGrade], "");
+  assert.equal(clinicalRow[index.reviewBlinded], "");
+  assert.equal(clinicalRow[index.labelSource], "");
 });
 
 test("validation label merge updates reviewed fields from CSV", () => {
   const csv = [
-    "rowType,sampleId,assessmentId,quality,visibleMovementLevel,coactivationNotes,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,reviewerRole,reviewedAt,notes",
-    'frameSample,sample-1,,strong,moderate,"eye relaxed, mouth moved",,,,,,,high,clinician,2026-06-23T10:00:00.000Z,"usable label"',
-    "assessmentClinicalScale,,assessment-1:clinical-scale,,,,II,82,79,91,77,69,high,clinician,2026-06-23T10:01:00.000Z,reviewed scale labels",
+    "rowType,sampleId,assessmentId,quality,visibleMovementLevel,coactivationNotes,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    'frameSample,sample-1,,strong,moderate,"eye relaxed, mouth moved",,,,,,,,,,clinician,2026-06-23T10:00:00.000Z,"usable label"',
+    "assessmentClinicalScale,,assessment-1:clinical-scale,,,,II,82,79,91,77,69,high,yes,clinician-assigned,clinician,2026-06-23T10:01:00.000Z,reviewed scale labels",
   ].join("\n");
 
   const merged = mergeValidationLabels(sampleRecords(), csv);
@@ -118,6 +126,8 @@ test("validation label merge updates reviewed fields from CSV", () => {
   assert.equal(clinicalLabel.efaceDynamic, "77");
   assert.equal(clinicalLabel.efaceSynkinesis, "69");
   assert.equal(clinicalLabel.clinicianConfidence, "high");
+  assert.equal(clinicalLabel.reviewBlinded, "yes");
+  assert.equal(clinicalLabel.labelSource, "clinician-assigned");
   assert.equal(clinicalLabel.reviewerRole, "clinician");
   assert.equal(clinicalLabel.notes, "reviewed scale labels");
 });

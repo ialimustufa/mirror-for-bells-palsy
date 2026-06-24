@@ -16,6 +16,9 @@ const PRIMARY_CLINICAL_SCALE_LABELS = Object.freeze(["houseBrackmann", "sunnybro
 const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist|adjudicated|consensus)\b|\bent\b|\bslp\b/i;
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
+const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
+const INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN = /\b(clinician[-\s]?assigned|clinician|independent|adjudicated|consensus|reference[-\s]?standard)\b/i;
+const NON_INDEPENDENT_LABEL_SOURCE_PATTERN = /\b(mirror|estimate|algorithm|model|app|copied|auto|automated|self|patient|caregiver|demo|test|rehearsal|practice|unblinded)\b/i;
 const CLINICAL_LABEL_SOURCE_FIELDS = Object.freeze([
   "houseBrackmannGrade",
   "sunnybrookComposite",
@@ -194,6 +197,8 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   const label = record.label ?? {};
   const reviewerRole = String(label.reviewerRole ?? "").trim();
   const confidence = String(label.clinicianConfidence ?? "").trim();
+  const reviewBlinded = String(label.reviewBlinded ?? "").trim();
+  const labelSource = String(label.labelSource ?? "").trim();
   const reasons = [];
   if (!reviewerRole) {
     reasons.push("missing clinician reviewer role");
@@ -204,6 +209,16 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   }
   if (confidence && UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN.test(confidence)) {
     reasons.push("clinician confidence is uncertain");
+  }
+  if (!BLINDED_REVIEW_PATTERN.test(reviewBlinded)) {
+    reasons.push("review was not marked blinded to Mirror estimates");
+  }
+  if (!labelSource) {
+    reasons.push("missing independent clinical label source");
+  } else if (NON_INDEPENDENT_LABEL_SOURCE_PATTERN.test(labelSource)) {
+    reasons.push("label source is marked non-independent or copied");
+  } else if (!INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN.test(labelSource)) {
+    reasons.push("label source is not recognized as independent clinical/adjudicated");
   }
   for (const scale of PRIMARY_CLINICAL_SCALE_LABELS) {
     if (labels[scale] == null) reasons.push(`missing valid ${scale} label`);

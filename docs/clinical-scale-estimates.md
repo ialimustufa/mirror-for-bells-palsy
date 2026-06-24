@@ -70,6 +70,9 @@ Mirror's current estimates in read-only reference columns for audit, but the
 - `sunnybrookComposite`
 - `efaceTotal`
 - Optional `efaceStatic`, `efaceDynamic`, and `efaceSynkinesis` domain scores
+- `reviewBlinded`, `labelSource`, `reviewerRole`, `clinicianConfidence`, and
+  `reviewedAt` metadata used to prove that a target label was independently
+  clinician-assigned or adjudicated before it is counted by readiness tooling
 
 The validation evaluator compares Mirror estimates against reviewed labels. The
 default minimum standard is:
@@ -78,11 +81,13 @@ default minimum standard is:
 - Sunnybrook composite: at least 80% within 10 points.
 - eFACE total: at least 80% within 10 points.
 - At least 30 reviewed assessment labels before any primary scale can pass.
-- Reviewed labels only count when the row has a recognized clinician or
-  adjudicated reviewer role, is not marked uncertain, and contains valid primary
-  HB, Sunnybrook, and eFACE total labels. Development rehearsal, user, patient,
-  caregiver, copied, incomplete, and out-of-range rows are excluded from the
-  readiness denominators and reported as excluded label rows.
+- Reviewed labels only count when the row is explicitly marked blinded to Mirror
+  estimates, has an independent clinician-assigned or adjudicated `labelSource`,
+  has a recognized clinician or adjudicated reviewer role, is not marked
+  uncertain, and contains valid primary HB, Sunnybrook, and eFACE total labels.
+  Development rehearsal, user, patient, caregiver, copied, algorithmic,
+  unblinded, incomplete, and out-of-range rows are excluded from the readiness
+  denominators and reported as excluded label rows.
 - A Wilson 95% binomial confidence interval is reported for each agreement rate
   so reviewers can see the uncertainty around the observed percentage.
 

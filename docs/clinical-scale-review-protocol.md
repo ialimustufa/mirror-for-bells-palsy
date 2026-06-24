@@ -39,6 +39,17 @@ Reviewer labels are merged back into a reviewed dataset:
 npm run validation:merge-labels -- validation-dataset.jsonl blinded-labels.csv reviewed-dataset.jsonl
 ```
 
+For rows intended to count toward clinical-scale readiness, reviewers must also
+fill the review metadata fields:
+
+- `reviewBlinded`: `yes` only when Mirror estimate columns were hidden before
+  target assignment.
+- `labelSource`: `clinician-assigned` for an independent clinician label, or
+  `adjudicated-consensus` after a documented adjudication step.
+- `reviewerRole`: the clinical role or adjudication role.
+- `clinicianConfidence`: leave blank or use a confident/high-confidence value;
+  rows marked `uncertain` are excluded.
+
 ## Inclusion Criteria
 
 An assessment can be used for clinical-scale agreement only when:
@@ -60,6 +71,11 @@ Exclude an assessment row from clinical readiness counts when:
 - The reviewer could see Mirror's estimate before assigning the primary target.
 - The label was copied from the Mirror estimate rather than independently
   assigned.
+- The row lacks `reviewBlinded: yes` or equivalent explicit blinded-review
+  metadata.
+- The row lacks an independent `labelSource`, or the source is marked as copied
+  from Mirror, algorithmic, automated, self-reported, demo, test, or rehearsal
+  data.
 - The row is missing a recognized clinician/adjudication `reviewerRole`.
 - The `reviewerRole` is marked as development rehearsal, developer, user,
   patient, caregiver, demo, test, or other non-clinical review.
@@ -101,8 +117,9 @@ Clinical-scale readiness uses the machine-readable standard in
 - At least 80% House-Brackmann agreement within one grade.
 - At least 80% Sunnybrook composite agreement within 10 points.
 - At least 80% eFACE total agreement within 10 points.
-- Only eligible clinician/adjudicated rows with valid primary labels count
-  toward the reviewed-assessment floor and per-scale agreement denominators.
+- Only eligible blinded, independently clinician-assigned or adjudicated rows
+  with valid primary labels count toward the reviewed-assessment floor and
+  per-scale agreement denominators.
 - Wilson 95% confidence interval reported for each primary agreement rate.
 
 The Wilson interval is reported because a raw observed percentage can hide

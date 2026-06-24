@@ -57,10 +57,10 @@ checks for:
 - Current validation status and remaining release risks in the roadmap.
 - `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, and whether clinical-facing scores are allowed. Referenced calibration and clinical-scale agreement artifacts are also checked for the expected report markers.
 - Runtime clinical-scale presentation policy, which reads `docs/validation-status.json` before app panels or reports can use clinical-facing wording.
-- Clinical-scale readiness only counts eligible clinician/adjudicated labels with
-  valid primary HB, Sunnybrook, and eFACE total targets; rehearsal,
-  non-clinician, uncertain, incomplete, or out-of-range rows are excluded and
-  reported separately.
+- Clinical-scale readiness only counts explicitly blinded, independently
+  clinician-assigned or adjudicated labels with valid primary HB, Sunnybrook, and
+  eFACE total targets; unblinded, copied, rehearsal, non-clinician, uncertain,
+  incomplete, or out-of-range rows are excluded and reported separately.
 
 Backup compatibility must remain rollback-safe:
 
