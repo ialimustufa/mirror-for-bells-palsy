@@ -2,6 +2,7 @@ const LABEL_COLUMNS = [
   "rowType",
   "sampleId",
   "assessmentId",
+  "validationCaseId",
   "sessionId",
   "sessionTs",
   "date",
@@ -72,6 +73,7 @@ const FRAME_LABEL_FIELDS = [
 ];
 
 const ASSESSMENT_CLINICAL_LABEL_FIELDS = [
+  "validationCaseId",
   "houseBrackmannGrade",
   "sunnybrookComposite",
   "efaceTotal",
@@ -162,6 +164,7 @@ function frameLabelRowFromRecord(line) {
     rowType: "frameSample",
     sampleId: record.id ?? frame.id ?? "",
     assessmentId: "",
+    validationCaseId: "",
     sessionId: record.sessionId ?? frame.sessionId ?? "",
     sessionTs: frame.sessionTs ?? "",
     date: "",
@@ -241,6 +244,7 @@ function assessmentClinicalLabelRowFromRecord(line, options = {}) {
     rowType: "assessmentClinicalScale",
     sampleId: "",
     assessmentId: record.id ?? "",
+    validationCaseId: label.validationCaseId ?? "",
     sessionId: record.sessionId ?? "",
     sessionTs: record.sessionTs ?? "",
     date: record.date ?? "",

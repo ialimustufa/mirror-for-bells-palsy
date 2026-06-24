@@ -48,6 +48,7 @@ function validationReport(overrides = {}) {
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
       minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
       minUsableMovementCoverageRatio: 0.8,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
@@ -67,6 +68,7 @@ function validationReport(overrides = {}) {
       duplicateClinicalScaleAssessmentIdCount: 0,
       missingClinicalScaleAssessmentIdCount: 0,
       reviewedAssessmentCount: 30,
+      distinctClinicalCaseCount: 30,
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
@@ -104,6 +106,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /# Mirror Clinical Scale Agreement Report/);
   assert.match(markdown, /Status: meets-clinical-scale-confidence-standard/);
   assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
+  assert.match(markdown, /Distinct validation case minimum: 10/);
   assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, /Minimum usable movement coverage: 80\.0%/);
   assert.match(markdown, /Estimator input provenance: counted current-version rows preserve used\/omitted movement IDs/);
@@ -127,6 +130,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Unique assessment clinical-scale records: 30/);
   assert.match(markdown, /Duplicate assessment IDs: 0/);
   assert.match(markdown, /Rows missing assessment IDs: 0/);
+  assert.match(markdown, /Distinct validation cases: 30/);
   assert.match(markdown, new RegExp(`Estimate version counts: ${CURRENT_ESTIMATOR_VERSION_KEY}: 30`));
   assert.match(markdown, /House-Brackmann Case Mix/);
   assert.match(markdown, /Required severity bands: 3/);
@@ -135,6 +139,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /HB V-VI severe\/complete \| 10 \| yes/);
   assert.match(markdown, /Reference Standard Controls/);
   assert.match(markdown, /Eligible blinded independent clinical labels: 30/);
+  assert.match(markdown, /Case identity control: counted labels require a pseudonymous `validationCaseId`/);
   assert.match(markdown, /Blinding control: counted labels require `sourceLabelSheetMode: blinded` and `reviewBlinded`/);
   assert.match(markdown, /Unique assessment control: counted labels require one stable assessment id/);
   assert.match(markdown, new RegExp(`Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`));

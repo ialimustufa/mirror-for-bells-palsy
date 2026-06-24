@@ -237,6 +237,7 @@ function clinicalRecord(id, estimate, label) {
         },
       },
       label: {
+        validationCaseId: label.validationCaseId ?? id.replace(":clinical-scale", ""),
         houseBrackmannGrade: label.hb,
         sunnybrookComposite: label.sunnybrook,
         efaceTotal: label.eface,
@@ -286,6 +287,7 @@ test("clinical scale evaluation passes only when Wilson lower-bound agreement cl
 
   assert.equal(extracted.length, 30);
   assert.equal(report.summary.reviewedAssessmentCount, 30);
+  assert.equal(report.summary.distinctClinicalCaseCount, 30);
   assert.equal(report.summary.meetsMinimumStandard, true);
   assert.equal(report.summary.readyForClinicalFacingScoring, true);
   assert.equal(report.caseMix.representedSeverityBandCount, 3);
@@ -295,6 +297,7 @@ test("clinical scale evaluation passes only when Wilson lower-bound agreement cl
   assert.equal(report.standard.minAgreementRate, 0.8);
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.standard.minReviewedAssessments, 30);
+  assert.equal(report.standard.minDistinctClinicalCases, 10);
   assert.equal(report.standard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(report.summary.estimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 30);
   assert.equal(report.summary.currentClinicalScaleEstimateVersionAssessmentCount, 30);
@@ -389,6 +392,27 @@ test("clinical scale evaluation fails closed when reviewed labels do not span HB
   assert.match(report.blockingReasons.join("\n"), /House-Brackmann severity bands/);
 });
 
+test("clinical scale evaluation fails closed when reviewed labels come from too few validation cases", () => {
+  const records = clinicalAgreementRecords(30, 30).map((line) => ({
+    ...line,
+    record: {
+      ...line.record,
+      label: {
+        ...line.record.label,
+        validationCaseId: "case-single",
+      },
+    },
+  }));
+
+  const report = evaluateClinicalScaleEstimates(records, { generatedAt: "2026-06-23T00:00:00.000Z" });
+
+  assert.equal(report.summary.reviewedAssessmentCount, 30);
+  assert.equal(report.summary.distinctClinicalCaseCount, 1);
+  assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
+  assert.equal(report.summary.meetsMinimumStandard, false);
+  assert.match(report.blockingReasons.join("\n"), /needs at least 10 distinct validation cases/);
+});
+
 test("clinical scale evaluation fails closed without enough reviewed assessments", () => {
   const report = evaluateClinicalScaleEstimates(clinicalAgreementRecords(29, 29), { generatedAt: "2026-06-23T00:00:00.000Z" });
 
@@ -437,6 +461,7 @@ test("clinical scale evaluation only counts eligible clinician-reviewed primary 
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -475,6 +500,7 @@ test("clinical scale evaluation excludes stale or missing estimator-version labe
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -514,6 +540,7 @@ test("clinical scale evaluation excludes labels paired with insufficient estimat
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -549,6 +576,7 @@ test("clinical scale evaluation counts minimum evidence only for scales with com
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -594,6 +622,7 @@ test("clinical scale evaluation treats HB estimate as missing without required e
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -646,6 +675,7 @@ test("clinical scale evaluation excludes labels without movement provenance", ()
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -684,6 +714,7 @@ test("clinical scale evaluation excludes labels without scale input provenance",
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,
@@ -727,6 +758,7 @@ test("clinical scale evaluation excludes labels without complete resting-metric 
   const report = evaluateClinicalScaleEstimates(records, {
     generatedAt: "2026-06-23T00:00:00.000Z",
     minReviewedAssessments: 1,
+    minDistinctClinicalCases: 1,
     minAgreementWilsonLowerBound: 0,
     minHouseBrackmannSeverityBands: 1,
     minAssessmentsPerSeverityBand: 1,

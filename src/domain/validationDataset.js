@@ -2,7 +2,7 @@ import { summarizeAssessmentSession } from "./assessment";
 
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 5;
+const VALIDATION_LABEL_SCHEMA_VERSION = 6;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
@@ -115,6 +115,7 @@ function buildAssessmentClinicalLabelFields() {
     estimateMissingRestingMetricKeys: { type: "resting-metric-key-list", default: "record.estimate.evidence.missingRestingMetricKeys" },
     estimateCalculationUsesCompleteRestingMetrics: { type: "boolean|null", default: "record.estimate.evidence.calculationUsesCompleteRestingMetrics" },
     clinicalScaleEstimateVersion: { type: "integer|null", default: "record.estimate.version" },
+    validationCaseId: { type: "pseudonymous-string|null", default: null },
     houseBrackmannGrade: { type: "enum|null", values: HOUSE_BRACKMANN_LABELS, default: null },
     sunnybrookComposite: { type: "number|null", range: [0, 100], default: null },
     efaceTotal: { type: "number|null", range: [0, 100], default: null },
@@ -181,6 +182,7 @@ function compactFrameSample(sample = {}, appState = {}) {
 
 function buildAssessmentClinicalLabelTemplate() {
   return {
+    validationCaseId: null,
     houseBrackmannGrade: null,
     sunnybrookComposite: null,
     efaceTotal: null,

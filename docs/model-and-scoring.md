@@ -1001,24 +1001,26 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - Assessment clinical-scale rows include estimate status, evidence tier, usable
   movement coverage, used/omitted movement exercise IDs, and the
   usable-movements-only calculation flag so reviewer sheets remain tied to the
-  exact estimator inputs. Label schema v5 also carries House-Brackmann
+  exact estimator inputs. The current label schema also carries House-Brackmann
   input-completeness provenance: required exercise IDs, used exercise IDs,
   missing required exercise IDs, and the complete flag. It also carries
   Sunnybrook and eFACE input-completeness provenance with each scale's complete
   flag plus used and omitted movement exercise IDs. It lists
   `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
   target fields rather than required fields because valid targets count
-  scale-by-scale.
+  scale-by-scale. Label schema v6 adds `validationCaseId`, a pseudonymous case
+  identifier used to distinguish distinct validation cases from repeated
+  assessments of the same case.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
   `quality`, `visibleMovementLevel`, `coactivationNotes`, `reviewerRole`,
   `reviewedAt`, and free-text `notes`.
 - A `label` template on each assessment clinical-scale row with
-  `houseBrackmannGrade`, `sunnybrookComposite`, `efaceTotal`, optional eFACE
-  domain scores, reviewer confidence, reviewer role, review time, and notes.
-  At least one valid primary target is needed for a row to count, and each
-  valid primary target counts only for its own scale.
+  `validationCaseId`, `houseBrackmannGrade`, `sunnybrookComposite`,
+  `efaceTotal`, optional eFACE domain scores, reviewer confidence, reviewer
+  role, review time, and notes. At least one valid primary target is needed for
+  a row to count, and each valid primary target counts only for its own scale.
 
 Label fields start empty except for values Mirror can infer locally, such as the
 sample's intended exercise and the profile affected side. A reviewed validation set
@@ -1066,9 +1068,11 @@ being hidden by aggregate accuracy.
 When reviewed `assessmentClinicalScale` labels are present, the same evaluator
 also emits a clinical-scale validation report. The default minimum standard is at
 least 30 reviewed assessment labels, at least 80% observed agreement for each
-primary scale, and a Wilson 95% lower confidence bound of at least 80% for each
-primary agreement rate. The primary tolerances are House-Brackmann within one
-grade, Sunnybrook composite within 10 points, and eFACE total within 10 points.
+primary scale, at least 10 distinct pseudonymous validation cases through
+`validationCaseId`, and a Wilson 95% lower confidence bound of at least 80% for
+each primary agreement rate. The primary tolerances are House-Brackmann within
+one grade, Sunnybrook composite within 10 points, and eFACE total within 10
+points.
 eFACE static, dynamic, and synkinesis domain agreement is reported when those
 labels are supplied. The clinical-scale gate also requires House-Brackmann labels
 to cover HB I-II mild/normal, HB III-IV moderate, and HB V-VI severe/complete,
@@ -1084,7 +1088,9 @@ resting metric keys, and `estimateCalculationUsesCompleteRestingMetrics: true`;
 inconsistent or missing movement, scale-input, or resting-metric provenance
 excludes the reviewed row. Duplicate or missing clinical-scale assessment ids
 also block readiness so one reviewed assessment cannot inflate agreement
-denominators. House-Brackmann agreement treats the paired estimate
+denominators. Missing `validationCaseId` values are excluded, and repeated
+assessments from one validation case cannot satisfy the distinct-case release
+floor by themselves. House-Brackmann agreement treats the paired estimate
 as missing unless the estimate provenance shows the required gentle eye-closure
 input was used. Sunnybrook and eFACE primary agreement comparisons require
 complete scale-specific movement input; normalized 4/5 Sunnybrook/eFACE
@@ -1122,11 +1128,12 @@ The clinical-readiness command reads a reviewed dataset, combined validation
 report, or clinical-scale validation report and writes a release decision for the
 clinical-scale estimates. It evaluates House-Brackmann, Sunnybrook composite,
 and eFACE total rows independently, requiring each passing scale to meet the
-30-label, 80% observed agreement, and 80% Wilson lower-bound standard. The
-all-primary-scale status also requires all primary checks, the House-Brackmann
-severity-band case-mix gate, and current clinical-scale estimator-version
-evidence to pass. The case-mix gate counts only comparable House-Brackmann
-estimate/label pairs, so missing HB estimates cannot fill severity bands. It also emits
+30-label, 10-distinct-validation-case, 80% observed agreement, and 80% Wilson
+lower-bound standard. The all-primary-scale status also requires all primary
+checks, the House-Brackmann severity-band case-mix gate, and current
+clinical-scale estimator-version evidence to pass. The case-mix gate counts only
+comparable House-Brackmann estimate/label pairs, so missing HB estimates cannot
+fill severity bands. It also emits
 `clinicalScaleAvailabilityRecommendation` entries for the House-Brackmann,
 Sunnybrook, and eFACE status keys, so a reviewer can see which individual scale
 rows are evidence-eligible after human review when the full set is not ready.
@@ -1140,8 +1147,8 @@ report, or clinical-readiness report into a Markdown clinical-scale agreement
 report. It records the dataset summary, primary-scale agreement table, Wilson
 confidence intervals, House-Brackmann case-mix table, missing estimate counts,
 estimator-version counts, a scale-specific availability recommendation table,
-blocking reasons, reference-standard controls, and a sample of out-of-tolerance
-assessment rows for adjudication. The report is
+distinct validation-case counts, blocking reasons, reference-standard controls,
+and a sample of out-of-tolerance assessment rows for adjudication. The report is
 designed for the release reviewer to attach under `docs/validation/` before any
 status update.
 
@@ -1155,12 +1162,13 @@ denominators include only eligible reviewer pairs
 that pass the blinding, independence, current-version, and estimate-evidence
 gates; excluded reviewer pairs are counted separately and cannot support release.
 Each scale enabled in `clinicalScaleAvailability` must have at least 30 eligible
-paired labels, at least 80% observed reviewer agreement, and a Wilson lower
-confidence bound of at least 80% before the reviewer agreement artifact can
-support clinical-facing release for that scale. The artifact must also show
-HB I-II, HB III-IV, and HB V-VI represented by at least three same-band eligible
-paired reviewer labels, so a reviewer-agreement report cannot pass on one
-severity range alone. Disabled primary scales may stay
+paired labels, at least 10 distinct pseudonymous validation cases, at least 80%
+observed reviewer agreement, and a Wilson lower confidence bound of at least 80%
+before the reviewer agreement artifact can support clinical-facing release for
+that scale. The artifact must also show HB I-II, HB III-IV, and HB V-VI
+represented by at least three same-band eligible paired reviewer labels, so a
+reviewer-agreement report cannot pass on one severity range alone. Disabled
+primary scales may stay
 in estimate mode when their rows are not ready, but metadata, blinding,
 current-version, and estimate-evidence blockers still invalidate the artifact. It
 also rejects reviewer rows that are unblinded, non-independent, non-clinician,
@@ -1172,7 +1180,9 @@ adjudicated labels must remain tied to the qualifying estimate evidence that
 generated the blinded review package. When an adjudication output path is
 provided, it writes a CSV with raw reviewer values, raw estimator versions, and
 raw estimate-evidence provenance preserved in audit columns and blank target
-columns for the final consensus label.
+columns for the final consensus label. The adjudication CSV preserves a
+mergeable `validationCaseId` only when both reviewer sheets agree on the same
+pseudonymous case id.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset
@@ -1201,8 +1211,8 @@ House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
 observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
 coverage, an agreement sample plan, current estimator-version evidence, the 80%
 usable-movement coverage floor, complete/minimum estimate evidence-tier controls,
-unique assessment-id controls, explicit
-movement, scale-input, and resting-metric provenance controls, explicit
+unique assessment-id controls, explicit distinct validation-case controls,
+explicit movement, scale-input, and resting-metric provenance controls, explicit
 reference-standard controls, and release-control text. When all three primary
 scales are enabled, the report status must also be the passing
 confidence-standard status. Clinical reviewer-agreement report paths must point
@@ -1213,10 +1223,10 @@ usable-movement coverage provenance, scale-specific input provenance, complete
 resting-metric provenance, no excluded reviewer-pair, metadata, or
 estimate-evidence blockers, zero incomplete scale-specific estimate-input skips
 for every enabled primary scale, at least 30 eligible paired labels on every
-enabled primary scale, at least 80% observed reviewer agreement, and Wilson
-lower-bound reviewer agreement meeting the configured 80% standard, plus
-House-Brackmann same-band reviewer severity coverage, before clinical-facing
-support can be enabled for that scale.
+enabled primary scale, at least 10 distinct pseudonymous validation cases, at
+least 80% observed reviewer agreement, and Wilson lower-bound reviewer agreement
+meeting the configured 80% standard, plus House-Brackmann same-band reviewer
+severity coverage, before clinical-facing support can be enabled for that scale.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

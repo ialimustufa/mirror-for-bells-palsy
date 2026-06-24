@@ -25,6 +25,7 @@ function normalizeThresholds(options = {}) {
     minAgreementRate: options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate,
     minAgreementWilsonLowerBound: options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound,
     minReviewedAssessments: Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments)),
+    minDistinctClinicalCases: Math.max(1, Math.round(options.minDistinctClinicalCases ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minDistinctClinicalCases)),
     minHouseBrackmannSeverityBands: Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minHouseBrackmannSeverityBands)),
     minAssessmentsPerSeverityBand: Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAssessmentsPerSeverityBand)),
     minUsableMovementCoverageRatio: options.minUsableMovementCoverageRatio ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minUsableMovementCoverageRatio,
@@ -111,6 +112,9 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   if ((clinicalValidation.summary?.reviewedAssessmentCount ?? 0) < thresholds.minReviewedAssessments) {
     commonBlockingReasons.push(`needs at least ${thresholds.minReviewedAssessments} reviewed clinical-scale assessments`);
   }
+  if ((clinicalValidation.summary?.distinctClinicalCaseCount ?? 0) < thresholds.minDistinctClinicalCases) {
+    commonBlockingReasons.push(`needs at least ${thresholds.minDistinctClinicalCases} distinct validation cases`);
+  }
   if (clinicalValidation.standard?.clinicalScaleEstimateVersion !== thresholds.clinicalScaleEstimateVersion) {
     commonBlockingReasons.push(`clinicalScaleEstimateVersion: needs validation report for estimator v${thresholds.clinicalScaleEstimateVersion}`);
   }
@@ -167,6 +171,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
     },
     validationSummary: {
       reviewedAssessmentCount: clinicalValidation.summary?.reviewedAssessmentCount ?? 0,
+      distinctClinicalCaseCount: clinicalValidation.summary?.distinctClinicalCaseCount ?? 0,
       excludedClinicalLabelCount: clinicalValidation.summary?.excludedClinicalLabelCount ?? 0,
       excludedClinicalLabelReasons: clinicalValidation.summary?.excludedClinicalLabelReasons ?? {},
       primaryScaleLabelIssueReasons: clinicalValidation.summary?.primaryScaleLabelIssueReasons ?? {},

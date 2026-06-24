@@ -31,6 +31,7 @@ const DEFAULT_REVIEWER_AGREEMENT_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
   minAgreementWilsonLowerBound: 0.8,
   minPairedLabels: 30,
+  minDistinctClinicalCases: 10,
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
   minUsableMovementCoverageRatio: 0.8,
@@ -249,6 +250,10 @@ function estimateEvidenceTier(row = {}) {
 function estimateUsableMovementCoverageRatio(row = {}) {
   const ratio = Number(row?.estimateUsableMovementCoverageRatio);
   return Number.isFinite(ratio) ? ratio : null;
+}
+
+function validationCaseId(row = {}) {
+  return String(row?.validationCaseId ?? "").trim();
 }
 
 function estimateMovementCount(row = {}, key) {
@@ -558,6 +563,9 @@ function reviewerRowEligibility(row = {}, options = {}) {
   } else if (!INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN.test(labelSource)) {
     reasons.push("label source is not recognized as independent clinical");
   }
+  if (!validationCaseId(row)) {
+    reasons.push("missing validation case id");
+  }
   for (const scaleKey of requiredPrimaryScaleKeys) {
     if (scaleValue(scaleKey, row[scaleKey]) == null) reasons.push(`missing valid ${scaleKey} label`);
   }
@@ -627,6 +635,11 @@ function reviewerPairEligibility(assessmentId, reviewerA, reviewerB, options = {
   }
   if (reviewerAVersion !== reviewerBVersion) {
     reasons.push("reviewer sheets have mismatched estimator versions");
+  }
+  const reviewerACaseId = validationCaseId(reviewerA);
+  const reviewerBCaseId = validationCaseId(reviewerB);
+  if (reviewerACaseId && reviewerBCaseId && reviewerACaseId !== reviewerBCaseId) {
+    reasons.push("reviewer sheets have mismatched validation case ids");
   }
   if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) {
     reasons.push("reviewer sheets have mismatched estimate evidence");
@@ -870,6 +883,11 @@ function estimateEvidenceSummaryPart(reviewerA, reviewerB) {
 
 function disagreementSummaryForAssessment(assessmentId, reviewerA, reviewerB) {
   const parts = [];
+  const reviewerACaseId = validationCaseId(reviewerA);
+  const reviewerBCaseId = validationCaseId(reviewerB);
+  if (reviewerACaseId && reviewerBCaseId && reviewerACaseId !== reviewerBCaseId) {
+    parts.push(`Validation case id: reviewer A ${reviewerACaseId} vs reviewer B ${reviewerBCaseId}`);
+  }
   const versionPart = estimateVersionSummaryPart(reviewerA, reviewerB);
   if (versionPart) parts.push(versionPart);
   const evidencePart = estimateEvidenceSummaryPart(reviewerA, reviewerB);
@@ -894,6 +912,7 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   const source = reviewerA ?? reviewerB ?? {};
   row.rowType = "assessmentClinicalScale";
   row.assessmentId = assessmentId;
+  row.validationCaseId = validationCaseId(reviewerA) === validationCaseId(reviewerB) ? validationCaseId(reviewerA) : "";
   row.sessionId = source.sessionId ?? "";
   row.sessionTs = source.sessionTs ?? "";
   row.date = source.date ?? "";
@@ -978,6 +997,7 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
 function needsAdjudication(reviewerA, reviewerB) {
   if (!reviewerA || !reviewerB) return true;
   if (clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) return true;
+  if (validationCaseId(reviewerA) && validationCaseId(reviewerB) && validationCaseId(reviewerA) !== validationCaseId(reviewerB)) return true;
   if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) return true;
   return REVIEW_SCALE_KEYS.some((scaleKey) => {
     const a = scaleValue(scaleKey, reviewerValue(reviewerA, scaleKey));
@@ -1080,6 +1100,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementRate;
   const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementWilsonLowerBound;
   const minPairedLabels = Math.max(1, Math.round(options.minPairedLabels ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minPairedLabels));
+  const minDistinctClinicalCases = Math.max(1, Math.round(options.minDistinctClinicalCases ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minDistinctClinicalCases));
   const minHouseBrackmannSeverityBands = Math.max(1, Math.round(options.minHouseBrackmannSeverityBands ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minHouseBrackmannSeverityBands));
   const minAssessmentsPerSeverityBand = Math.max(1, Math.round(options.minAssessmentsPerSeverityBand ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAssessmentsPerSeverityBand));
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
@@ -1088,6 +1109,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     minAgreementRate,
     minAgreementWilsonLowerBound,
     minPairedLabels,
+    minDistinctClinicalCases,
     minHouseBrackmannSeverityBands,
     minAssessmentsPerSeverityBand,
     confidenceLevel,
@@ -1101,6 +1123,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const estimateEvidenceMismatches = [];
   const excludedReviewerPairReasons = {};
   const excludedReviewerPairs = [];
+  const distinctValidationCaseIds = new Set();
   let eligibleReviewerPairCount = 0;
   for (const assessmentId of assessmentIds) {
     const reviewerA = reviewerAById.get(assessmentId) ?? null;
@@ -1137,6 +1160,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       }
       if (hasAnyPairedPrimaryReviewScale(reviewerA, reviewerB)) {
         eligibleReviewerPairCount += 1;
+        distinctValidationCaseIds.add(validationCaseId(reviewerA));
       } else {
         const excludedPair = {
           assessmentId,
@@ -1201,6 +1225,9 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   if (estimateEvidenceMismatches.length) {
     blockingReasons.push(`estimateEvidence: reviewer sheets disagree for ${estimateEvidenceMismatches.length} assessment labels`);
   }
+  if (distinctValidationCaseIds.size < minDistinctClinicalCases) {
+    blockingReasons.push(`validationCases: needs at least ${minDistinctClinicalCases} distinct validation cases`);
+  }
   if (houseBrackmannCaseMix.blockingReasons.length) {
     blockingReasons.push(`houseBrackmannCaseMix: ${houseBrackmannCaseMix.blockingReasons.join("; ")}`);
   }
@@ -1216,6 +1243,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       minAgreementRate,
       minAgreementWilsonLowerBound,
       minPairedLabels,
+      minDistinctClinicalCases,
       minHouseBrackmannSeverityBands,
       minAssessmentsPerSeverityBand,
       minUsableMovementCoverageRatio,
@@ -1234,6 +1262,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerBAssessmentCount: reviewerBById.size,
       comparedAssessmentCount: assessmentIds.length,
       eligibleReviewerPairCount,
+      distinctValidationCaseCount: distinctValidationCaseIds.size,
       excludedReviewerPairCount: excludedReviewerPairs.length,
       excludedReviewerPairReasons,
       adjudicationRequiredCount: adjudicationRows.length,

@@ -30,6 +30,7 @@ function clinicalValidationReport(overrides = {}) {
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
       minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
@@ -41,6 +42,7 @@ function clinicalValidationReport(overrides = {}) {
     summary: {
       assessmentClinicalScaleRecords: 30,
       reviewedAssessmentCount: 30,
+      distinctClinicalCaseCount: 30,
       excludedClinicalLabelCount: 0,
       excludedClinicalLabelReasons: {},
       estimatedAssessmentCount: 30,
@@ -76,6 +78,7 @@ test("clinical scale readiness fails closed with insufficient reviewed assessmen
     summary: {
       assessmentClinicalScaleRecords: 12,
       reviewedAssessmentCount: 12,
+      distinctClinicalCaseCount: 12,
       estimatedAssessmentCount: 12,
       meetsMinimumStandard: false,
     },
@@ -97,6 +100,26 @@ test("clinical scale readiness accepts a raw clinical scale validation report", 
   const report = clinicalValidationReportFrom(source);
 
   assert.equal(report, source);
+});
+
+test("clinical scale readiness fails closed without enough distinct validation cases", () => {
+  const report = assessClinicalScaleReadiness(clinicalValidationReport({
+    summary: {
+      assessmentClinicalScaleRecords: 30,
+      reviewedAssessmentCount: 30,
+      distinctClinicalCaseCount: 1,
+      excludedClinicalLabelCount: 0,
+      excludedClinicalLabelReasons: {},
+      estimatedAssessmentCount: 30,
+      estimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: 30 },
+      currentClinicalScaleEstimateVersionAssessmentCount: 30,
+      meetsMinimumStandard: false,
+    },
+  }), { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.equal(report.validationSummary.distinctClinicalCaseCount, 1);
+  assert.match(report.blockingReasons.join("\n"), /needs at least 10 distinct validation cases/);
 });
 
 test("clinical scale readiness fails closed without House-Brackmann case-mix evidence", () => {
@@ -142,6 +165,7 @@ test("clinical scale readiness fails closed without current estimator-version ev
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
       minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1,
@@ -207,6 +231,7 @@ test("clinical scale readiness reports confidence standard without enabling clin
   assert.equal(report.validationSummary.readyForClinicalFacingScoring, false);
   assert.equal(report.validationSummary.clinicalFacingScoresAllowedByReportAlone, false);
   assert.equal(report.validationSummary.excludedClinicalLabelCount, 0);
+  assert.equal(report.validationSummary.distinctClinicalCaseCount, 30);
   assert.equal(report.validationSummary.caseMix.representedSeverityBandCount, 3);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.thresholds.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);

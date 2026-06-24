@@ -6,6 +6,7 @@ import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js
 const DEFAULT_STATUS_PATH = "docs/validation-status.json";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
+const DEFAULT_MIN_DISTINCT_CLINICAL_CASES = 10;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
 const DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO = 0.8;
 const PRIMARY_CLINICAL_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
@@ -92,6 +93,10 @@ function assertClinicalScaleMinimumStandard(value) {
   assertCondition(
     Number.isInteger(value.minReviewedAssessments) && value.minReviewedAssessments >= DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS,
     `clinicalScaleMinimumStandard.minReviewedAssessments must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
+  );
+  assertCondition(
+    Number.isInteger(value.minDistinctClinicalCases) && value.minDistinctClinicalCases >= DEFAULT_MIN_DISTINCT_CLINICAL_CASES,
+    `clinicalScaleMinimumStandard.minDistinctClinicalCases must be at least ${DEFAULT_MIN_DISTINCT_CLINICAL_CASES}`,
   );
   assertCondition(
     value.minHouseBrackmannSeverityBands === DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS,
@@ -185,9 +190,12 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /Wilson/i, artifactPath, "Wilson confidence interval reporting");
   assertTextMatches(text, new RegExp(`Clinical-scale estimator version:\\s*v?${CLINICAL_SCALE_ESTIMATE_VERSION}\\b`, "i"), artifactPath, `clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`);
   assertTextMatches(text, /Minimum usable movement coverage:\s*80\.0%/i, artifactPath, "the 80% usable movement coverage estimate-evidence floor");
+  assertTextMatches(text, /Distinct validation case minimum:\s*\d+/i, artifactPath, "the distinct validation case minimum");
+  assertTextMatches(text, /Distinct validation cases:\s*\d+/i, artifactPath, "the distinct validation case count");
   assertTextMatches(text, /Reference standard:\s*blinded clinician-assigned/i, artifactPath, "the blinded clinician reference-standard statement");
   assertTextMatches(text, /## Reference Standard Controls/i, artifactPath, "the reference-standard controls section");
   assertTextMatches(text, /Eligible blinded independent clinical labels:\s*\d+/i, artifactPath, "eligible blinded independent clinical label count");
+  assertTextMatches(text, /Case identity control:\s*counted labels require a pseudonymous `validationCaseId`/i, artifactPath, "the pseudonymous validation-case identity control");
   assertTextMatches(text, /Blinding control:\s*counted labels require `sourceLabelSheetMode:\s*blinded` and `reviewBlinded`/i, artifactPath, "the explicit blinded-review control");
   assertTextMatches(text, /Unique assessment control:\s*counted labels require one stable assessment id per reviewed clinical-scale row/i, artifactPath, "the unique assessment-id control");
   assertTextMatches(text, new RegExp(`Estimator version control:\\s*counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`, "i"), artifactPath, "the explicit estimator-version control");
@@ -207,6 +215,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role/i, artifactPath, "the explicit reviewer-role control");
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
   const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
+  const distinctClinicalCaseCount = integerFromMatch(text, /Distinct validation cases:\s*(\d+)/i);
   const eligibleBlindedIndependentLabelCount = integerFromMatch(text, /Eligible blinded independent clinical labels:\s*(\d+)/i);
   const duplicateClinicalScaleAssessmentIdCount = integerFromMatch(text, /Duplicate assessment IDs:\s*(\d+)/i);
   const missingClinicalScaleAssessmentIdCount = integerFromMatch(text, /Rows missing assessment IDs:\s*(\d+)/i);
@@ -235,6 +244,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
     path: artifactPath,
     status: text.match(/Status:\s*([^\n]+)/i)?.[1]?.trim() ?? null,
     reviewedClinicalScaleAssessmentCount,
+    distinctClinicalCaseCount,
     eligibleBlindedIndependentLabelCount,
     duplicateClinicalScaleAssessmentIdCount,
     missingClinicalScaleAssessmentIdCount,
@@ -287,6 +297,10 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     `${artifactPath}.standard.minPairedLabels must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
   );
   assertCondition(
+    Number.isInteger(report.standard.minDistinctClinicalCases) && report.standard.minDistinctClinicalCases >= DEFAULT_MIN_DISTINCT_CLINICAL_CASES,
+    `${artifactPath}.standard.minDistinctClinicalCases must be at least ${DEFAULT_MIN_DISTINCT_CLINICAL_CASES}`,
+  );
+  assertCondition(
     report.standard.minHouseBrackmannSeverityBands === DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS,
     `${artifactPath}.standard.minHouseBrackmannSeverityBands must be ${DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS}`,
   );
@@ -309,6 +323,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertNonNegativeInteger(report.summary.reviewerBAssessmentCount, `${artifactPath}.summary.reviewerBAssessmentCount`);
   assertNonNegativeInteger(report.summary.comparedAssessmentCount, `${artifactPath}.summary.comparedAssessmentCount`);
   assertNonNegativeInteger(report.summary.eligibleReviewerPairCount, `${artifactPath}.summary.eligibleReviewerPairCount`);
+  assertNonNegativeInteger(report.summary.distinctValidationCaseCount, `${artifactPath}.summary.distinctValidationCaseCount`);
   assertNonNegativeInteger(report.summary.excludedReviewerPairCount, `${artifactPath}.summary.excludedReviewerPairCount`);
   assertNonNegativeInteger(report.summary.reviewerAEligibleAssessmentCount, `${artifactPath}.summary.reviewerAEligibleAssessmentCount`);
   assertNonNegativeInteger(report.summary.reviewerBEligibleAssessmentCount, `${artifactPath}.summary.reviewerBEligibleAssessmentCount`);
@@ -376,6 +391,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     reviewerBAssessmentCount: report.summary.reviewerBAssessmentCount,
     comparedAssessmentCount: report.summary.comparedAssessmentCount,
     eligibleReviewerPairCount: report.summary.eligibleReviewerPairCount,
+    distinctValidationCaseCount: report.summary.distinctValidationCaseCount,
     excludedReviewerPairCount: report.summary.excludedReviewerPairCount,
     reviewerAEligibleAssessmentCount: report.summary.reviewerAEligibleAssessmentCount,
     reviewerBEligibleAssessmentCount: report.summary.reviewerBEligibleAssessmentCount,
@@ -406,6 +422,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
 function clinicalAgreementReportHasCommonEvidence(report, status) {
   return (
     (report.reviewedClinicalScaleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.distinctClinicalCaseCount ?? 0) >= status.clinicalScaleMinimumStandard.minDistinctClinicalCases
     && (report.eligibleBlindedIndependentLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
     && report.clinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
     && (report.duplicateClinicalScaleAssessmentIdCount ?? 0) === 0
@@ -441,6 +458,7 @@ function reviewerAgreementReportHasCommonEvidence(report, status) {
     report.requiredClinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
     && (report.comparedAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
     && (report.eligibleReviewerPairCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.distinctValidationCaseCount ?? 0) >= status.clinicalScaleMinimumStandard.minDistinctClinicalCases
     && (report.excludedReviewerPairCount ?? 0) === 0
     && (report.reviewerAEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
     && (report.reviewerBEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments

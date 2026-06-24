@@ -56,6 +56,7 @@ const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minAgreementRate: 0.8,
   minAgreementWilsonLowerBound: 0.8,
   minReviewedAssessments: 30,
+  minDistinctClinicalCases: 10,
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
   minUsableMovementCoverageRatio: 0.8,
@@ -256,6 +257,10 @@ function extractAssessmentClinicalScaleRecords(records = []) {
 
 function clinicalAssessmentRecordId(record = {}) {
   return String(record.id ?? record.assessmentId ?? record.sourceSummary?.assessmentId ?? "").trim();
+}
+
+function clinicalValidationCaseId(record = {}) {
+  return String(record.label?.validationCaseId ?? record.validationCaseId ?? record.sourceSummary?.validationCaseId ?? "").trim();
 }
 
 function duplicateClinicalAssessmentIds(records = []) {
@@ -671,6 +676,9 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   } else if (!INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN.test(labelSource)) {
     reasons.push("label source is not recognized as independent clinical/adjudicated");
   }
+  if (!clinicalValidationCaseId(record)) {
+    reasons.push("missing validation case id");
+  }
   for (const scale of requiredPrimaryScales) {
     if (estimate[scale] == null) reasons.push(`missing valid ${scale} estimate`);
     if (labels[scale] == null) reasons.push(`missing valid ${scale} label`);
@@ -888,6 +896,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const minAgreementRate = options.minAgreementRate ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementRate;
   const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minAgreementWilsonLowerBound;
   const minReviewedAssessments = Math.max(1, Math.round(options.minReviewedAssessments ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minReviewedAssessments));
+  const minDistinctClinicalCases = Math.max(1, Math.round(options.minDistinctClinicalCases ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.minDistinctClinicalCases));
   const confidenceLevel = options.confidenceLevel ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.confidenceLevel;
   const sunnybrookTolerance = Number.isFinite(options.sunnybrookTolerance) ? options.sunnybrookTolerance : 10;
   const efaceTolerance = Number.isFinite(options.efaceTolerance) ? options.efaceTolerance : 10;
@@ -918,6 +927,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   const estimateVersionCounts = {};
   let missingClinicalScaleAssessmentIdCount = 0;
   let duplicateClinicalScaleAssessmentRecordCount = 0;
+  const distinctClinicalCaseIds = new Set();
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion
     ?? DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD.clinicalScaleEstimateVersion;
   const houseBrackmannCaseMixCounts = createHouseBrackmannCaseMixCounts();
@@ -967,6 +977,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     incrementReasonCounts(primaryScaleLabelIssueReasonCounts, primaryScaleLabelIssueReasons(labels));
     incrementReasonCounts(primaryScaleEstimateIssueReasonCounts, primaryScaleEstimateIssueReasons(estimate, validPrimaryScales));
     reviewedAssessmentCount += 1;
+    distinctClinicalCaseIds.add(clinicalValidationCaseId(record));
     const severityBand = houseBrackmannSeverityBand(labels.houseBrackmann);
     if (severityBand && estimate.houseBrackmann != null) houseBrackmannCaseMixCounts[severityBand] += 1;
     for (const [scale, accumulator] of Object.entries(accumulators)) {
@@ -991,6 +1002,9 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   if (reviewedAssessmentCount < minReviewedAssessments) {
     blockingReasons.push(`needs at least ${minReviewedAssessments} reviewed clinical-scale assessments`);
   }
+  if (distinctClinicalCaseIds.size < minDistinctClinicalCases) {
+    blockingReasons.push(`needs at least ${minDistinctClinicalCases} distinct validation cases`);
+  }
   if (!caseMix.meetsMinimumStandard) {
     blockingReasons.push(`caseMix: ${caseMix.blockingReasons.join("; ")}`);
   }
@@ -1005,6 +1019,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       minAgreementRate,
       minAgreementWilsonLowerBound,
       minReviewedAssessments,
+      minDistinctClinicalCases,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel,
@@ -1032,6 +1047,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
       duplicateClinicalScaleAssessmentRecordCount,
       missingClinicalScaleAssessmentIdCount,
       reviewedAssessmentCount,
+      distinctClinicalCaseCount: distinctClinicalCaseIds.size,
       excludedClinicalLabelCount,
       excludedClinicalLabelReasons,
       primaryScaleLabelIssueReasons: primaryScaleLabelIssueReasonCounts,

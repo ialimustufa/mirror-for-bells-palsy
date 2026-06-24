@@ -32,6 +32,7 @@ const BASE_STATUS = {
     minAgreementRate: 0.8,
     minAgreementWilsonLowerBound: 0.8,
     minReviewedAssessments: 30,
+    minDistinctClinicalCases: 10,
     minHouseBrackmannSeverityBands: 3,
     minAssessmentsPerSeverityBand: 3,
     minUsableMovementCoverageRatio: 0.8,
@@ -57,6 +58,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Evidence Standard
 
 - Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}
+- Distinct validation case minimum: 10
 - Minimum usable movement coverage: 80.0%
 - Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, House-Brackmann required-input provenance, Sunnybrook/eFACE input-completeness provenance, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.
 
@@ -67,6 +69,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 - Duplicate assessment IDs: 0
 - Rows missing assessment IDs: 0
 - Reviewed clinical-scale assessments: ${reviewedCount}
+- Distinct validation cases: ${reviewedCount}
 - Ready primary scales: ${readyPrimaryScales}/3
 
 ## Primary Scale Agreement
@@ -102,6 +105,7 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 ## Reference Standard Controls
 
 - Eligible blinded independent clinical labels: ${reviewedCount}
+- Case identity control: counted labels require a pseudonymous \`validationCaseId\`; at least 10 distinct validation cases are required so repeated assessments from one person cannot satisfy the 80% agreement gate alone.
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
 - Unique assessment control: counted labels require one stable assessment id per reviewed clinical-scale row; duplicate or missing assessment ids are excluded and block release readiness.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
@@ -164,6 +168,7 @@ function passingClinicalReviewerAgreementReport({
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
       minPairedLabels: 30,
+      minDistinctClinicalCases: 10,
       minHouseBrackmannSeverityBands: 3,
       minAssessmentsPerSeverityBand: 3,
       minUsableMovementCoverageRatio: 0.8,
@@ -182,6 +187,7 @@ function passingClinicalReviewerAgreementReport({
       reviewerBAssessmentCount: comparedCount,
       comparedAssessmentCount: comparedCount,
       eligibleReviewerPairCount: comparedCount,
+      distinctValidationCaseCount: comparedCount,
       excludedReviewerPairCount: 0,
       excludedReviewerPairReasons: {},
       adjudicationRequiredCount: 4,
@@ -388,12 +394,14 @@ test("validation status artifacts accept documented clinical and calibration rep
 
   assert.equal(result.status.clinicalFacingScoresAllowed, true);
   assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].distinctClinicalCaseCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(result.artifacts.clinicalAgreementReports[0].minimumUsableMovementCoverageRatio, 0.8);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].comparedAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].eligibleReviewerPairCount, 30);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].distinctValidationCaseCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].excludedReviewerPairCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryPairedCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementRate, 1);
@@ -545,6 +553,38 @@ test("validation status artifacts reject reviewer agreement reports with duplica
   reviewerReport.summary.reviewerADuplicateAssessmentIdCount = 1;
   reviewerReport.summary.reviewerADuplicateAssessmentRowCount = 2;
   reviewerReport.summary.reviewerADuplicateAssessmentIds = ["assessment-1:clinical-scale"];
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with too few distinct validation cases", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.summary.distinctValidationCaseCount = 1;
+  reviewerReport.blockingReasons = ["validationCases: needs at least 10 distinct validation cases"];
 
   await assert.rejects(
     () => validateStatusArtifacts(status, {
@@ -725,6 +765,34 @@ test("validation status artifacts reject clinical agreement reports with duplica
   );
 });
 
+test("validation status artifacts reject clinical agreement reports with too few distinct validation cases", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("Distinct validation cases: 30", "Distinct validation cases: 1"),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale agreement report artifacts/,
+  );
+});
+
 test("validation status rejects non-date updatedAt values", () => {
   assert.throws(
     () => validateStatus({
@@ -743,6 +811,7 @@ test("validation status rejects weak clinical scale minimum standards", () => {
         minAgreementRate: 0.8,
         minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 12,
+        minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
         minUsableMovementCoverageRatio: 0.8,
@@ -763,6 +832,7 @@ test("validation status rejects missing clinical scale review protocol", () => {
         minAgreementRate: 0.8,
         minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 30,
+        minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
         minUsableMovementCoverageRatio: 0.8,
@@ -792,9 +862,20 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
     () => validateStatus({
       ...BASE_STATUS,
       clinicalScaleMinimumStandard: {
+        ...BASE_STATUS.clinicalScaleMinimumStandard,
+        minDistinctClinicalCases: 3,
+      },
+    }),
+    /minDistinctClinicalCases/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
         minAgreementRate: 0.8,
         minAgreementWilsonLowerBound: 0.7,
         minReviewedAssessments: 30,
+        minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
         minUsableMovementCoverageRatio: 0.8,
@@ -812,6 +893,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minAgreementRate: 0.8,
         minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 30,
+        minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 2,
         minAssessmentsPerSeverityBand: 3,
         minUsableMovementCoverageRatio: 0.8,
@@ -829,6 +911,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minAgreementRate: 0.8,
         minAgreementWilsonLowerBound: 0.8,
         minReviewedAssessments: 30,
+        minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 2,
         minUsableMovementCoverageRatio: 0.8,

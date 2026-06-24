@@ -16,7 +16,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/model-and-scoring.md",
-    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /clinical-scale agreement\s+report/i, /not diagnosis/i],
+    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /clinical-scale agreement\s+report/i, /validationCaseId/i, /distinct validation-case/i, /not diagnosis/i],
   },
   {
     path: "docs/algorithm-upgrade-roadmap.md",
@@ -28,7 +28,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/clinical-scale-review-protocol.md",
-    patterns: [/blinded label sheet/i, /reviewer-agreement/i, /30 reviewed clinical-scale assessment/i, /clinician-assigned grade/i, /reference-standard controls/i],
+    patterns: [/blinded label sheet/i, /reviewer-agreement/i, /30 reviewed clinical-scale assessment/i, /validationCaseId/i, /distinct validation-case/i, /clinician-assigned grade/i, /reference-standard controls/i],
   },
 ];
 
