@@ -7,6 +7,7 @@ import {
   validateClinicalScaleReviewerAgreementReportText,
   validateStatus,
   validateStatusArtifacts,
+  validateThresholdCalibrationReportText,
 } from "../scripts/validation-status-check.mjs";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
@@ -657,12 +658,14 @@ test("validation status artifacts accept documented clinical and calibration rep
 
   assert.equal(result.status.clinicalFacingScoresAllowed, true);
   assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].generatedAt, "2026-06-24T00:00:00.000Z");
   assert.equal(result.artifacts.clinicalAgreementReports[0].distinctClinicalCaseCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(result.artifacts.clinicalAgreementReports[0].minimumUsableMovementCoverageRatio, 0.8);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].comparedAssessmentCount, 30);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].generatedAt, "2026-06-24T00:00:00.000Z");
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].eligibleReviewerPairCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].distinctValidationCaseCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].excludedReviewerPairCount, 0);
@@ -678,6 +681,7 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumHouseBrackmannSeverityBandLabelCount, 10);
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
+  assert.equal(result.artifacts.thresholdCalibrationReports[0].generatedAt, "2026-06-24T00:00:00.000Z");
 });
 
 test("validation status artifacts accept scale-specific clinical availability for a passing primary scale", async () => {
@@ -857,6 +861,37 @@ test("validation status rejects reviewer agreement Wilson bounds that do not mat
   assert.throws(
     () => validateClinicalScaleReviewerAgreementReportText(JSON.stringify(reviewerReport), REVIEWER_AGREEMENT_REPORT_PATH),
     /byScale\.houseBrackmannGrade\.withinToleranceConfidenceInterval\.lower must match Wilson score lower bound for 30\/30/,
+  );
+});
+
+test("validation status rejects clinical agreement artifacts without ISO generated timestamps", () => {
+  const markdownReport = passingClinicalAgreementReport()
+    .replace("Generated: 2026-06-24T00:00:00.000Z", "Generated: June 24, 2026");
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(markdownReport, CLINICAL_AGREEMENT_REPORT_PATH),
+    /Generated must be a UTC ISO timestamp/,
+  );
+
+  const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport({ generatedAt: "June 24, 2026" }));
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(JSON.stringify(structuredReport), STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH),
+    /generatedAt must be a UTC ISO timestamp/,
+  );
+});
+
+test("validation status rejects reviewer and threshold artifacts without ISO generated timestamps", () => {
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.generatedAt = "June 24, 2026";
+  assert.throws(
+    () => validateClinicalScaleReviewerAgreementReportText(JSON.stringify(reviewerReport), REVIEWER_AGREEMENT_REPORT_PATH),
+    /generatedAt must be a UTC ISO timestamp/,
+  );
+
+  const thresholdReport = JSON.parse(passingThresholdReport());
+  thresholdReport.generatedAt = "June 24, 2026";
+  assert.throws(
+    () => validateThresholdCalibrationReportText(JSON.stringify(thresholdReport), THRESHOLD_CALIBRATION_REPORT_PATH),
+    /generatedAt must be a UTC ISO timestamp/,
   );
 });
 

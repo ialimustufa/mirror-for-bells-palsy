@@ -5,6 +5,7 @@ import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js
 
 const DEFAULT_STATUS_PATH = "docs/validation-status.json";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const DEFAULT_MIN_DISTINCT_CLINICAL_CASES = 10;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
@@ -61,6 +62,11 @@ function assertStringArray(value, field) {
   for (const [index, item] of value.entries()) {
     assertCondition(typeof item === "string" && item.length > 0, `${field}[${index}] must be a non-empty string`);
   }
+}
+
+function assertIsoTimestamp(value, field) {
+  assertCondition(typeof value === "string" && ISO_TIMESTAMP_RE.test(value), `${field} must be a UTC ISO timestamp`);
+  assertCondition(!Number.isNaN(Date.parse(value)), `${field} must be a valid UTC ISO timestamp`);
 }
 
 function assertIntegerAtLeast(value, minimum, field) {
@@ -346,6 +352,7 @@ function primaryScaleAgreementRowFromJson(report, artifactPath, scaleKey, scaleL
 function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   assertCondition(report?.kind === "mirror-clinical-scale-agreement-report", `${artifactPath} must be a mirror-clinical-scale-agreement-report`);
   assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
+  assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
   assertCondition(typeof report.status === "string" && report.status.length > 0, `${artifactPath}.status must be present`);
   const standard = report.evidenceStandard ?? report.standard;
   assertCondition(standard && typeof standard === "object", `${artifactPath} must include an evidenceStandard object`);
@@ -427,6 +434,7 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   );
   return {
     path: artifactPath,
+    generatedAt: report.generatedAt,
     status: report.status,
     reviewedClinicalScaleAssessmentCount: summary.reviewedClinicalScaleAssessmentCount,
     distinctClinicalCaseCount: summary.distinctClinicalCaseCount,
@@ -466,6 +474,8 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
     }
   }
   assertTextMatches(text, /# Mirror Clinical Scale Agreement Report/i, artifactPath, "the Mirror clinical-scale agreement report heading");
+  const generatedAt = text.match(/^Generated:\s*([^\s]+)/im)?.[1]?.trim();
+  assertIsoTimestamp(generatedAt, `${artifactPath}.Generated`);
   assertTextMatches(text, /Status:\s*\S+/i, artifactPath, "a clinical-scale readiness status");
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
   assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
@@ -536,6 +546,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   const readyPrimaryScaleCount = integerFromMatch(text, /Ready primary scales:\s*(\d+)\/\d+/i);
   return {
     path: artifactPath,
+    generatedAt,
     status: text.match(/Status:\s*([^\n]+)/i)?.[1]?.trim() ?? null,
     reviewedClinicalScaleAssessmentCount,
     distinctClinicalCaseCount,
@@ -562,12 +573,14 @@ function validateThresholdCalibrationReportText(text, artifactPath) {
     throw new Error(`${artifactPath} must be a JSON threshold calibration report: ${error.message}`);
   }
   assertCondition(report?.kind === "mirror-threshold-calibration-report", `${artifactPath} must be a mirror-threshold-calibration-report`);
+  assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
   assertNonNegativeInteger(report.summary.readyExercises, `${artifactPath}.summary.readyExercises`);
   assertCondition(Array.isArray(report.exercises), `${artifactPath} must include an exercises array`);
   assertTextMatches(report.note ?? "", /reviewed labels/i, artifactPath, "the reviewed-labels calibration note");
   return {
     path: artifactPath,
+    generatedAt: report.generatedAt,
     readyExerciseCount: report.summary.readyExercises,
   };
 }
@@ -581,6 +594,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   }
   assertCondition(report?.kind === "mirror-clinical-scale-reviewer-agreement-report", `${artifactPath} must be a mirror-clinical-scale-reviewer-agreement-report`);
   assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
+  assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
   assertCondition(report.standard && typeof report.standard === "object", `${artifactPath} must include a reviewer agreement standard object`);
   assertCondition(report.standard.minAgreementRate === 0.8, `${artifactPath}.standard.minAgreementRate must be 0.8`);
   assertCondition(
@@ -706,6 +720,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertTextMatches(report.note ?? "", /reference-standard quality check/i, artifactPath, "the reference-standard reviewer-agreement note");
   return {
     path: artifactPath,
+    generatedAt: report.generatedAt,
     reviewerAAssessmentCount: report.summary.reviewerAAssessmentCount,
     reviewerBAssessmentCount: report.summary.reviewerBAssessmentCount,
     comparedAssessmentCount: report.summary.comparedAssessmentCount,
