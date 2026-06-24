@@ -95,12 +95,29 @@ function passingThresholdReport({ readyExercises = 5 } = {}) {
   });
 }
 
-function passingClinicalReviewerAgreementReport({ comparedCount = 30, primaryPairedCount = 30, blockingReasons = [] } = {}) {
+function passingClinicalReviewerAgreementReport({
+  comparedCount = 30,
+  primaryPairedCount = 30,
+  blockingReasons = [],
+  withinToleranceRate = 1,
+  wilsonLower = 0.887,
+} = {}) {
+  const withinToleranceCount = Math.round(primaryPairedCount * withinToleranceRate);
   return JSON.stringify({
     kind: "mirror-clinical-scale-reviewer-agreement-report",
     generatedAt: "2026-06-24T00:00:00.000Z",
     reviewerA: "clinician-a",
     reviewerB: "clinician-b",
+    standard: {
+      minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
+      minPairedLabels: 30,
+      confidenceInterval: {
+        method: "wilson-score",
+        confidenceLevel: 0.95,
+      },
+      primaryScales: ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"],
+    },
     summary: {
       reviewerAAssessmentCount: comparedCount,
       reviewerBAssessmentCount: comparedCount,
@@ -119,11 +136,36 @@ function passingClinicalReviewerAgreementReport({ comparedCount = 30, primaryPai
       reviewerAStaleOrMissingEstimateVersionCount: 0,
       reviewerBStaleOrMissingEstimateVersionCount: 0,
       estimateVersionMismatchCount: 0,
+      readyPrimaryScaleCount: 3,
     },
     byScale: {
-      houseBrackmannGrade: { pairedCount: primaryPairedCount, exactMatchCount: primaryPairedCount, withinToleranceCount: primaryPairedCount },
-      sunnybrookComposite: { pairedCount: primaryPairedCount, exactMatchCount: primaryPairedCount, withinToleranceCount: primaryPairedCount },
-      efaceTotal: { pairedCount: primaryPairedCount, exactMatchCount: primaryPairedCount, withinToleranceCount: primaryPairedCount },
+      houseBrackmannGrade: {
+        pairedCount: primaryPairedCount,
+        exactMatchCount: withinToleranceCount,
+        withinToleranceCount,
+        withinToleranceRate,
+        withinToleranceConfidenceInterval: { method: "wilson-score", confidenceLevel: 0.95, lower: wilsonLower, upper: 1 },
+        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
+        blockingReasons: [],
+      },
+      sunnybrookComposite: {
+        pairedCount: primaryPairedCount,
+        exactMatchCount: withinToleranceCount,
+        withinToleranceCount,
+        withinToleranceRate,
+        withinToleranceConfidenceInterval: { method: "wilson-score", confidenceLevel: 0.95, lower: wilsonLower, upper: 1 },
+        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
+        blockingReasons: [],
+      },
+      efaceTotal: {
+        pairedCount: primaryPairedCount,
+        exactMatchCount: withinToleranceCount,
+        withinToleranceCount,
+        withinToleranceRate,
+        withinToleranceConfidenceInterval: { method: "wilson-score", confidenceLevel: 0.95, lower: wilsonLower, upper: 1 },
+        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
+        blockingReasons: [],
+      },
     },
     estimateVersionMismatches: [],
     reviewerSheetIssues: [],
@@ -205,6 +247,8 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].comparedAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryPairedCount, 30);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementRate, 1);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementWilsonLowerBound, 0.887);
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
 
@@ -259,6 +303,36 @@ test("validation status artifacts reject reviewer agreement reports with metadat
       }),
     }),
     /reviewer-agreement blocking reasons/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with low Wilson reviewer agreement", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport({
+          withinToleranceRate: 0.8,
+          wilsonLower: 0.63,
+        }),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /clinical scale reviewer agreement report artifacts/,
   );
 });
 

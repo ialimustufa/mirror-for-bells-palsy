@@ -1066,8 +1066,12 @@ status update.
 When two clinicians review the same blinded clinical-scale labels, the
 reviewer-agreement command compares the two CSVs before merge. It reports
 per-scale paired counts, exact agreement, tolerance-based agreement, missing
-labels, estimator-version counts, stale/missing estimator-version rows, and
-disagreement rows. It also rejects reviewer rows that are unblinded,
+labels, Wilson 95% confidence intervals, estimator-version counts,
+stale/missing estimator-version rows, and disagreement rows. Each primary scale
+must have at least 30 paired labels, at least 80% observed reviewer agreement,
+and a Wilson lower confidence bound of at least 80% before the reviewer
+agreement artifact can support clinical-facing release. It also rejects reviewer
+rows that are unblinded,
 non-independent, non-clinician, uncertain, copied, rehearsal, incomplete, or
 out-of-range. Missing, stale, or mismatched clinical-scale estimator versions are
 blocking report findings because adjudicated labels must remain tied to the
@@ -1091,8 +1095,10 @@ bounds meeting the configured standard, House-Brackmann case-mix coverage,
 current estimator-version evidence, explicit reference-standard controls, and
 release-control text. Clinical reviewer-agreement report paths must point to JSON
 `mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
-eligible reviewer sheets, no metadata blockers, and at least 30 paired labels on
-each primary scale before clinical-facing clinical-scale support can be enabled.
+eligible reviewer sheets, no metadata blockers, at least 30 paired labels on each
+primary scale, at least 80% observed reviewer agreement, and Wilson lower-bound
+reviewer agreement meeting the configured 80% standard before clinical-facing
+clinical-scale support can be enabled.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

@@ -75,6 +75,9 @@ checks for:
 - Reviewer-agreement reports must also block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
   reviewer rows before adjudication output can support readiness.
+- Reviewer-agreement reports must also show at least 30 paired primary labels,
+  at least 80% observed reviewer agreement, and a 95% Wilson lower bound meeting
+  the configured 80% agreement floor for each primary scale.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced
   clinical-scale agreement reports must have 95% Wilson lower bounds meeting the
   configured 80% agreement floor.

@@ -20,6 +20,10 @@ function assertNonNegativeInteger(value, field) {
   assertCondition(Number.isInteger(value) && value >= 0, `${field} must be a non-negative integer`);
 }
 
+function assertFiniteNumber(value, field) {
+  assertCondition(Number.isFinite(value), `${field} must be a finite number`);
+}
+
 function assertStringArray(value, field) {
   assertCondition(Array.isArray(value), `${field} must be an array`);
   for (const [index, item] of value.entries()) {
@@ -159,6 +163,18 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     throw new Error(`${artifactPath} must be a JSON clinical-scale reviewer-agreement report: ${error.message}`);
   }
   assertCondition(report?.kind === "mirror-clinical-scale-reviewer-agreement-report", `${artifactPath} must be a mirror-clinical-scale-reviewer-agreement-report`);
+  assertCondition(report.standard && typeof report.standard === "object", `${artifactPath} must include a reviewer agreement standard object`);
+  assertCondition(report.standard.minAgreementRate === 0.8, `${artifactPath}.standard.minAgreementRate must be 0.8`);
+  assertCondition(
+    report.standard.minAgreementWilsonLowerBound === DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND,
+    `${artifactPath}.standard.minAgreementWilsonLowerBound must be ${DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND}`,
+  );
+  assertCondition(
+    Number.isInteger(report.standard.minPairedLabels) && report.standard.minPairedLabels >= DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS,
+    `${artifactPath}.standard.minPairedLabels must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
+  );
+  assertCondition(report.standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.standard.confidenceInterval.method must be wilson-score`);
+  assertCondition(report.standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.standard.confidenceInterval.confidenceLevel must be 0.95`);
   assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
   assertNonNegativeInteger(report.summary.reviewerAAssessmentCount, `${artifactPath}.summary.reviewerAAssessmentCount`);
   assertNonNegativeInteger(report.summary.reviewerBAssessmentCount, `${artifactPath}.summary.reviewerBAssessmentCount`);
@@ -183,8 +199,15 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     const scale = report.byScale?.[scaleKey];
     assertCondition(scale && typeof scale === "object", `${artifactPath} must include ${scaleKey} reviewer agreement row`);
     assertNonNegativeInteger(scale.pairedCount, `${artifactPath}.byScale.${scaleKey}.pairedCount`);
+    assertNonNegativeInteger(scale.withinToleranceCount, `${artifactPath}.byScale.${scaleKey}.withinToleranceCount`);
+    assertFiniteNumber(scale.withinToleranceRate, `${artifactPath}.byScale.${scaleKey}.withinToleranceRate`);
+    assertCondition(scale.withinToleranceConfidenceInterval?.method === "wilson-score", `${artifactPath}.byScale.${scaleKey}.withinToleranceConfidenceInterval.method must be wilson-score`);
+    assertFiniteNumber(scale.withinToleranceConfidenceInterval?.lower, `${artifactPath}.byScale.${scaleKey}.withinToleranceConfidenceInterval.lower`);
+    assertFiniteNumber(scale.withinToleranceConfidenceInterval?.upper, `${artifactPath}.byScale.${scaleKey}.withinToleranceConfidenceInterval.upper`);
     return scale.pairedCount;
   });
+  const primaryAgreementRates = PRIMARY_CLINICAL_REVIEW_SCALE_KEYS.map((scaleKey) => report.byScale?.[scaleKey]?.withinToleranceRate ?? 0);
+  const primaryAgreementWilsonLowerBounds = PRIMARY_CLINICAL_REVIEW_SCALE_KEYS.map((scaleKey) => report.byScale?.[scaleKey]?.withinToleranceConfidenceInterval?.lower ?? 0);
   assertTextMatches(report.note ?? "", /reference-standard quality check/i, artifactPath, "the reference-standard reviewer-agreement note");
   return {
     path: artifactPath,
@@ -200,6 +223,8 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     estimateVersionMismatchCount: report.summary.estimateVersionMismatchCount,
     requiredClinicalScaleEstimateVersion: report.summary.requiredClinicalScaleEstimateVersion,
     minimumPrimaryPairedCount: Math.min(...primaryPairedCounts),
+    minimumPrimaryAgreementRate: Math.min(...primaryAgreementRates),
+    minimumPrimaryAgreementWilsonLowerBound: Math.min(...primaryAgreementWilsonLowerBounds),
   };
 }
 
@@ -307,10 +332,12 @@ async function validateStatusArtifacts(status, options = {}) {
       && (report.reviewerBStaleOrMissingEstimateVersionCount ?? 0) === 0
       && (report.estimateVersionMismatchCount ?? 0) === 0
       && (report.minimumPrimaryPairedCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.minimumPrimaryAgreementRate ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementRate
+      && (report.minimumPrimaryAgreementWilsonLowerBound ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
     ));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document current-version, blinded independent reviewer sheets with paired primary labels meeting the minimum reviewed-assessment floor and no reviewer metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document current-version, blinded independent reviewer sheets with paired primary labels, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no reviewer metadata blockers",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

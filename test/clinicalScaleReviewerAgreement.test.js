@@ -59,6 +59,9 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.comparedAssessmentCount, 4);
   assert.equal(report.summary.adjudicationRequiredCount, 4);
   assert.equal(report.summary.requiredClinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.standard.minAgreementRate, 0.8);
+  assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
+  assert.deepEqual(report.standard.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
   assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
   assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 0);
@@ -72,10 +75,35 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.byScale.houseBrackmannGrade.exactMatchCount, 1);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceCount, 1);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceRate, 0.5);
+  assert.equal(report.byScale.houseBrackmannGrade.meetsMinimumStandard, false);
+  assert.equal(report.byScale.houseBrackmannGrade.withinToleranceConfidenceInterval.method, "wilson-score");
   assert.equal(report.byScale.sunnybrookComposite.withinToleranceCount, 1);
   assert.equal(report.byScale.sunnybrookComposite.missingReviewerBCount, 1);
   assert.equal(report.byScale.efaceStatic.pairedCount, 1);
+  assert.equal(report.summary.readyPrimaryScaleCount, 0);
+  assert.match(report.blockingReasons.join("\n"), /Wilson lower bound/);
   assert.match(report.adjudicationRows.find((row) => row.assessmentId === "assessment-2:clinical-scale").disagreementSummary, /outside tolerance/);
+});
+
+test("clinical-scale reviewer agreement passes only with enough high-confidence paired agreement", () => {
+  const rows = Array.from({ length: 30 }, (_, index) => ({
+    assessmentId: `assessment-${index + 1}:clinical-scale`,
+    houseBrackmannGrade: index % 3 === 0 ? "II" : index % 3 === 1 ? "III" : "V",
+    sunnybrookComposite: index % 3 === 0 ? 88 : index % 3 === 1 ? 72 : 48,
+    efaceTotal: index % 3 === 0 ? 86 : index % 3 === 1 ? 70 : 51,
+  }));
+
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.comparedAssessmentCount, 30);
+  assert.equal(report.summary.readyPrimaryScaleCount, 3);
+  assert.equal(report.byScale.houseBrackmannGrade.withinToleranceRate, 1);
+  assert.ok(report.byScale.houseBrackmannGrade.withinToleranceConfidenceInterval.lower >= 0.8);
+  assert.equal(report.byScale.sunnybrookComposite.meetsMinimumStandard, true);
+  assert.equal(report.byScale.efaceTotal.meetsMinimumStandard, true);
+  assert.deepEqual(report.blockingReasons, []);
 });
 
 test("clinical-scale adjudication CSV preserves raw reviewer labels and can be merged after adjudication", () => {

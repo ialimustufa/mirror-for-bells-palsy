@@ -163,10 +163,13 @@ If multiple reviewers label the same assessment:
 
 The reviewer-agreement report uses the same tolerance targets as the clinical
 validation gate: House-Brackmann within one grade, Sunnybrook composite within
-10 points, and eFACE totals/domains within 10 points. It also reports reviewer
-sheet metadata issues before any adjudicated row can be merged. The adjudication
-sheet keeps both raw reviewer values and raw estimator versions in audit columns
-and leaves the mergeable target columns blank until a consensus label is entered.
+10 points, and eFACE totals/domains within 10 points. Each primary reviewer
+agreement row must have at least 30 paired labels, at least 80% observed
+tolerance-based agreement, and a Wilson 95% lower confidence bound of at least
+80%. It also reports reviewer sheet metadata issues before any adjudicated row
+can be merged. The adjudication sheet keeps both raw reviewer values and raw
+estimator versions in audit columns and leaves the mergeable target columns blank
+until a consensus label is entered.
 
 ## Required Artifacts Before Enabling Clinical-Facing Scores
 
@@ -179,7 +182,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - A clinical-scale reviewer-agreement report from
   `npm run validation:reviewer-agreement` showing current-version, blinded,
   independent clinician sheets with at least 30 paired primary-scale labels and
-  no reviewer-sheet metadata blockers.
+  at least 80% observed and Wilson lower-bound reviewer agreement on each
+  primary scale, with no reviewer-sheet metadata blockers.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
@@ -199,7 +203,8 @@ status, all three primary scale rows, Wilson lower-bound agreement meeting the
 minimum, explicit reference-standard controls, an eligible blinded independent
 label count meeting the minimum reviewed-assessment floor, a House-Brackmann
 case-mix section meeting the severity-band minimum, current estimator-version
-evidence, a reviewer-agreement artifact meeting the paired-label floor, and
+evidence, a reviewer-agreement artifact meeting the paired-label floor plus the
+observed-agreement and Wilson lower-bound reviewer-agreement gates, and
 release-control text. A status update that only changes counts or report paths
 without matching artifacts must fail the release check.
 

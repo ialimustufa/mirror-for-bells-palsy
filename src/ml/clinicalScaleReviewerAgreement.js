@@ -9,6 +9,17 @@ const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estima
 const BLINDED_LABEL_SHEET_PATTERN = /^(blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
 const INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN = /\b(clinician[-\s]?assigned|clinician|independent|reference[-\s]?standard)\b/i;
 const NON_INDEPENDENT_LABEL_SOURCE_PATTERN = /\b(mirror|estimate|algorithm|model|app|copied|auto|automated|self|patient|caregiver|demo|test|rehearsal|practice|unblinded)\b/i;
+const DEFAULT_REVIEWER_AGREEMENT_STANDARD = Object.freeze({
+  minAgreementRate: 0.8,
+  minAgreementWilsonLowerBound: 0.8,
+  minPairedLabels: 30,
+  confidenceLevel: 0.95,
+});
+const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
+  0.9: 1.6448536269514722,
+  0.95: 1.959963984540054,
+  0.99: 2.5758293035489004,
+});
 
 const REVIEW_SCALE_CONFIG = Object.freeze({
   houseBrackmannGrade: {
@@ -126,6 +137,26 @@ function compactRate(numerator, denominator) {
 
 function compactNumber(value, digits = 2) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function zScoreForConfidenceLevel(confidenceLevel) {
+  return WILSON_Z_BY_CONFIDENCE_LEVEL[confidenceLevel] ?? WILSON_Z_BY_CONFIDENCE_LEVEL[DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel];
+}
+
+function wilsonScoreInterval(successes, total, confidenceLevel = DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel) {
+  if (!Number.isFinite(successes) || !Number.isFinite(total) || total <= 0) return null;
+  const z = zScoreForConfidenceLevel(confidenceLevel);
+  const phat = successes / total;
+  const z2 = z * z;
+  const denominator = 1 + z2 / total;
+  const center = (phat + z2 / (2 * total)) / denominator;
+  const margin = (z / denominator) * Math.sqrt((phat * (1 - phat) / total) + (z2 / (4 * total * total)));
+  return {
+    method: "wilson-score",
+    confidenceLevel,
+    lower: compactNumber(Math.max(0, center - margin), 4),
+    upper: compactNumber(Math.min(1, center + margin), 4),
+  };
 }
 
 function clinicalScaleEstimateVersion(row = {}) {
@@ -281,10 +312,24 @@ function updateScaleAccumulator(accumulator, assessmentId, reviewerAValue, revie
   }
 }
 
-function summarizeScale(accumulator) {
+function summarizeScale(accumulator, options = {}) {
+  const minAgreementRate = options.minAgreementRate ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementRate;
+  const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementWilsonLowerBound;
+  const minPairedLabels = Math.max(1, Math.round(options.minPairedLabels ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minPairedLabels));
+  const confidenceLevel = options.confidenceLevel ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel;
   const meanAbsDelta = accumulator.absoluteDeltas.length
     ? accumulator.absoluteDeltas.reduce((sum, value) => sum + value, 0) / accumulator.absoluteDeltas.length
     : null;
+  const withinToleranceRate = compactRate(accumulator.withinToleranceCount, accumulator.pairedCount);
+  const confidenceInterval = wilsonScoreInterval(accumulator.withinToleranceCount, accumulator.pairedCount, confidenceLevel);
+  const blockingReasons = [];
+  if (accumulator.pairedCount < minPairedLabels) blockingReasons.push(`needs at least ${minPairedLabels} paired reviewer labels`);
+  if (withinToleranceRate == null || withinToleranceRate < minAgreementRate) {
+    blockingReasons.push(`needs at least ${Math.round(minAgreementRate * 100)}% ${accumulator.agreementLabel}`);
+  }
+  if (confidenceInterval?.lower == null || confidenceInterval.lower < minAgreementWilsonLowerBound) {
+    blockingReasons.push(`needs ${Math.round(confidenceLevel * 100)}% Wilson lower bound at least ${Math.round(minAgreementWilsonLowerBound * 100)}% for ${accumulator.agreementLabel}`);
+  }
   return {
     scale: accumulator.scale,
     label: accumulator.label,
@@ -296,8 +341,11 @@ function summarizeScale(accumulator) {
     exactMatchCount: accumulator.exactMatchCount,
     withinToleranceCount: accumulator.withinToleranceCount,
     exactAgreementRate: compactRate(accumulator.exactMatchCount, accumulator.pairedCount),
-    withinToleranceRate: compactRate(accumulator.withinToleranceCount, accumulator.pairedCount),
+    withinToleranceRate,
+    withinToleranceConfidenceInterval: confidenceInterval,
     meanAbsDelta: compactNumber(meanAbsDelta, 2),
+    meetsMinimumStandard: blockingReasons.length === 0,
+    blockingReasons,
     disagreementCount: accumulator.disagreements.length,
     disagreements: accumulator.disagreements.slice(0, 20),
   };
@@ -384,6 +432,11 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const reviewerAById = reviewerRowsByAssessmentId(reviewerACsv);
   const reviewerBById = reviewerRowsByAssessmentId(reviewerBCsv);
   const requiredClinicalScaleEstimateVersion = options.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION;
+  const minAgreementRate = options.minAgreementRate ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementRate;
+  const minAgreementWilsonLowerBound = options.minAgreementWilsonLowerBound ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minAgreementWilsonLowerBound;
+  const minPairedLabels = Math.max(1, Math.round(options.minPairedLabels ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minPairedLabels));
+  const confidenceLevel = options.confidenceLevel ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.confidenceLevel;
+  const agreementOptions = { minAgreementRate, minAgreementWilsonLowerBound, minPairedLabels, confidenceLevel };
   const assessmentIds = [...new Set([...reviewerAById.keys(), ...reviewerBById.keys()])].sort();
   const accumulators = Object.fromEntries(REVIEW_SCALE_KEYS.map((scaleKey) => [scaleKey, createScaleAccumulator(scaleKey)]));
   const adjudicationRows = [];
@@ -403,7 +456,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     }
     if (needsAdjudication(reviewerA, reviewerB)) adjudicationRows.push(adjudicationRow(assessmentId, reviewerA, reviewerB));
   }
-  const byScale = Object.fromEntries(Object.entries(accumulators).map(([scaleKey, accumulator]) => [scaleKey, summarizeScale(accumulator)]));
+  const byScale = Object.fromEntries(Object.entries(accumulators).map(([scaleKey, accumulator]) => [scaleKey, summarizeScale(accumulator, agreementOptions)]));
   const primaryScaleSummaries = PRIMARY_REVIEW_SCALE_KEYS.map((scaleKey) => byScale[scaleKey]);
   const reviewerAEstimateVersionCounts = estimateVersionCounts(reviewerAById);
   const reviewerBEstimateVersionCounts = estimateVersionCounts(reviewerBById);
@@ -429,13 +482,23 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     blockingReasons.push(`clinicalScaleEstimateVersion: reviewer sheets disagree for ${estimateVersionMismatches.length} assessment labels`);
   }
   for (const scale of primaryScaleSummaries) {
-    if (scale.pairedCount === 0) blockingReasons.push(`${scale.scale}: no paired reviewer labels`);
+    if (!scale.meetsMinimumStandard) blockingReasons.push(`${scale.scale}: ${scale.blockingReasons.join("; ")}`);
   }
   return {
     kind: "mirror-clinical-scale-reviewer-agreement-report",
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     reviewerA: options.reviewerA ?? "reviewer-a",
     reviewerB: options.reviewerB ?? "reviewer-b",
+    standard: {
+      minAgreementRate,
+      minAgreementWilsonLowerBound,
+      minPairedLabels,
+      confidenceInterval: {
+        method: "wilson-score",
+        confidenceLevel,
+      },
+      primaryScales: PRIMARY_REVIEW_SCALE_KEYS,
+    },
     summary: {
       reviewerAAssessmentCount: reviewerAById.size,
       reviewerBAssessmentCount: reviewerBById.size,
@@ -454,6 +517,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerAStaleOrMissingEstimateVersionCount,
       reviewerBStaleOrMissingEstimateVersionCount,
       estimateVersionMismatchCount: estimateVersionMismatches.length,
+      readyPrimaryScaleCount: primaryScaleSummaries.filter((scale) => scale.meetsMinimumStandard).length,
     },
     byScale,
     estimateVersionMismatches,
@@ -477,6 +541,7 @@ function createClinicalScaleAdjudicationCsv(report) {
 
 export {
   ADJUDICATION_COLUMNS,
+  DEFAULT_REVIEWER_AGREEMENT_STANDARD,
   PRIMARY_REVIEW_SCALE_KEYS,
   REVIEW_SCALE_CONFIG,
   REVIEW_SCALE_KEYS,
