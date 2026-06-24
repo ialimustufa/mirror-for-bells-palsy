@@ -126,6 +126,10 @@ current clinical-scale estimator version, and the
 `sourceLabelSheetMode`/`reviewBlinded`/estimator `version`/`labelSource`
 controls before a clinical agreement artifact can support clinical-facing score
 availability.
+Clinical-facing availability also requires a reviewer-agreement JSON artifact in
+`clinicalScaleReviewerAgreementReports` showing current-version, blinded,
+independent clinician sheets with paired primary-scale labels meeting the same
+reviewed-assessment floor and no reviewer-sheet metadata blockers.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

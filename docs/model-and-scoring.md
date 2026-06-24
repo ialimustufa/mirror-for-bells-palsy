@@ -1089,7 +1089,11 @@ with the Mirror clinical-scale agreement heading, a passing confidence-standard
 status, primary House-Brackmann/Sunnybrook/eFACE rows, primary Wilson lower
 bounds meeting the configured standard, House-Brackmann case-mix coverage,
 current estimator-version evidence, explicit reference-standard controls, and
-release-control text. Threshold calibration report paths must point to JSON
+release-control text. Clinical reviewer-agreement report paths must point to JSON
+`mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
+eligible reviewer sheets, no metadata blockers, and at least 30 paired labels on
+each primary scale before clinical-facing clinical-scale support can be enabled.
+Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.
 

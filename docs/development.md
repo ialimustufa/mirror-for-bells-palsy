@@ -66,6 +66,9 @@ checks for:
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, and an eligible blinded
   independent label count meeting the minimum reviewed-assessment floor.
+- `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
+  `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
+  support can be enabled.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version provenance for each reviewer sheet; stale, missing, or mismatched
   versions are release blockers until adjudicated from current-version evidence.

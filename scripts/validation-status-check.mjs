@@ -8,6 +8,7 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
 const PRIMARY_CLINICAL_SCALE_COUNT = 3;
+const PRIMARY_CLINICAL_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 const DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
 const DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND = 3;
 
@@ -150,6 +151,58 @@ function validateThresholdCalibrationReportText(text, artifactPath) {
   };
 }
 
+function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
+  let report;
+  try {
+    report = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${artifactPath} must be a JSON clinical-scale reviewer-agreement report: ${error.message}`);
+  }
+  assertCondition(report?.kind === "mirror-clinical-scale-reviewer-agreement-report", `${artifactPath} must be a mirror-clinical-scale-reviewer-agreement-report`);
+  assertCondition(report.summary && typeof report.summary === "object", `${artifactPath} must include a summary object`);
+  assertNonNegativeInteger(report.summary.reviewerAAssessmentCount, `${artifactPath}.summary.reviewerAAssessmentCount`);
+  assertNonNegativeInteger(report.summary.reviewerBAssessmentCount, `${artifactPath}.summary.reviewerBAssessmentCount`);
+  assertNonNegativeInteger(report.summary.comparedAssessmentCount, `${artifactPath}.summary.comparedAssessmentCount`);
+  assertNonNegativeInteger(report.summary.reviewerAEligibleAssessmentCount, `${artifactPath}.summary.reviewerAEligibleAssessmentCount`);
+  assertNonNegativeInteger(report.summary.reviewerBEligibleAssessmentCount, `${artifactPath}.summary.reviewerBEligibleAssessmentCount`);
+  assertNonNegativeInteger(report.summary.reviewerAIneligibleAssessmentCount, `${artifactPath}.summary.reviewerAIneligibleAssessmentCount`);
+  assertNonNegativeInteger(report.summary.reviewerBIneligibleAssessmentCount, `${artifactPath}.summary.reviewerBIneligibleAssessmentCount`);
+  assertNonNegativeInteger(report.summary.reviewerAStaleOrMissingEstimateVersionCount, `${artifactPath}.summary.reviewerAStaleOrMissingEstimateVersionCount`);
+  assertNonNegativeInteger(report.summary.reviewerBStaleOrMissingEstimateVersionCount, `${artifactPath}.summary.reviewerBStaleOrMissingEstimateVersionCount`);
+  assertNonNegativeInteger(report.summary.estimateVersionMismatchCount, `${artifactPath}.summary.estimateVersionMismatchCount`);
+  assertCondition(
+    report.summary.requiredClinicalScaleEstimateVersion === CLINICAL_SCALE_ESTIMATE_VERSION,
+    `${artifactPath}.summary.requiredClinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
+  );
+  assertCondition(Array.isArray(report.blockingReasons), `${artifactPath} must include blockingReasons array`);
+  assertCondition(report.blockingReasons.length === 0, `${artifactPath} must have no reviewer-agreement blocking reasons`);
+  assertCondition(Array.isArray(report.reviewerSheetIssues), `${artifactPath} must include reviewerSheetIssues array`);
+  assertCondition(report.reviewerSheetIssues.length === 0, `${artifactPath} must have no reviewer-sheet metadata issues`);
+  assertCondition(report.byScale && typeof report.byScale === "object", `${artifactPath} must include byScale reviewer agreement results`);
+  const primaryPairedCounts = PRIMARY_CLINICAL_REVIEW_SCALE_KEYS.map((scaleKey) => {
+    const scale = report.byScale?.[scaleKey];
+    assertCondition(scale && typeof scale === "object", `${artifactPath} must include ${scaleKey} reviewer agreement row`);
+    assertNonNegativeInteger(scale.pairedCount, `${artifactPath}.byScale.${scaleKey}.pairedCount`);
+    return scale.pairedCount;
+  });
+  assertTextMatches(report.note ?? "", /reference-standard quality check/i, artifactPath, "the reference-standard reviewer-agreement note");
+  return {
+    path: artifactPath,
+    reviewerAAssessmentCount: report.summary.reviewerAAssessmentCount,
+    reviewerBAssessmentCount: report.summary.reviewerBAssessmentCount,
+    comparedAssessmentCount: report.summary.comparedAssessmentCount,
+    reviewerAEligibleAssessmentCount: report.summary.reviewerAEligibleAssessmentCount,
+    reviewerBEligibleAssessmentCount: report.summary.reviewerBEligibleAssessmentCount,
+    reviewerAIneligibleAssessmentCount: report.summary.reviewerAIneligibleAssessmentCount,
+    reviewerBIneligibleAssessmentCount: report.summary.reviewerBIneligibleAssessmentCount,
+    reviewerAStaleOrMissingEstimateVersionCount: report.summary.reviewerAStaleOrMissingEstimateVersionCount,
+    reviewerBStaleOrMissingEstimateVersionCount: report.summary.reviewerBStaleOrMissingEstimateVersionCount,
+    estimateVersionMismatchCount: report.summary.estimateVersionMismatchCount,
+    requiredClinicalScaleEstimateVersion: report.summary.requiredClinicalScaleEstimateVersion,
+    minimumPrimaryPairedCount: Math.min(...primaryPairedCounts),
+  };
+}
+
 async function readArtifactText(path, options = {}) {
   if (options.readArtifactText) return options.readArtifactText(path);
   try {
@@ -170,6 +223,7 @@ function validateStatus(status) {
   assertNonNegativeInteger(status.readyExerciseCount, "readyExerciseCount");
   assertClinicalScaleMinimumStandard(status.clinicalScaleMinimumStandard);
   assertStringArray(status.clinicalScaleAgreementReports, "clinicalScaleAgreementReports");
+  assertStringArray(status.clinicalScaleReviewerAgreementReports, "clinicalScaleReviewerAgreementReports");
   assertStringArray(status.thresholdCalibrationReports, "thresholdCalibrationReports");
   if (status.notes !== undefined) assertStringArray(status.notes, "notes");
   assertCondition(typeof status.productionThresholdConstantsCalibrated === "boolean", "productionThresholdConstantsCalibrated must be boolean");
@@ -188,6 +242,13 @@ function validateStatus(status) {
       "clinical scale agreement reports require reviewed clinical-scale assessment coverage meeting the minimum standard",
     );
   }
+  if (status.clinicalScaleReviewerAgreementReports.length > 0) {
+    assertCondition(status.reviewedDatasetCount > 0, "clinical scale reviewer agreement reports require reviewed datasets");
+    assertCondition(
+      status.reviewedClinicalScaleAssessmentCount >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
+      "clinical scale reviewer agreement reports require reviewed clinical-scale assessment coverage meeting the minimum standard",
+    );
+  }
   if (status.clinicalFacingScoresAllowed) {
     assertCondition(status.productionThresholdConstantsCalibrated, "clinical-facing scores require calibrated production thresholds");
     assertCondition(status.reviewedFrameCount > 0, "clinical-facing scores require reviewed frame coverage");
@@ -196,6 +257,7 @@ function validateStatus(status) {
       "clinical-facing scores require reviewed clinical-scale assessment coverage meeting the minimum standard",
     );
     assertCondition(status.clinicalScaleAgreementReports.length > 0, "clinical-facing scores require clinical scale agreement reports");
+    assertCondition(status.clinicalScaleReviewerAgreementReports.length > 0, "clinical-facing scores require clinical scale reviewer agreement reports");
   }
   return status;
 }
@@ -206,6 +268,11 @@ async function validateStatusArtifacts(status, options = {}) {
   for (const artifactPath of status.clinicalScaleAgreementReports) {
     const text = await readArtifactText(artifactPath, options);
     clinicalAgreementReports.push(validateClinicalScaleAgreementReportText(text, artifactPath));
+  }
+  const clinicalReviewerAgreementReports = [];
+  for (const artifactPath of status.clinicalScaleReviewerAgreementReports) {
+    const text = await readArtifactText(artifactPath, options);
+    clinicalReviewerAgreementReports.push(validateClinicalScaleReviewerAgreementReportText(text, artifactPath));
   }
   const thresholdCalibrationReports = [];
   for (const artifactPath of status.thresholdCalibrationReports) {
@@ -228,6 +295,24 @@ async function validateStatusArtifacts(status, options = {}) {
       "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, current estimator version, 80% Wilson lower-bound agreement, House-Brackmann severity-band case mix, and 3/3 ready primary scales meeting the minimum standard",
     );
   }
+  if (status.clinicalScaleReviewerAgreementReports.length > 0) {
+    const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => (
+      report.requiredClinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
+      && (report.comparedAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.reviewerAEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.reviewerBEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (report.reviewerAIneligibleAssessmentCount ?? 0) === 0
+      && (report.reviewerBIneligibleAssessmentCount ?? 0) === 0
+      && (report.reviewerAStaleOrMissingEstimateVersionCount ?? 0) === 0
+      && (report.reviewerBStaleOrMissingEstimateVersionCount ?? 0) === 0
+      && (report.estimateVersionMismatchCount ?? 0) === 0
+      && (report.minimumPrimaryPairedCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    ));
+    assertCondition(
+      reviewerReportMeetingMinimum,
+      "clinical scale reviewer agreement report artifacts must document current-version, blinded independent reviewer sheets with paired primary labels meeting the minimum reviewed-assessment floor and no reviewer metadata blockers",
+    );
+  }
   if (status.productionThresholdConstantsCalibrated) {
     const readyExerciseCount = thresholdCalibrationReports.reduce((sum, report) => sum + report.readyExerciseCount, 0);
     assertCondition(
@@ -239,6 +324,7 @@ async function validateStatusArtifacts(status, options = {}) {
     status,
     artifacts: {
       clinicalAgreementReports,
+      clinicalReviewerAgreementReports,
       thresholdCalibrationReports,
     },
   };
@@ -257,6 +343,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
 export {
   validateClinicalScaleAgreementReportText,
+  validateClinicalScaleReviewerAgreementReportText,
   validateStatus,
   validateStatusArtifacts,
   validateStatusFile,

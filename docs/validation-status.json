@@ -17,6 +17,7 @@
     "reviewProtocol": "docs/clinical-scale-review-protocol.md"
   },
   "clinicalScaleAgreementReports": [],
+  "clinicalScaleReviewerAgreementReports": [],
   "thresholdCalibrationReports": [],
   "productionThresholdConstantsCalibrated": false,
   "clinicalFacingScoresAllowed": false,
