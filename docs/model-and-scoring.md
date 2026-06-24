@@ -1109,7 +1109,11 @@ It currently records that validation tooling exists but no clinician-reviewed da
 is committed, production thresholds are not clinically calibrated, and clinical-facing
 scores are not allowed. The app and printable report copy read this status through
 `src/domain/clinicalScalePresentation.js`, so clinical-facing wording cannot be
-enabled by changing only a UI component.
+enabled by changing only a UI component. The runtime policy also requires the
+same high-level status evidence as the release gate: reviewed dataset and frame
+counts, reviewed clinical-scale assessment coverage, calibration reports,
+clinical agreement reports, reviewer-agreement reports, calibrated thresholds,
+and the explicit `clinicalFacingScoresAllowed` flag.
 
 `npm run validation:status` validates both the status JSON and any referenced
 report artifacts. Clinical agreement report paths must point to Markdown reports

@@ -2,11 +2,32 @@ import validationStatus from "../../docs/validation-status.json" with { type: "j
 
 const DEFAULT_VALIDATION_STATUS = Object.freeze(validationStatus);
 
+function clinicalFacingStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
+  const standard = status?.clinicalScaleMinimumStandard ?? {};
+  const minReviewedAssessments = Number.isInteger(standard.minReviewedAssessments)
+    ? standard.minReviewedAssessments
+    : 30;
+  return Boolean(
+    status?.clinicalFacingScoresAllowed === true
+      && status?.productionThresholdConstantsCalibrated === true
+      && Number(status?.reviewedDatasetCount) > 0
+      && Number(status?.reviewedFrameCount) > 0
+      && Number(status?.reviewedClinicalScaleAssessmentCount) >= minReviewedAssessments
+      && Array.isArray(status?.clinicalScaleAgreementReports)
+      && status.clinicalScaleAgreementReports.length > 0
+      && Array.isArray(status?.clinicalScaleReviewerAgreementReports)
+      && status.clinicalScaleReviewerAgreementReports.length > 0
+      && Array.isArray(status?.thresholdCalibrationReports)
+      && status.thresholdCalibrationReports.length > 0
+  );
+}
+
 function clinicalScalePresentationPolicy(status = DEFAULT_VALIDATION_STATUS) {
-  const clinicalFacingScoresAllowed = status?.clinicalFacingScoresAllowed === true;
+  const clinicalFacingScoresAllowed = clinicalFacingStatusEligible(status);
   return {
     validationStatus: status?.status ?? null,
     clinicalFacingScoresAllowed,
+    requestedClinicalFacingScoresAllowed: status?.clinicalFacingScoresAllowed === true,
     mode: clinicalFacingScoresAllowed ? "clinical-facing-supported" : "mirror-estimate",
     panelTitle: clinicalFacingScoresAllowed ? "Clinical scale support" : "Clinical scale estimates",
     availableLabel: clinicalFacingScoresAllowed ? "Validated support values available" : "Assessment-grade estimates available",
@@ -29,4 +50,4 @@ function clinicalScalePresentationPolicy(status = DEFAULT_VALIDATION_STATUS) {
   };
 }
 
-export { DEFAULT_VALIDATION_STATUS, clinicalScalePresentationPolicy };
+export { DEFAULT_VALIDATION_STATUS, clinicalFacingStatusEligible, clinicalScalePresentationPolicy };

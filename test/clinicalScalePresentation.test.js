@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import validationStatus from "../docs/validation-status.json" with { type: "json" };
-import { clinicalScalePresentationPolicy, DEFAULT_VALIDATION_STATUS } from "../src/domain/clinicalScalePresentation.js";
+import { clinicalFacingStatusEligible, clinicalScalePresentationPolicy, DEFAULT_VALIDATION_STATUS } from "../src/domain/clinicalScalePresentation.js";
 import { buildSessionReportHtml, clinicalScaleEstimateRows } from "../src/reports/sessionReport.js";
 
 const RESTING_METRICS = {
@@ -27,21 +27,48 @@ function movementScore(exerciseId, ratio) {
 test("clinical scale presentation policy defaults to the repo validation status", () => {
   assert.equal(DEFAULT_VALIDATION_STATUS.clinicalFacingScoresAllowed, validationStatus.clinicalFacingScoresAllowed);
   assert.equal(validationStatus.clinicalFacingScoresAllowed, false);
+  assert.equal(clinicalFacingStatusEligible(), false);
 
   const policy = clinicalScalePresentationPolicy();
 
   assert.equal(policy.mode, "mirror-estimate");
+  assert.equal(policy.requestedClinicalFacingScoresAllowed, false);
   assert.equal(policy.badgeLabel, "Estimate");
   assert.match(policy.shortNotice, /not clinician-assigned/);
   assert.match(policy.reportNotice, /not clinician-assigned or validated clinical grades/);
 });
 
-test("clinical scale presentation policy switches copy only when clinical-facing scores are allowed", () => {
+test("clinical scale presentation policy does not switch copy for a boolean-only status change", () => {
   const policy = clinicalScalePresentationPolicy({
     status: "validated-clinical-scale-support",
     clinicalFacingScoresAllowed: true,
   });
 
+  assert.equal(policy.requestedClinicalFacingScoresAllowed, true);
+  assert.equal(policy.clinicalFacingScoresAllowed, false);
+  assert.equal(policy.mode, "mirror-estimate");
+  assert.equal(policy.badgeLabel, "Estimate");
+  assert.match(policy.shortNotice, /not clinician-assigned/);
+});
+
+test("clinical scale presentation policy switches copy only with complete release status evidence", () => {
+  const status = {
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleMinimumStandard: {
+      minReviewedAssessments: 30,
+    },
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+  const policy = clinicalScalePresentationPolicy(status);
+
+  assert.equal(clinicalFacingStatusEligible(status), true);
   assert.equal(policy.mode, "clinical-facing-supported");
   assert.equal(policy.badgeLabel, "Validated");
   assert.equal(policy.scaleNoun, "support value");
@@ -83,7 +110,17 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(rows[1], /Sunnybrook estimate/);
   assert.match(rows.join(" "), /Evidence tier: Complete standard-assessment evidence/);
 
-  const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({ clinicalFacingScoresAllowed: true }));
+  const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleMinimumStandard: { minReviewedAssessments: 30 },
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  }));
   assert.match(supportedRows[0], /House-Brackmann support value/);
 
   const html = buildSessionReportHtml({
