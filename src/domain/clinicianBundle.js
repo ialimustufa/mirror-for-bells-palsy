@@ -247,7 +247,7 @@ function buildClinicianBundleRecords(source = {}, options = {}) {
       containsFrameSamples: frameSamples.length > 0,
     },
     sections: ["assessmentTrend", "assessmentComparison", "session", "journal", "image", "frameSample"],
-    note: "Mirror practice metrics are not validated clinical grades. Share only by explicit user export.",
+    note: "Mirror practice metrics are self-tracking feedback, not clinician-assigned clinical grades. Share only by explicit user export.",
   };
 
   const records = [manifest];

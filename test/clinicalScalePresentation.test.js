@@ -126,8 +126,9 @@ test("clinical scale presentation policy defaults to the repo validation status"
   assert.equal(policy.primaryClinicalScaleSupportCount, 0);
   assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
   assert.equal(policy.badgeLabel, "Estimate");
+  assert.equal(policy.panelTitle, "Scale-inspired estimates");
   assert.match(policy.shortNotice, /not clinician-assigned/);
-  assert.match(policy.reportNotice, /not clinician-assigned or validated clinical grades/);
+  assert.match(policy.reportNotice, /self-tracking only/);
 });
 
 test("clinical scale presentation policy does not switch copy for a boolean-only status change", () => {
@@ -143,7 +144,7 @@ test("clinical scale presentation policy does not switch copy for a boolean-only
   assert.match(policy.shortNotice, /not clinician-assigned/);
 });
 
-test("clinical scale presentation policy switches copy only with complete release status evidence", () => {
+test("clinical scale presentation policy stays estimate-only with complete future evidence", () => {
   const status = {
     schemaVersion: 1,
     updatedAt: "2026-06-24",
@@ -165,16 +166,18 @@ test("clinical scale presentation policy switches copy only with complete releas
   };
   const policy = clinicalScalePresentationPolicy(status);
 
-  assert.equal(clinicalFacingStatusEligible(status), true);
-  assert.equal(policy.mode, "clinical-facing-supported");
+  assert.equal(clinicalFacingStatusEligible(status), false);
+  assert.equal(policy.mode, "mirror-estimate");
+  assert.equal(policy.clinicalFacingScoresAllowed, false);
   assert.equal(policy.validationReleaseStatusEligible, true);
   assert.equal(policy.validationReleaseEvidenceEligible, true);
   assert.equal(policy.validationStandardEligible, true);
   assert.equal(policy.scaleAvailability.houseBrackmann.availabilityEvidenceEligible, true);
-  assert.equal(policy.badgeLabel, "Validated");
-  assert.equal(policy.scaleNoun, "support value");
-  assert.match(policy.shortNotice, /validation gate/);
-  assert.match(policy.reportNotice, /clinician interpretation/);
+  assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
+  assert.equal(policy.badgeLabel, "Estimate");
+  assert.equal(policy.scaleNoun, "self-tracking estimate");
+  assert.match(policy.shortNotice, /scale-inspired/);
+  assert.match(policy.reportNotice, /not clinician-assigned grades/);
 });
 
 test("clinical scale presentation policy fails closed for enabled scales without per-scale evidence", () => {
@@ -201,15 +204,16 @@ test("clinical scale presentation policy fails closed for enabled scales without
     }));
     const policy = clinicalScalePresentationPolicy(status);
 
-    assert.equal(clinicalFacingStatusEligible(status), true);
+    assert.equal(clinicalFacingStatusEligible(status), false);
     assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
     assert.equal(clinicalScaleAvailabilityEvidenceEligible(status, "houseBrackmann"), false);
     assert.match(clinicalScaleAvailabilityEvidenceBlockers(status, "houseBrackmann").join("\n"), blocker);
     assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
     assert.equal(policy.scaleAvailability.houseBrackmann.availabilityEvidenceEligible, false);
     assert.match(policy.scaleAvailability.houseBrackmann.availabilityEvidenceBlockers.join("\n"), blocker);
-    assert.equal(policy.scaleAvailability.sunnybrook.clinicalFacingScoresAllowed, true);
-    assert.equal(policy.mode, "mixed-clinical-scale-support");
+    assert.equal(policy.scaleAvailability.sunnybrook.clinicalFacingScoresAllowed, false);
+    assert.equal(policy.scaleAvailability.sunnybrook.availabilityEvidenceEligible, true);
+    assert.equal(policy.mode, "mirror-estimate");
   }
 });
 
@@ -275,7 +279,7 @@ test("clinical scale presentation policy fails closed when enabled scale source 
     };
     const policy = clinicalScalePresentationPolicy(status);
 
-    assert.equal(clinicalFacingStatusEligible(status), true);
+    assert.equal(clinicalFacingStatusEligible(status), false);
     assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
     assert.equal(clinicalScaleAvailabilityEvidenceEligible(status, "houseBrackmann"), false);
     assert.match(clinicalScaleAvailabilityEvidenceBlockers(status, "houseBrackmann").join("\n"), blocker);
@@ -362,7 +366,7 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
   };
   const policy = clinicalScalePresentationPolicy(status);
 
-  assert.equal(clinicalFacingStatusEligible(status), true);
+  assert.equal(clinicalFacingStatusEligible(status), false);
   assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
   assert.equal(policy.mode, "mirror-estimate");
   assert.equal(policy.anyClinicalScaleSupportAllowed, false);
@@ -371,7 +375,7 @@ test("clinical scale presentation policy requires explicit per-scale availabilit
   assert.match(policy.shortNotice, /not clinician-assigned/);
 });
 
-test("clinical scale presentation policy can keep individual scales as estimates", () => {
+test("clinical scale presentation policy keeps all individual scales as estimates", () => {
   const status = {
     schemaVersion: 1,
     updatedAt: "2026-06-24",
@@ -397,18 +401,20 @@ test("clinical scale presentation policy can keep individual scales as estimates
   };
   const policy = clinicalScalePresentationPolicy(status);
 
-  assert.equal(policy.mode, "mixed-clinical-scale-support");
+  assert.equal(policy.mode, "mirror-estimate");
   assert.equal(policy.clinicalFacingScoresAllowed, false);
-  assert.equal(policy.anyClinicalScaleSupportAllowed, true);
-  assert.equal(policy.primaryClinicalScaleSupportCount, 2);
+  assert.equal(policy.anyClinicalScaleSupportAllowed, false);
+  assert.equal(policy.primaryClinicalScaleSupportCount, 0);
   assert.equal(clinicalFacingScaleStatusEligible(status, "sunnybrook"), false);
-  assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), true);
-  assert.equal(scaleNounForClinicalScale(policy, "houseBrackmann"), "support value");
-  assert.equal(scaleNounForClinicalScale(policy, "sunnybrook"), "estimate");
-  assert.match(policy.shortNotice, /remaining values are Mirror estimates/);
+  assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
+  assert.equal(policy.scaleAvailability.houseBrackmann.availabilityEvidenceEligible, true);
+  assert.equal(policy.scaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, false);
+  assert.equal(scaleNounForClinicalScale(policy, "houseBrackmann"), "self-tracking estimate");
+  assert.equal(scaleNounForClinicalScale(policy, "sunnybrook"), "self-tracking estimate");
+  assert.match(policy.shortNotice, /self-tracking/);
 });
 
-test("compact clinical scale labels include validation-aware per-scale nouns", () => {
+test("compact clinical scale labels stay estimate-only", () => {
   const scales = {
     houseBrackmann: { grade: "II", label: "Mild dysfunction" },
     sunnybrook: {
@@ -433,10 +439,10 @@ test("compact clinical scale labels include validation-aware per-scale nouns", (
     eface: enabledScaleEvidence(),
   }));
 
-  assert.equal(compactClinicalScaleValueLabel(scales, mixedPolicy), "HB II support · SB 86 estimate · eFACE 89 support");
+  assert.equal(compactClinicalScaleValueLabel(scales, mixedPolicy), "HB II estimate · SB 86 estimate · eFACE 89 estimate");
 });
 
-test("clinical scale report rows and printable reports use the validation-aware estimate wording", () => {
+test("clinical scale report rows and printable reports use estimate-only wording", () => {
   const clinicalScales = {
     status: "estimated",
     coverage: {
@@ -470,8 +476,8 @@ test("clinical scale report rows and printable reports use the validation-aware 
   };
 
   const rows = clinicalScaleEstimateRows(clinicalScales);
-  assert.match(rows[0], /House-Brackmann estimate/);
-  assert.match(rows[1], /Sunnybrook estimate/);
+  assert.match(rows[0], /House-Brackmann-inspired self-tracking estimate/);
+  assert.match(rows[1], /Sunnybrook-style self-tracking estimate/);
   assert.match(rows.join(" "), /Evidence tier: Complete standard-assessment evidence/);
   assert.match(rows.join(" "), /Resting evidence: 3\/3 required resting metrics available/);
 
@@ -516,7 +522,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     },
   });
   assert.match(minimumRows.join(" "), /Omitted from scale formulas: Lip pucker/);
-  assert.match(minimumRows.join(" "), /Sunnybrook input: 4\/5 standard movements used; omitted Lip pucker/);
+  assert.match(minimumRows.join(" "), /Sunnybrook-style input: 4\/5 standard movements used; omitted Lip pucker/);
   assert.match(minimumRows.join(" "), /eFACE-style input: 4\/5 standard movements used; omitted Lip pucker/);
 
   const houseBrackmannGapRows = clinicalScaleEstimateRows({
@@ -563,11 +569,11 @@ test("clinical scale report rows and printable reports use the validation-aware 
       eface: clinicalScales.scales.eface,
     },
   });
-  assert.doesNotMatch(houseBrackmannGapRows.join(" "), /House-Brackmann estimate: Grade/);
-  assert.match(houseBrackmannGapRows.join(" "), /House-Brackmann estimate unavailable: requires Gentle eye closure/);
-  assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook estimate/);
-  assert.match(houseBrackmannGapRows.join(" "), /eFACE-style estimate/);
-  assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook input: 4\/5 standard movements used; omitted Gentle eye closure/);
+  assert.doesNotMatch(houseBrackmannGapRows.join(" "), /House-Brackmann-inspired self-tracking estimate: Grade/);
+  assert.match(houseBrackmannGapRows.join(" "), /House-Brackmann-inspired estimate unavailable: requires Gentle eye closure/);
+  assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook-style self-tracking estimate/);
+  assert.match(houseBrackmannGapRows.join(" "), /eFACE-style self-tracking estimate/);
+  assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook-style input: 4\/5 standard movements used; omitted Gentle eye closure/);
 
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
     schemaVersion: 1,
@@ -588,7 +594,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
     clinicalFacingScoresAllowed: true,
     clinicalScaleAvailability: clinicalScaleAvailability(),
   }));
-  assert.match(supportedRows[0], /House-Brackmann support value/);
+  assert.match(supportedRows[0], /House-Brackmann-inspired self-tracking estimate/);
 
   const mixedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
     schemaVersion: 1,
@@ -613,9 +619,9 @@ test("clinical scale report rows and printable reports use the validation-aware 
       eface: enabledScaleEvidence(),
     },
   }));
-  assert.match(mixedRows[0], /House-Brackmann support value/);
-  assert.match(mixedRows[1], /Sunnybrook estimate/);
-  assert.match(mixedRows[2], /eFACE-style support value/);
+  assert.match(mixedRows[0], /House-Brackmann-inspired self-tracking estimate/);
+  assert.match(mixedRows[1], /Sunnybrook-style self-tracking estimate/);
+  assert.match(mixedRows[2], /eFACE-style self-tracking estimate/);
 
   const html = buildSessionReportHtml({
     kind: "assessment",
@@ -633,11 +639,11 @@ test("clinical scale report rows and printable reports use the validation-aware 
     ],
   });
 
-  assert.match(html, /Clinical scale estimates/);
-  assert.match(html, /House-Brackmann estimate/);
+  assert.match(html, /Scale-inspired self-tracking estimates/);
+  assert.match(html, /House-Brackmann-inspired self-tracking estimate/);
   assert.match(html, /Evidence tier: Complete standard-assessment evidence/);
   assert.match(html, /Resting evidence: 3\/3 required resting metrics available/);
-  assert.match(html, /These are Mirror estimates only/);
+  assert.match(html, /self-tracking only/);
 
   const missingEyeClosureHtml = buildSessionReportHtml({
     kind: "assessment",
@@ -654,11 +660,11 @@ test("clinical scale report rows and printable reports use the validation-aware 
     ],
   });
 
-  assert.doesNotMatch(missingEyeClosureHtml, /House-Brackmann estimate: Grade/);
-  assert.match(missingEyeClosureHtml, /House-Brackmann estimate unavailable: requires Gentle eye closure/);
-  assert.match(missingEyeClosureHtml, /Sunnybrook estimate/);
-  assert.match(missingEyeClosureHtml, /eFACE-style estimate/);
-  assert.match(missingEyeClosureHtml, /Sunnybrook input: 4\/5 standard movements used; omitted Gentle eye closure/);
+  assert.doesNotMatch(missingEyeClosureHtml, /House-Brackmann-inspired self-tracking estimate: Grade/);
+  assert.match(missingEyeClosureHtml, /House-Brackmann-inspired estimate unavailable: requires Gentle eye closure/);
+  assert.match(missingEyeClosureHtml, /Sunnybrook-style self-tracking estimate/);
+  assert.match(missingEyeClosureHtml, /eFACE-style self-tracking estimate/);
+  assert.match(missingEyeClosureHtml, /Sunnybrook-style input: 4\/5 standard movements used; omitted Gentle eye closure/);
   assert.match(missingEyeClosureHtml, /eFACE-style input: 4\/5 standard movements used; omitted Gentle eye closure/);
 
   const hiddenHtml = buildSessionReportHtml({
@@ -677,6 +683,6 @@ test("clinical scale report rows and printable reports use the validation-aware 
     ],
   }, { includeClinicalScaleEstimates: false });
 
-  assert.doesNotMatch(hiddenHtml, /Clinical scale estimates/);
-  assert.doesNotMatch(hiddenHtml, /House-Brackmann estimate/);
+  assert.doesNotMatch(hiddenHtml, /Scale-inspired self-tracking estimates/);
+  assert.doesNotMatch(hiddenHtml, /House-Brackmann-inspired self-tracking estimate/);
 });

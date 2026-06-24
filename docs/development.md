@@ -62,15 +62,17 @@ checks for:
 - Privacy/local-first wording for browser data, clinician bundle, and validation exports.
 - Current validation status and remaining release risks in the roadmap.
 - `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, whether clinical-facing scores are allowed, and which source-dataset hashes support clinical agreement, reviewer-agreement, package-verification, and threshold-calibration evidence. Referenced calibration and clinical-scale agreement artifacts are also checked for the expected report markers.
-- Runtime clinical-scale presentation policy, which reads `docs/validation-status.json`
-  before app panels or reports can use clinical-facing wording and fails closed
-  unless the status is explicitly `clinical-scale-agreement-reviewed`; it also
-  fails closed without schema-v1 dated status metadata, reviewed dataset/frame
-  coverage, ready exercise coverage, clinical and reviewer agreement report
-  paths, clinical evidence source-hash lists, threshold report paths and matching
-  `thresholdCalibrationSourceDatasetSha256s`, per-scale clinical/reviewer
-  agreement evidence summaries for each enabled House-Brackmann/Sunnybrook/eFACE
-  support value, or
+- Runtime scale-inspired estimate presentation policy, which reads
+  `docs/validation-status.json` and keeps app panels and reports in
+  estimate-only wording. The policy also preserves future validation audit
+  checks and fails closed unless the status is explicitly
+  `clinical-scale-agreement-reviewed`; it also fails closed without schema-v1
+  dated status metadata, reviewed dataset/frame coverage, ready exercise
+  coverage, clinical and reviewer agreement report paths, clinical evidence
+  source-hash lists, threshold report paths and matching
+  `thresholdCalibrationSourceDatasetSha256s`, and per-scale clinical/reviewer
+  agreement evidence summaries for any future reviewed House-Brackmann,
+  Sunnybrook, or eFACE scale entry, or
   if the status file weakens the documented 30-assessment, 10-case, 80%
   observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
   Wilson-confidence-interval, current-estimator-version, review-protocol,
@@ -130,8 +132,8 @@ checks for:
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` and review-package verification JSON
   artifacts in `clinicalScaleReviewPackageVerificationReports`, plus matching
-  source hashes in the three clinical-scale evidence hash arrays, before
-  clinical-facing clinical-scale support can be enabled.
+  source hashes in the three clinical-scale evidence hash arrays, before any
+  future reviewed validation status can be considered.
 - `npm run validation:status-evidence` can draft the per-scale
   `clinicalScaleAvailability` evidence block from a clinical agreement report
   reviewer-agreement report, and matching review-package verification report.

@@ -846,7 +846,7 @@ Each assessment stores a compact summary in `assessments` with:
 - Rest section: whether a neutral calibration review image is available plus compact resting asymmetry metrics.
 - Voluntary movement sections grouped by brow/forehead, eye, midface/nose, and mouth zones.
 - Coactivation risk from quiet-region movement recorded during the assessment.
-- Optional `clinicalScales` estimates for House-Brackmann, Sunnybrook, and eFACE-style domains when at least 80% of standard movements are usable and all required resting metrics are available.
+- Optional `clinicalScales` estimates for House-Brackmann-inspired, Sunnybrook-style, and eFACE-style domains when at least 80% of standard movements are usable and all required resting metrics are available.
 - Source session timestamp so the original report and images can still be opened.
 
 Clinician bundle exports include consecutive assessment comparisons. These compare
@@ -864,7 +864,7 @@ not a clinical grade:
 Only compact rounded metric summaries are saved in `restingMetrics`; raw neutral
 landmarks are not stored as part of the assessment summary.
 
-Clinical-scale estimates are stored with explicit status and caveats:
+Scale-inspired estimates are stored with explicit status and caveats:
 
 - `version: 5` for the current estimator. Reviewed v1/v2/v3/v4 clinical-scale
   labels are stale after the v5 House-Brackmann eye-closure input guard
@@ -892,22 +892,18 @@ Clinical-scale estimates are stored with explicit status and caveats:
   scale-specific movement input, so normalized 4/5 Sunnybrook/eFACE estimates
   count as missing estimates in those release denominators.
 - App panels and printable reports also surface scale-specific input gaps, such
-  as `House-Brackmann estimate unavailable: requires Gentle eye closure`, so a
+  as `House-Brackmann-inspired estimate unavailable: requires Gentle eye closure`, so a
   withheld scale is not silently hidden when other eligible estimates remain.
 - v5 estimates also record required, available, and missing resting metric keys
   and require `estimateCalculationUsesCompleteRestingMetrics: true`.
 
-These values are not clinical-facing validated grades while
-`docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
-The runtime presentation policy in `src/domain/clinicalScalePresentation.js`
-imports that same status file so app panels and printable reports keep the
-Mirror-estimate wording until the reviewed validation gate is explicitly opened.
-Compact dashboard and assessment-history summaries append the same per-scale
-status, so mixed validation states can show one scale as support while keeping
-the remaining House-Brackmann, Sunnybrook, or eFACE-style values labeled as
-estimates.
+These values are scale-inspired self-tracking estimates, not clinician-assigned
+grades, diagnosis, prognosis, or treatment guidance. `docs/validation-status.json`
+has `clinicalFacingScoresAllowed: false`, and the runtime presentation policy in
+`src/domain/clinicalScalePresentation.js` keeps app panels, dashboard summaries,
+assessment history, and printable reports in estimate-only wording.
 Users can also turn off `prefs.clinicalScaleEstimatesEnabled` to hide optional
-clinical-scale estimates from the assessment summary, assessment history, and
+scale-inspired estimates from the assessment summary, assessment history, and
 printable report output. The preference is display-only: validation datasets and
 clinician bundles still preserve the underlying assessment evidence for explicit
 review/export workflows.
@@ -933,7 +929,7 @@ The report includes:
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Resting asymmetry metrics for assessment reports when neutral calibration was available.
-- Clinical-scale estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, including the complete/minimum evidence tier, or an insufficient-data reason when it is not.
+- Scale-inspired estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, including the complete/minimum evidence tier, or an insufficient-data reason when it is not.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
@@ -1209,49 +1205,46 @@ adjudicator or adjudication panel to fill, while preserving raw reviewer ids in
 audit columns.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
-It currently records that validation tooling exists but no clinician-reviewed dataset
-is committed, production thresholds are not clinically calibrated, and clinical-facing
-scores are not allowed. The app and printable report copy read this status through
-`src/domain/clinicalScalePresentation.js`, so clinical-facing wording cannot be
-enabled by changing only a UI component. The runtime policy also requires the
-same high-level status evidence as the release gate: reviewed dataset and frame
-counts, reviewed clinical-scale assessment coverage, calibration reports,
-clinical agreement reports, reviewer-agreement reports, calibrated thresholds,
-ready exercise coverage, schema-v1 dated status metadata, the explicit
-`clinicalFacingScoresAllowed` flag, and the explicit
-`clinical-scale-agreement-reviewed` status value. It also requires the status
-file to list clinical evidence source hashes for agreement, reviewer-agreement,
-and package-verification artifacts. For every enabled scale in
-`clinicalScaleAvailability`, the runtime also requires a per-scale evidence
-summary pointing to the listed clinical agreement, reviewer-agreement, and
-clinical review package verification reports, repeating `sourceDatasetSha256`,
-and showing current estimator version, reviewed-label count, distinct-case
-count, observed agreement, Wilson lower bound, reviewer paired-label count,
-reviewer distinct-case count, reviewer observed agreement, and reviewer Wilson
-lower bound. `npm run validation:status` cross-checks those per-scale summaries
-against the parsed report artifacts, so a status file cannot promote a scale by
-entering unsupported counts, rates, Wilson lower bounds, or report paths. `npm
-run validation:status-evidence` can generate a draft of that status block from
-the clinical agreement, reviewer-agreement, and review-package verification
+It currently records that validation tooling exists but no clinician-reviewed
+dataset is committed, production thresholds are not clinically calibrated, and
+`clinicalFacingScoresAllowed` is false. The app and printable report copy read
+this status through `src/domain/clinicalScalePresentation.js`, and the current
+product presentation remains scale-inspired and estimate-only. Future optional
+clinical validation review would require the same high-level status evidence as
+the release gate: reviewed dataset and frame counts, reviewed clinical-scale
+assessment coverage, calibration reports, clinical agreement reports,
+reviewer-agreement reports, calibrated thresholds, ready exercise coverage,
+schema-v1 dated status metadata, the explicit `clinicalFacingScoresAllowed`
+flag, and the explicit `clinical-scale-agreement-reviewed` status value. It
+also requires the status file to list clinical evidence source hashes for
+agreement, reviewer-agreement, and package-verification artifacts. For every
+future reviewed scale entry in `clinicalScaleAvailability`, the runtime also
+requires a per-scale evidence summary pointing to the listed clinical agreement,
+reviewer-agreement, and clinical review package verification reports, repeating
+`sourceDatasetSha256`, and showing current estimator version, reviewed-label
+count, distinct-case count, observed agreement, Wilson lower bound, reviewer
+paired-label count, reviewer distinct-case count, reviewer observed agreement,
+and reviewer Wilson lower bound. `npm run validation:status` cross-checks those
+per-scale summaries against the parsed report artifacts, so a status file cannot
+claim unsupported counts, rates, Wilson lower bounds, or report paths. `npm run
+validation:status-evidence` can generate a draft of that status block from the
+clinical agreement, reviewer-agreement, and review-package verification
 artifacts; with `--status-patch`, it also drafts the matching clinical,
 reviewer, and package-verification report path arrays and their matching
-source-hash arrays. The release decision remains a human-reviewed status file
-update. It also audits the machine-readable
-minimum standard before using clinical-facing wording: the
-30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
-Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence
-interval, current clinical-scale estimator version, review protocol, and
-House-Brackmann severity-band floors must remain at or above the documented
-release standard. The status file must also
-include `clinicalScaleAvailability` entries for House-Brackmann, Sunnybrook, and
-eFACE, so every release records an explicit per-scale presentation decision.
-Future releases can keep one primary scale in estimate mode even if another
-scale is approved for clinical-facing support. A per-scale availability flag is
-only presentational; it cannot bypass the global release gate, and a global
-clinical-facing status must name at least one enabled primary scale. The runtime
-presentation policy fails closed when a primary scale is not explicitly listed
-in `clinicalScaleAvailability`, even if the global `clinicalFacingScoresAllowed`
-flag is true.
+source-hash arrays. The release decision remains a future human-reviewed status
+file update. It also audits the machine-readable minimum standard for future
+validation review: the 30-assessment floor, 10 distinct validation cases, 80%
+observed agreement, 80% Wilson lower bound, 80% usable movement coverage, Wilson
+95% confidence interval, current clinical-scale estimator version, review
+protocol, and House-Brackmann severity-band floors must remain at or above the
+documented release standard. The status file must also include
+`clinicalScaleAvailability` entries for House-Brackmann, Sunnybrook, and eFACE,
+so every future reviewed release records an explicit per-scale validation
+decision. A per-scale availability flag is only evidence metadata; it cannot
+bypass the global release gate, and a global reviewed status must name at least
+one enabled primary scale. The runtime presentation policy still fails closed
+when a primary scale is not explicitly listed in `clinicalScaleAvailability`,
+even if the global `clinicalFacingScoresAllowed` flag is true.
 
 `npm run validation:status` validates both the status JSON and any referenced
 report artifacts. Clinical agreement report paths must point to Markdown reports
@@ -1287,15 +1280,16 @@ least 10 distinct pseudonymous validation cases, at least 80% observed reviewer
 agreement, distinct pseudonymous reviewer ids for the raw reviewer sheets, zero
 cross-severity House-Brackmann reviewer disagreements, and Wilson lower-bound
 reviewer agreement meeting the configured 80% standard, plus House-Brackmann
-same-band reviewer severity coverage, before clinical-facing support can be
-enabled for that scale.
+same-band reviewer severity coverage before that scale can be counted in any
+future reviewed validation status.
 Clinical review package verification report paths must point to JSON
 `mirror-clinical-scale-review-package-verification` schema-v1 artifacts with
 `status: passed`, a source dataset SHA-256 match, blinded-manifest controls,
 stable row identities, hidden estimate-value columns, unchanged
 estimate-provenance columns, no verification errors, and at least the configured
-minimum reviewed clinical-scale assessment rows before clinical-facing support
-can be enabled. Clinical agreement and reviewer-agreement reports used for
+minimum reviewed clinical-scale assessment rows before that package can support
+any future reviewed validation status. Clinical agreement and reviewer-agreement
+reports used for
 enabled scales must carry `sourceDatasetSha256`, and those values must match one
 of the listed passed review package verification reports so release evidence
 traces back to the blinded source dataset package. The status file must list the

@@ -99,5 +99,5 @@ test("compareAssessmentRecords reports practice-metric deltas without clinical g
   assert.equal(comparison.coactivationRisk.change, "lower-risk");
   assert.equal(comparison.captureQuality.change, "lower-risk");
   assert.equal(comparison.zones[0].voluntaryMovementDelta, 0.12);
-  assert.match(comparison.note, /not a validated clinical grade/);
+  assert.match(comparison.note, /self-tracking only/);
 });

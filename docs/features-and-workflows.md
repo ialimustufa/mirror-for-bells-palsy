@@ -15,7 +15,7 @@ This document collects the product behavior that used to live in the main README
 - Local persistence of sessions, journal entries, streaks, trends, and rep snapshots.
 - A standardized assessment mode that saves assessment summaries separately from daily practice sessions.
 - Resting asymmetry metrics for assessment reports, including eye aperture, midface proxy, and mouth-corner position.
-- Optional House-Brackmann, Sunnybrook, and eFACE-style estimates from standard assessments when at least 80% of required movement evidence is usable and all required resting metrics are available.
+- Optional House-Brackmann-inspired, Sunnybrook-style, and eFACE-style self-tracking estimates from standard assessments when at least 80% of required movement evidence is usable and all required resting metrics are available.
 - Printable session report that can be saved as a PDF for a physiotherapist.
 - Local clinician bundle export with assessment trends, selected report images, journal notes, diagnostics, and replay frame samples when available.
 - Opt-in validation dataset export with frame-sample and assessment clinical-scale label templates for later user, clinician, or developer review.
@@ -27,7 +27,7 @@ This document collects the product behavior that used to live in the main README
 
 The main app route at `/` guides a user through camera setup, calibration, exercise preview, rest, hold, interstitial feedback, and summary. It can score holds when the model and camera are available, and it still supports unscored guided practice when they are not.
 
-Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends. When evidence coverage is sufficient, the completion summary, assessment history, and report export show optional clinical-scale estimates for review; these remain Mirror estimates, not validated clinician grades. A Progress preference can hide these estimates from user-facing panels and printable reports without deleting the underlying assessment data.
+Standard assessments use a fixed movement set across brow, eye, midface/nose, and mouth zones. They reuse the session runner for capture and scoring, but save compact records in `assessments` so Progress can show assessment trends separately from daily practice trends. When evidence coverage is sufficient, the completion summary, assessment history, and report export show optional scale-inspired self-tracking estimates; these remain Mirror estimates, not clinician-assigned grades. A Progress preference can hide these estimates from user-facing panels and printable reports without deleting the underlying assessment data.
 
 ## Safety Prompts
 

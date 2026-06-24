@@ -146,7 +146,7 @@ test("clinical scale estimates omit House-Brackmann when eye closure is missing"
   assert.equal(inputGaps.length, 1);
   assert.equal(inputGaps[0].scaleKey, "houseBrackmann");
   assert.deepEqual(inputGaps[0].missingMovementLabels, ["Gentle eye closure"]);
-  assert.equal(inputGaps[0].message, "House-Brackmann estimate unavailable: requires Gentle eye closure.");
+  assert.equal(inputGaps[0].message, "House-Brackmann-inspired estimate unavailable: requires Gentle eye closure.");
 });
 
 test("clinical scale estimates do not use weak-capture movements in minimum evidence formulas", () => {

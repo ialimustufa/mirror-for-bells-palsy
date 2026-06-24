@@ -152,7 +152,7 @@ function compareAssessmentRecords(previous = null, current = null) {
       previous: previous.clinicalScales?.status === "estimated" ? previous.clinicalScales.scales : null,
       current: current.clinicalScales?.status === "estimated" ? current.clinicalScales.scales : null,
       status: current.clinicalScales?.status ?? previous.clinicalScales?.status ?? null,
-      note: "Clinical scale values are Mirror estimates unless separately clinician-entered and validated.",
+      note: "Scale-inspired values are Mirror estimates for self-tracking only, not clinician-assigned grades.",
     },
     zones: zoneKeys.map((zoneKey) => {
       const previousZone = previousZones.get(zoneKey);

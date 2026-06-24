@@ -1,10 +1,9 @@
 # Clinical Scale Review Protocol
 
-This protocol defines how Mirror clinical-scale estimates can be reviewed before
-any release status claims that House-Brackmann, Sunnybrook, or eFACE-style values
-are ready for broader availability. It is a validation workflow for Mirror
-estimates, not a medical-device protocol and not a substitute for clinician
-assessment.
+This protocol defines a future optional review workflow for Mirror scale-inspired
+self-tracking estimates. It does not make House-Brackmann-inspired,
+Sunnybrook-style, or eFACE-style values clinician-assigned grades, and it is not
+a medical-device protocol or a substitute for clinician assessment.
 
 ## Scope
 
@@ -16,10 +15,11 @@ sessions. It covers:
 - eFACE total target labels.
 - Optional eFACE static, dynamic, and synkinesis domain labels.
 
-Mirror estimates remain estimates unless the release status explicitly says
-`clinical-scale-agreement-reviewed` and the referenced agreement artifacts pass.
-Even a passing readiness report does not turn an estimate into a
-clinician-assigned grade by itself.
+Mirror outputs remain scale-inspired self-tracking estimates. Even a passing
+future readiness report would not turn an estimate into a clinician-assigned
+grade by itself.
+A future `clinical-scale-agreement-reviewed` status would be a validation status
+marker only; it would not alter the current estimate-only app presentation.
 
 ## Reviewer Materials
 
@@ -35,7 +35,7 @@ source dataset SHA-256 hash, dataset export metadata, label schema version,
 current clinical-scale estimator version, blinded sheet row counts, and the
 80% observed/Wilson release standard. This makes the reviewer handoff auditable:
 later readiness evidence can prove which dataset and blinded sheet the reviewer
-received. The package does not enable clinical-facing scores by itself.
+received. The package does not change the estimate-only app presentation.
 
 After labels are returned, verify that the sheet still matches the package
 manifest before merging:

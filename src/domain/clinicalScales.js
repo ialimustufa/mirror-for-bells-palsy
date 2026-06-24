@@ -20,8 +20,8 @@ const REQUIRED_RESTING_METRIC_KEYS = Object.freeze(REQUIRED_RESTING_METRICS.map(
 const REQUIRED_RESTING_METRIC_LABELS = Object.freeze(Object.fromEntries(REQUIRED_RESTING_METRICS.map((metric) => [metric.key, metric.label])));
 const HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS = Object.freeze(["eye-close"]);
 const CLINICAL_SCALE_LABELS = Object.freeze({
-  houseBrackmann: "House-Brackmann",
-  sunnybrook: "Sunnybrook",
+  houseBrackmann: "House-Brackmann-inspired",
+  sunnybrook: "Sunnybrook-style",
   eface: "eFACE-style",
 });
 const STANDARD_SCALE_MOVEMENT_LABELS = Object.freeze(Object.fromEntries(STANDARD_SCALE_MOVEMENTS.map((movement) => [movement.exerciseId, movement.label])));
@@ -512,8 +512,8 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
     evidence: estimateEvidence(coverage, restingCompleteness, reasons),
     caveats: [
       "Estimated from Mirror standard-assessment practice data, not assigned by a clinician.",
-      "Do not use as a diagnosis, prognosis, treatment decision, or validated clinical endpoint.",
-      "Clinical-facing use requires clinician-reviewed validation data and documented agreement against the target scale.",
+      "For self-tracking only; not diagnosis, prognosis, treatment guidance, or a validated endpoint.",
+      "Future clinical validation would require clinician-reviewed evidence against the referenced scales.",
     ],
   };
   if (reasons.length) return { ...base, reasons, scales: null };

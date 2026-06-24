@@ -108,14 +108,14 @@ function clinicalScaleEstimateCards(scales, presentation, inputNotesByScale = {}
   return [
     scales.houseBrackmann ? {
       key: "houseBrackmann",
-      label: "House-Brackmann",
+      label: "House-Brackmann-inspired",
       value: `Grade ${scales.houseBrackmann.grade}`,
       sublabel: scales.houseBrackmann.label,
       statusLabel: scaleNounForClinicalScale(presentation, "houseBrackmann"),
     } : null,
     scales.sunnybrook ? {
       key: "sunnybrook",
-      label: "Sunnybrook",
+      label: "Sunnybrook-style",
       value: `${Math.round(scales.sunnybrook.compositeScore)}/100`,
       sublabel: `${scales.sunnybrook.voluntaryMovementScore} vol - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synk${inputNotesByScale.sunnybrook ? ` · ${inputNotesByScale.sunnybrook}` : ""}`,
       statusLabel: scaleNounForClinicalScale(presentation, "sunnybrook"),
@@ -2595,7 +2595,7 @@ function ProgressView({ data, streak, prefs, dataTransferStatus, onTogglePref, o
           <DailyGoalSelector value={prefs.dailyGoal ?? 3} onChange={(v) => onSetPref("dailyGoal", v)} />
           <ToggleRow label="Symmetry tracking" description="Auto-measure symmetry during exercises" value={prefs.symmetryEnabled} onToggle={() => onTogglePref("symmetryEnabled")} />
           <ToggleRow label="Personal recovery model" description="Train local trend estimates from your saved sessions" value={prefs.personalModelEnabled !== false} onToggle={() => onTogglePref("personalModelEnabled")} />
-          <ToggleRow label="Clinical scale estimates" description="Show optional HB, Sunnybrook, and eFACE-style estimates after assessments" value={showClinicalScaleEstimates} onToggle={() => onTogglePref("clinicalScaleEstimatesEnabled")} />
+          <ToggleRow label="Scale-inspired estimates" description="Show optional HB-inspired, Sunnybrook-style, and eFACE-style self-tracking estimates after assessments" value={showClinicalScaleEstimates} onToggle={() => onTogglePref("clinicalScaleEstimatesEnabled")} />
           <ToggleRow label="Local data capture" description="Store sampled landmarks for debugging and future model work" value={prefs.dataCaptureEnabled === true} onToggle={() => onTogglePref("dataCaptureEnabled")} />
           <ScoringNoiseModeSelector value={prefs.scoringNoiseMode ?? "normal"} onChange={(mode) => onSetPref("scoringNoiseMode", mode)} />
           <ToggleRow label="Scoring diagnostics" description="Log scoring signals in the browser console" value={prefs.scoringDiagnosticsEnabled === true} onToggle={() => onSetPref("scoringDiagnosticsEnabled", !(prefs.scoringDiagnosticsEnabled === true))} />

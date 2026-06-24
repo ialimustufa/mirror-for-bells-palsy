@@ -825,7 +825,7 @@ test("validation status rejects clinical artifacts under non-clinical status", (
   );
 });
 
-test("validation status rejects clinical-facing support under non-clinical status", () => {
+test("validation status rejects reviewed presentation under non-clinical status", () => {
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,

@@ -68,7 +68,7 @@ function restingMetricRows(restingMetrics) {
 function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScalePresentationPolicy()) {
   if (!clinicalScales) return [];
   if (clinicalScales.status !== "estimated") {
-    return [`Clinical scale estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
+    return [`Scale-inspired estimates unavailable: ${(clinicalScales.reasons ?? ["insufficient data"]).join("; ")}.`];
   }
   const scales = clinicalScales.scales ?? {};
   const omittedMovements = omittedClinicalScaleMovementLabels(clinicalScales);
@@ -76,8 +76,8 @@ function clinicalScaleEstimateRows(clinicalScales, presentation = clinicalScaleP
   const inputCompletenessSummaries = clinicalScaleInputCompletenessSummaries(clinicalScales);
   const restingEvidence = clinicalScaleRestingEvidenceSummary(clinicalScales);
   return [
-    scales.houseBrackmann ? `House-Brackmann ${scaleNounForClinicalScale(presentation, "houseBrackmann")}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
-    scales.sunnybrook ? `Sunnybrook ${scaleNounForClinicalScale(presentation, "sunnybrook")}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
+    scales.houseBrackmann ? `House-Brackmann-inspired ${scaleNounForClinicalScale(presentation, "houseBrackmann")}: Grade ${scales.houseBrackmann.grade} (${scales.houseBrackmann.label})` : null,
+    scales.sunnybrook ? `Sunnybrook-style ${scaleNounForClinicalScale(presentation, "sunnybrook")}: ${Math.round(scales.sunnybrook.compositeScore)}/100 composite (${scales.sunnybrook.voluntaryMovementScore} voluntary - ${scales.sunnybrook.restingSymmetryScore} rest - ${scales.sunnybrook.synkinesisScore} synkinesis)` : null,
     scales.eface ? `eFACE-style ${scaleNounForClinicalScale(presentation, "eface")}: ${Math.round(scales.eface.totalScore)}/100 total (${Math.round(scales.eface.staticScore)} static, ${Math.round(scales.eface.dynamicScore)} dynamic, ${Math.round(scales.eface.synkinesisScore)} synkinesis)` : null,
     ...inputGaps.map((gap) => gap.message),
     ...inputCompletenessSummaries.map((summary) => summary.message),

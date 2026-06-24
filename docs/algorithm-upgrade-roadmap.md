@@ -20,7 +20,7 @@ The next upgrade should make the algorithm more clinically legible, safer around
 - Phase 0 instrumentation: implemented on `algorithm-upgrade`. Sessions, exercise records, movement profiles, and frame-sample scoring payloads now carry `scoringModelVersion`; live scoring stores structured `dropReason` counts and per-rep score distributions; saved and just-finished sessions now show local scoring diagnostics.
 - Phase 1 signal-quality work: started. MediaPipe inference now uses a worker-backed detector when supported, direction-specific scoring is active for smile, pucker, cheek puff/suck, eye closure, and vowel families, session records include pre-session setup quality with occlusion/glare risk, capture-quality summaries, a replay CLI can rerun saved frame samples through the scorer, and quiet-region coactivation metrics are recorded for supported exercises.
 - Still pending in Phase 1: collect reviewed validation datasets and use threshold calibration reports to decide production constant changes.
-- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, clinician bundles include assessment-to-assessment comparisons, neutral calibration saves compact resting asymmetry metrics, optional House-Brackmann/Sunnybrook/eFACE-style estimates are generated only when at least 80% of the standard assessment has usable evidence, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
+- Phase 2 clinical-legibility work: started. Standardized assessment records now save separately from daily practice, Progress shows assessment trends separately, clinician bundles include assessment-to-assessment comparisons, neutral calibration saves compact resting asymmetry metrics, optional House-Brackmann-inspired/Sunnybrook-style/eFACE-style self-tracking estimates are generated only when at least 80% of the standard assessment has usable evidence, and printable reports include capture-quality flags, rejected-frame reasons, quiet-region movement summaries, assessment sections, and conservative safety notes.
 - Phase 3 personalization work: started. The local personal recovery model now stores uncertainty ranges and plain trend statuses; it prioritizes controlled assessment samples, downweights weak capture quality and coactivation risk, and adaptive plans now avoid boosting stale/fatigue contexts or high-risk recent evidence.
 - Threshold personalization: new movement profiles store per-exercise threshold bands for minimum visible movement, reliable movement, and baseline target movement; saved movement features and validation replay now expose those bands for tuning.
 - Safety prompt coverage: implemented for weak/noisy capture, quiet-region coactivation, low eye-closure/dryness risk, and recent journal notes mentioning new or worsening symptoms, pain/strain, or significant fatigue.
@@ -74,7 +74,7 @@ Implementation notes:
 
 - Store an `assessment` record separate from normal `sessions`.
 - Display "practice trend" and "assessment trend" separately.
-- If House-Brackmann, Sunnybrook, or eFACE-style values are shown before validation, label them as Mirror estimates and keep validation gates separate from clinician-assigned grades.
+- House-Brackmann-inspired, Sunnybrook-style, and eFACE-style values are shown only as Mirror self-tracking estimates; validation gates stay separate from clinician-assigned grades.
 
 ### 3. Synkinesis-Aware Feedback
 
@@ -205,7 +205,7 @@ Work:
 Exit criteria:
 
 - A clinician can compare two assessment reports without reading raw app internals.
-- The report clearly says the metrics are Mirror practice metrics, not validated clinical grades.
+- The report clearly says the metrics are Mirror practice metrics, not clinician-assigned clinical grades.
 
 ### Phase 3: Upgrade Personalization
 
@@ -231,7 +231,7 @@ Work:
 
 - Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local validation JSONL exports with frame-sample records and assessment clinical-scale rows.
 - Label movement attempts with intended movement, affected side, quality, visible movement level, and coactivation notes; label clinical-scale assessment targets with House-Brackmann, Sunnybrook, and eFACE-style values. Status: implemented in the validation JSONL label schema, CSV label-sheet export, clinical review package export/verification with a blinded sheet plus source dataset hash manifest, and label merge workflow.
-- Compare MediaPipe landmark output and Mirror clinical-scale estimates on Bell's palsy faces against clinician-reviewed landmarks, region movement labels, or clinical-scale labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is still required.
+- Compare MediaPipe landmark output and Mirror scale-inspired estimates on Bell's palsy faces against clinician-reviewed landmarks, region movement labels, or facial-scale labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is future optional work.
 - Evaluate whether a lightweight correction model or clinical-domain landmark model is justified. Status: implemented as `npm run validation:model-readiness`, which fails closed without enough reviewed data, recommends threshold review before model training, and does not justify clinical-domain landmark models without reviewed landmark annotations.
 
 Exit criteria:
