@@ -120,7 +120,8 @@ the three `clinicalScale*SourceDatasetSha256s` arrays, and lists threshold
 calibration source hashes in `thresholdCalibrationSourceDatasetSha256s`. The
 same validation command also rejects any referenced clinical agreement,
 reviewer-agreement, or package-verification artifact whose own source hash is
-missing from its matching status hash array.
+missing from its matching status hash array, and rejects clinical source-hash
+arrays that are not paired with their corresponding report path arrays.
 
 ## Validation Workflow
 

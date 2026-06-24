@@ -73,6 +73,17 @@ function assertSha256Array(value, field) {
   }
 }
 
+function assertReportPathsAndSourceHashesPaired(reportPaths, sourceHashes, reportField, hashField) {
+  assertCondition(
+    reportPaths.length > 0 || sourceHashes.length === 0,
+    `${hashField} cannot list source dataset hashes without ${reportField}`,
+  );
+  assertCondition(
+    sourceHashes.length > 0 || reportPaths.length === 0,
+    `${reportField} require source dataset hashes in ${hashField}`,
+  );
+}
+
 function sha256ArrayIncludes(value, item) {
   return Array.isArray(value)
     && typeof item === "string"
@@ -1247,6 +1258,24 @@ function validateStatus(status) {
     assertCondition(status.clinicalScaleReviewPackageVerificationSourceDatasetSha256s.length > 0, "clinical-facing scores require clinical review package verification source dataset hashes");
     assertCondition(status.thresholdCalibrationSourceDatasetSha256s.length > 0, "clinical-facing scores require threshold calibration source dataset hashes");
   }
+  assertReportPathsAndSourceHashesPaired(
+    status.clinicalScaleAgreementReports,
+    status.clinicalScaleAgreementSourceDatasetSha256s,
+    "clinicalScaleAgreementReports",
+    "clinicalScaleAgreementSourceDatasetSha256s",
+  );
+  assertReportPathsAndSourceHashesPaired(
+    status.clinicalScaleReviewerAgreementReports,
+    status.clinicalScaleReviewerAgreementSourceDatasetSha256s,
+    "clinicalScaleReviewerAgreementReports",
+    "clinicalScaleReviewerAgreementSourceDatasetSha256s",
+  );
+  assertReportPathsAndSourceHashesPaired(
+    status.clinicalScaleReviewPackageVerificationReports,
+    status.clinicalScaleReviewPackageVerificationSourceDatasetSha256s,
+    "clinicalScaleReviewPackageVerificationReports",
+    "clinicalScaleReviewPackageVerificationSourceDatasetSha256s",
+  );
   return status;
 }
 
