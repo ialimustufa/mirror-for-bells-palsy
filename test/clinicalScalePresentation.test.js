@@ -74,6 +74,11 @@ test("clinical scale presentation policy switches copy only with complete releas
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: { clinicalFacingScoresAllowed: true },
+      sunnybrook: { clinicalFacingScoresAllowed: true },
+      eface: { clinicalFacingScoresAllowed: true },
+    },
   };
   const policy = clinicalScalePresentationPolicy(status);
 
@@ -83,6 +88,32 @@ test("clinical scale presentation policy switches copy only with complete releas
   assert.equal(policy.scaleNoun, "support value");
   assert.match(policy.shortNotice, /validation gate/);
   assert.match(policy.reportNotice, /clinician interpretation/);
+});
+
+test("clinical scale presentation policy requires explicit per-scale availability flags", () => {
+  const status = {
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleMinimumStandard: {
+      minReviewedAssessments: 30,
+    },
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+  const policy = clinicalScalePresentationPolicy(status);
+
+  assert.equal(clinicalFacingStatusEligible(status), true);
+  assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), false);
+  assert.equal(policy.mode, "mirror-estimate");
+  assert.equal(policy.anyClinicalScaleSupportAllowed, false);
+  assert.equal(policy.primaryClinicalScaleSupportCount, 0);
+  assert.equal(policy.scaleAvailability.houseBrackmann.requestedClinicalFacingScoresAllowed, false);
+  assert.match(policy.shortNotice, /not clinician-assigned/);
 });
 
 test("clinical scale presentation policy can keep individual scales as estimates", () => {
@@ -112,6 +143,7 @@ test("clinical scale presentation policy can keep individual scales as estimates
   assert.equal(policy.anyClinicalScaleSupportAllowed, true);
   assert.equal(policy.primaryClinicalScaleSupportCount, 2);
   assert.equal(clinicalFacingScaleStatusEligible(status, "sunnybrook"), false);
+  assert.equal(clinicalFacingScaleStatusEligible(status, "houseBrackmann"), true);
   assert.equal(scaleNounForClinicalScale(policy, "houseBrackmann"), "support value");
   assert.equal(scaleNounForClinicalScale(policy, "sunnybrook"), "estimate");
   assert.match(policy.shortNotice, /remaining values are Mirror estimates/);
@@ -161,6 +193,11 @@ test("clinical scale report rows and printable reports use the validation-aware 
     thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
     productionThresholdConstantsCalibrated: true,
     clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: { clinicalFacingScoresAllowed: true },
+      sunnybrook: { clinicalFacingScoresAllowed: true },
+      eface: { clinicalFacingScoresAllowed: true },
+    },
   }));
   assert.match(supportedRows[0], /House-Brackmann support value/);
 

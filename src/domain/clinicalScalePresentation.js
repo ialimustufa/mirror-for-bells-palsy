@@ -28,7 +28,7 @@ function requestedScaleAvailability(status = DEFAULT_VALIDATION_STATUS, scaleKey
   if (scaleConfig && typeof scaleConfig === "object" && "clinicalFacingScoresAllowed" in scaleConfig) {
     return scaleConfig.clinicalFacingScoresAllowed === true;
   }
-  return status?.clinicalFacingScoresAllowed === true;
+  return false;
 }
 
 function clinicalFacingScaleStatusEligible(status = DEFAULT_VALIDATION_STATUS, scaleKey) {

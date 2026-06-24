@@ -1129,7 +1129,10 @@ eFACE, so every release records an explicit per-scale presentation decision.
 Future releases can keep one primary scale in estimate mode even if another
 scale is approved for clinical-facing support. A per-scale availability flag is
 only presentational; it cannot bypass the global release gate, and a global
-clinical-facing status must name at least one enabled primary scale.
+clinical-facing status must name at least one enabled primary scale. The runtime
+presentation policy fails closed when a primary scale is not explicitly listed
+in `clinicalScaleAvailability`, even if the global `clinicalFacingScoresAllowed`
+flag is true.
 
 `npm run validation:status` validates both the status JSON and any referenced
 report artifacts. Clinical agreement report paths must point to Markdown reports
