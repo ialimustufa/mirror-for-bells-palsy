@@ -117,7 +117,10 @@ clinical-facing support unless each enabled per-scale status entry repeats the
 agreement hash, names the listed passed clinical review package verification
 report for the blinded source package, lists the clinical evidence hashes in
 the three `clinicalScale*SourceDatasetSha256s` arrays, and lists threshold
-calibration source hashes in `thresholdCalibrationSourceDatasetSha256s`.
+calibration source hashes in `thresholdCalibrationSourceDatasetSha256s`. The
+same validation command also rejects any referenced clinical agreement,
+reviewer-agreement, or package-verification artifact whose own source hash is
+missing from its matching status hash array.
 
 ## Validation Workflow
 

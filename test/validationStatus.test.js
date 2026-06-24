@@ -851,6 +851,67 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.thresholdCalibrationReports[0].generatedAt, "2026-06-24T00:00:00.000Z");
 });
 
+test("validation status artifacts reject clinical evidence source hashes that are not listed in status", async () => {
+  const unlistedSourceDatasetSha256 = "b".repeat(64);
+  const baseClinicalEvidenceStatus = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleAvailability: DISABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+  const weakTraceability = [
+    {
+      statusOverride: {
+        clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
+        clinicalScaleAgreementSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
+      },
+      artifacts: {
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: passingStructuredClinicalAgreementReport({
+          sourceDatasetSha256: unlistedSourceDatasetSha256,
+        }),
+      },
+      blocker: /clinical scale agreement report sourceDatasetSha256 values must be listed in clinicalScaleAgreementSourceDatasetSha256s/,
+    },
+    {
+      statusOverride: {
+        clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+        clinicalScaleReviewerAgreementSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
+      },
+      artifacts: {
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport({
+          sourceDatasetSha256: unlistedSourceDatasetSha256,
+        }),
+      },
+      blocker: /clinical scale reviewer agreement report sourceDatasetSha256 values must be listed in clinicalScaleReviewerAgreementSourceDatasetSha256s/,
+    },
+    {
+      statusOverride: {
+        clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+        clinicalScaleReviewPackageVerificationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
+      },
+      artifacts: {
+        [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]: passingClinicalReviewPackageVerificationReport({
+          sourceDatasetSha256: unlistedSourceDatasetSha256,
+        }),
+      },
+      blocker: /clinical review package verification report sourceDatasetSha256 values must be listed in clinicalScaleReviewPackageVerificationSourceDatasetSha256s/,
+    },
+  ];
+
+  for (const { statusOverride, artifacts, blocker } of weakTraceability) {
+    await assert.rejects(
+      () => validateStatusArtifacts({
+        ...baseClinicalEvidenceStatus,
+        ...statusOverride,
+      }, {
+        readArtifactText: artifactReader(artifacts),
+      }),
+      blocker,
+    );
+  }
+});
+
 test("validation status artifacts accept scale-specific clinical availability for a passing primary scale", async () => {
   const status = {
     ...BASE_STATUS,
@@ -1388,6 +1449,7 @@ test("validation status artifacts reject clinical agreement reports without a ma
 });
 
 test("validation status artifacts reject reviewer agreement reports with a mismatched source hash", async () => {
+  const mismatchedReviewerSourceDatasetSha256 = "b".repeat(64);
   const status = {
     ...BASE_STATUS,
     status: "clinical-scale-agreement-reviewed",
@@ -1398,6 +1460,10 @@ test("validation status artifacts reject reviewer agreement reports with a misma
     clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
     clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    clinicalScaleReviewerAgreementSourceDatasetSha256s: [
+      SOURCE_DATASET_SHA256,
+      mismatchedReviewerSourceDatasetSha256,
+    ],
     thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
     thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
     productionThresholdConstantsCalibrated: true,
@@ -1409,7 +1475,7 @@ test("validation status artifacts reject reviewer agreement reports with a misma
     () => validateStatusArtifacts(status, {
       readArtifactText: artifactReader({
         [CLINICAL_AGREEMENT_REPORT_PATH]: passingClinicalAgreementReport(),
-        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport({ sourceDatasetSha256: "b".repeat(64) }),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport({ sourceDatasetSha256: mismatchedReviewerSourceDatasetSha256 }),
         [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]: passingClinicalReviewPackageVerificationReport(),
         [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
       }),
@@ -1512,7 +1578,11 @@ test("validation status artifacts reject per-scale evidence summaries that do no
   const mismatchedEvidence = [
     {
       override: { sourceDatasetSha256: "b".repeat(64) },
-      statusOverride: clinicalSourceHashTraceability("b".repeat(64)),
+      statusOverride: {
+        clinicalScaleAgreementSourceDatasetSha256s: [SOURCE_DATASET_SHA256, "b".repeat(64)],
+        clinicalScaleReviewerAgreementSourceDatasetSha256s: [SOURCE_DATASET_SHA256, "b".repeat(64)],
+        clinicalScaleReviewPackageVerificationSourceDatasetSha256s: [SOURCE_DATASET_SHA256, "b".repeat(64)],
+      },
       blocker: /houseBrackmann\.sourceDatasetSha256 must match the clinical agreement report/,
     },
     { override: { clinicalReviewPackageVerificationReport: "docs/validation/other-review-package.json" }, blocker: /houseBrackmann\.clinicalReviewPackageVerificationReport/ },

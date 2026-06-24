@@ -1299,7 +1299,10 @@ traces back to the blinded source dataset package. The status file must list the
 same source hashes in `clinicalScaleAgreementSourceDatasetSha256s`,
 `clinicalScaleReviewerAgreementSourceDatasetSha256s`, and
 `clinicalScaleReviewPackageVerificationSourceDatasetSha256s`; an enabled scale
-whose hash is missing from any of those lists remains in estimate mode.
+whose hash is missing from any of those lists remains in estimate mode. The
+artifact validator also rejects referenced clinical agreement,
+reviewer-agreement, or package-verification reports when the artifact's own
+`sourceDatasetSha256` is not listed in the corresponding status hash array.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` schema-v1 artifacts with
 `sourceDatasetSha256` and ready-exercise coverage that matches the status claim.

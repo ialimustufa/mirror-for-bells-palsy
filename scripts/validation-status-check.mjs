@@ -100,6 +100,14 @@ function assertArtifactsNotNewerThanStatus(status, artifactGroups) {
   }
 }
 
+function assertReportSourceDatasetSha256sListed(reports, listedHashes, field, label) {
+  const unlistedReports = reports.filter((report) => !sha256ArrayIncludes(listedHashes, report.sourceDatasetSha256));
+  assertCondition(
+    unlistedReports.length === 0,
+    `${label} sourceDatasetSha256 values must be listed in ${field}`,
+  );
+}
+
 function assertIntegerAtLeast(value, minimum, field) {
   assertCondition(Number.isInteger(value) && value >= minimum, `${field} must be an integer at least ${minimum}`);
 }
@@ -1271,6 +1279,12 @@ async function validateStatusArtifacts(status, options = {}) {
     thresholdCalibrationReports,
   ]);
   if (status.clinicalScaleAgreementReports.length > 0) {
+    assertReportSourceDatasetSha256sListed(
+      clinicalAgreementReports,
+      status.clinicalScaleAgreementSourceDatasetSha256s,
+      "clinicalScaleAgreementSourceDatasetSha256s",
+      "clinical scale agreement report",
+    );
     const requiredScaleKeys = status.clinicalFacingScoresAllowed ? enabledClinicalScaleKeys(status) : CLINICAL_SCALE_AVAILABILITY_KEYS;
     const reportMeetingMinimum = clinicalAgreementReports.find((report) => clinicalAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
@@ -1279,6 +1293,12 @@ async function validateStatusArtifacts(status, options = {}) {
     );
   }
   if (status.clinicalScaleReviewerAgreementReports.length > 0) {
+    assertReportSourceDatasetSha256sListed(
+      clinicalReviewerAgreementReports,
+      status.clinicalScaleReviewerAgreementSourceDatasetSha256s,
+      "clinicalScaleReviewerAgreementSourceDatasetSha256s",
+      "clinical scale reviewer agreement report",
+    );
     const requiredScaleKeys = status.clinicalFacingScoresAllowed ? enabledClinicalScaleKeys(status) : CLINICAL_SCALE_AVAILABILITY_KEYS;
     const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => reviewerAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
@@ -1288,6 +1308,12 @@ async function validateStatusArtifacts(status, options = {}) {
     clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports, clinicalScaleReviewPackageVerificationReports);
   }
   if (status.clinicalScaleReviewPackageVerificationReports.length > 0) {
+    assertReportSourceDatasetSha256sListed(
+      clinicalScaleReviewPackageVerificationReports,
+      status.clinicalScaleReviewPackageVerificationSourceDatasetSha256s,
+      "clinicalScaleReviewPackageVerificationSourceDatasetSha256s",
+      "clinical review package verification report",
+    );
     const verifiedReviewPackage = clinicalScaleReviewPackageVerificationReports.find((report) => clinicalReviewPackageVerificationReportMeetsMinimum(report, status));
     assertCondition(
       verifiedReviewPackage,

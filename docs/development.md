@@ -113,7 +113,10 @@ checks for:
   and clinical-facing status must list those hashes in
   `clinicalScaleAgreementSourceDatasetSha256s`,
   `clinicalScaleReviewerAgreementSourceDatasetSha256s`, and
-  `clinicalScaleReviewPackageVerificationSourceDatasetSha256s`.
+  `clinicalScaleReviewPackageVerificationSourceDatasetSha256s`. The artifact
+  validator also rejects any referenced agreement, reviewer-agreement, or
+  package-verification report whose own `sourceDatasetSha256` is missing from
+  its matching status hash array.
   Threshold calibration reports must use `mirror-threshold-calibration-report`
   schema v1, include `sourceDatasetSha256`, and calibrated status must list
   matching hashes in
