@@ -151,7 +151,9 @@ The Wilson lower-bound gate is used because a raw observed percentage can hide
 uncertainty in small validation sets. The 30-assessment floor is a local release
 gate, not a universal clinical sample-size claim. The House-Brackmann case-mix
 gate is a local applicability control so a passing agreement rate cannot come
-only from one severity range. The estimator-version gate is a local change-control
+only from one severity range. It counts only rows with both a valid
+House-Brackmann target and a comparable House-Brackmann estimate, so missing HB
+estimates cannot satisfy case mix. The estimator-version gate is a local change-control
 measure: if the House-Brackmann/Sunnybrook/eFACE estimator changes, stale or
 missing-version label rows are excluded until the reviewed agreement evidence is
 regenerated for the current estimator version.

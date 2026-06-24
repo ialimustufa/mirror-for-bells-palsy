@@ -147,8 +147,9 @@ default minimum standard is:
   also be at least 80%.
 - At least 30 reviewed assessment labels before any primary scale can pass.
 - House-Brackmann case mix must cover all three local severity bands with at
-  least three eligible labels in each band: HB I-II mild/normal, HB III-IV
-  moderate, and HB V-VI severe/complete.
+  least three comparable estimate/label pairs in each band: HB I-II mild/normal,
+  HB III-IV moderate, and HB V-VI severe/complete. Rows with missing
+  House-Brackmann estimates do not satisfy case mix.
 - Reviewed labels only count when the row preserves `sourceLabelSheetMode:
   blinded`, is explicitly marked blinded to Mirror estimates, has an independent
   clinician-assigned or adjudicated `labelSource`,

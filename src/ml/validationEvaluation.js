@@ -741,7 +741,7 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
     incrementReasonCounts(primaryScaleEstimateIssueReasonCounts, primaryScaleEstimateIssueReasons(estimate, validPrimaryScales));
     reviewedAssessmentCount += 1;
     const severityBand = houseBrackmannSeverityBand(labels.houseBrackmann);
-    if (severityBand) houseBrackmannCaseMixCounts[severityBand] += 1;
+    if (severityBand && estimate.houseBrackmann != null) houseBrackmannCaseMixCounts[severityBand] += 1;
     for (const [scale, accumulator] of Object.entries(accumulators)) {
       recordAgreementCase(accumulator, record, estimate[scale], labels[scale]);
     }

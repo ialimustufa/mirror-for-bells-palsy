@@ -1101,7 +1101,8 @@ and eFACE total rows independently, requiring each passing scale to meet the
 30-label, 80% observed agreement, and 80% Wilson lower-bound standard. The
 all-primary-scale status also requires all primary checks, the House-Brackmann
 severity-band case-mix gate, and current clinical-scale estimator-version
-evidence to pass. It also emits
+evidence to pass. The case-mix gate counts only comparable House-Brackmann
+estimate/label pairs, so missing HB estimates cannot fill severity bands. It also emits
 `clinicalScaleAvailabilityRecommendation` entries for the House-Brackmann,
 Sunnybrook, and eFACE status keys, so a reviewer can see which individual scale
 rows are evidence-eligible after human review when the full set is not ready.

@@ -558,6 +558,10 @@ test("clinical scale evaluation treats HB estimate as missing without required e
   assert.equal(report.byScale.houseBrackmann.comparableCount, 0);
   assert.equal(report.byScale.houseBrackmann.missingEstimateCount, 1);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 0);
+  assert.equal(report.caseMix.representedSeverityBandCount, 0);
+  assert.equal(report.caseMix.severityBands.moderate.count, 0);
+  assert.equal(report.caseMix.meetsMinimumStandard, false);
+  assert.match(report.blockingReasons.join("\n"), /House-Brackmann severity bands/);
   assert.equal(report.byScale.sunnybrookComposite.comparableCount, 1);
   assert.equal(report.byScale.efaceTotal.comparableCount, 1);
   assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
