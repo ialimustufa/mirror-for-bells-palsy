@@ -2,6 +2,13 @@ import { LABEL_COLUMNS, parseCsv } from "./validationLabels.js";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../domain/clinicalScales.js";
 
 const PRIMARY_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist)\b|\bent\b|\bslp\b/i;
+const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
+const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
+const BLINDED_REVIEW_PATTERN = /^(true|yes|y|1|blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
+const BLINDED_LABEL_SHEET_PATTERN = /^(blinded|mirror[-\s]?hidden|estimate[-\s]?hidden)$/i;
+const INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN = /\b(clinician[-\s]?assigned|clinician|independent|reference[-\s]?standard)\b/i;
+const NON_INDEPENDENT_LABEL_SOURCE_PATTERN = /\b(mirror|estimate|algorithm|model|app|copied|auto|automated|self|patient|caregiver|demo|test|rehearsal|practice|unblinded)\b/i;
 
 const REVIEW_SCALE_CONFIG = Object.freeze({
   houseBrackmannGrade: {
@@ -141,6 +148,70 @@ function estimateVersionCounts(rowsById) {
   const counts = {};
   for (const row of rowsById.values()) incrementEstimateVersionCount(counts, clinicalScaleEstimateVersion(row));
   return counts;
+}
+
+function incrementReasonCount(counts, reason) {
+  counts[reason] = (counts[reason] ?? 0) + 1;
+}
+
+function reviewerRowEligibility(row = {}) {
+  const reviewerRole = String(row.reviewerRole ?? "").trim();
+  const confidence = String(row.clinicianConfidence ?? "").trim();
+  const sourceLabelSheetMode = String(row.sourceLabelSheetMode ?? "").trim();
+  const reviewBlinded = String(row.reviewBlinded ?? "").trim();
+  const labelSource = String(row.labelSource ?? "").trim();
+  const reasons = [];
+  if (!reviewerRole) {
+    reasons.push("missing clinical reviewer role");
+  } else if (NON_CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
+    reasons.push("reviewer role is marked non-clinical or rehearsal");
+  } else if (!CLINICAL_REVIEWER_ROLE_PATTERN.test(reviewerRole)) {
+    reasons.push("reviewer role is not recognized as clinical");
+  }
+  if (confidence && UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN.test(confidence)) {
+    reasons.push("clinician confidence is uncertain");
+  }
+  if (!BLINDED_LABEL_SHEET_PATTERN.test(sourceLabelSheetMode)) {
+    reasons.push("source label sheet was not generated in blinded mode");
+  }
+  if (!BLINDED_REVIEW_PATTERN.test(reviewBlinded)) {
+    reasons.push("review was not marked blinded to Mirror estimates");
+  }
+  if (!labelSource) {
+    reasons.push("missing independent clinical label source");
+  } else if (NON_INDEPENDENT_LABEL_SOURCE_PATTERN.test(labelSource)) {
+    reasons.push("label source is marked non-independent or copied");
+  } else if (!INDEPENDENT_CLINICAL_LABEL_SOURCE_PATTERN.test(labelSource)) {
+    reasons.push("label source is not recognized as independent clinical");
+  }
+  for (const scaleKey of PRIMARY_REVIEW_SCALE_KEYS) {
+    if (scaleValue(scaleKey, row[scaleKey]) == null) reasons.push(`missing valid ${scaleKey} label`);
+  }
+  return {
+    eligible: reasons.length === 0,
+    reasons,
+  };
+}
+
+function reviewerSheetEligibility(rowsById, reviewer) {
+  const reasonCounts = {};
+  const issues = [];
+  let eligibleAssessmentCount = 0;
+  for (const [assessmentId, row] of rowsById.entries()) {
+    const eligibility = reviewerRowEligibility(row);
+    if (eligibility.eligible) {
+      eligibleAssessmentCount += 1;
+      continue;
+    }
+    for (const reason of eligibility.reasons) incrementReasonCount(reasonCounts, reason);
+    issues.push({ reviewer, assessmentId, reasons: eligibility.reasons });
+  }
+  return {
+    eligibleAssessmentCount,
+    ineligibleAssessmentCount: issues.length,
+    ineligibleReasons: reasonCounts,
+    issues: issues.slice(0, 20),
+  };
 }
 
 function reviewerRowsByAssessmentId(csvText = "") {
@@ -336,10 +407,18 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const primaryScaleSummaries = PRIMARY_REVIEW_SCALE_KEYS.map((scaleKey) => byScale[scaleKey]);
   const reviewerAEstimateVersionCounts = estimateVersionCounts(reviewerAById);
   const reviewerBEstimateVersionCounts = estimateVersionCounts(reviewerBById);
+  const reviewerAEligibility = reviewerSheetEligibility(reviewerAById, "reviewerA");
+  const reviewerBEligibility = reviewerSheetEligibility(reviewerBById, "reviewerB");
   const reviewerAStaleOrMissingEstimateVersionCount = [...reviewerAById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
   const reviewerBStaleOrMissingEstimateVersionCount = [...reviewerBById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
   const blockingReasons = [];
   if (!assessmentIds.length) blockingReasons.push("no shared clinical-scale assessment labels found");
+  if (reviewerAEligibility.ineligibleAssessmentCount > 0) {
+    blockingReasons.push(`reviewerA: ${reviewerAEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata`);
+  }
+  if (reviewerBEligibility.ineligibleAssessmentCount > 0) {
+    blockingReasons.push(`reviewerB: ${reviewerBEligibility.ineligibleAssessmentCount} labels do not meet blinded independent clinical review metadata`);
+  }
   if (reviewerAStaleOrMissingEstimateVersionCount > 0) {
     blockingReasons.push(`reviewerA: ${reviewerAStaleOrMissingEstimateVersionCount} labels are missing or not estimator v${requiredClinicalScaleEstimateVersion}`);
   }
@@ -364,6 +443,12 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       adjudicationRequiredCount: adjudicationRows.length,
       primaryScaleCount: PRIMARY_REVIEW_SCALE_KEYS.length,
       requiredClinicalScaleEstimateVersion,
+      reviewerAEligibleAssessmentCount: reviewerAEligibility.eligibleAssessmentCount,
+      reviewerBEligibleAssessmentCount: reviewerBEligibility.eligibleAssessmentCount,
+      reviewerAIneligibleAssessmentCount: reviewerAEligibility.ineligibleAssessmentCount,
+      reviewerBIneligibleAssessmentCount: reviewerBEligibility.ineligibleAssessmentCount,
+      reviewerAIneligibleReasons: reviewerAEligibility.ineligibleReasons,
+      reviewerBIneligibleReasons: reviewerBEligibility.ineligibleReasons,
       reviewerAEstimateVersionCounts,
       reviewerBEstimateVersionCounts,
       reviewerAStaleOrMissingEstimateVersionCount,
@@ -372,6 +457,10 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
     },
     byScale,
     estimateVersionMismatches,
+    reviewerSheetIssues: [
+      ...reviewerAEligibility.issues,
+      ...reviewerBEligibility.issues,
+    ].slice(0, 40),
     adjudicationRows,
     blockingReasons,
     note: "Reviewer agreement is a reference-standard quality check. Resolve adjudication rows before merging final clinical-scale labels into a reviewed dataset.",

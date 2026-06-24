@@ -156,12 +156,17 @@ If multiple reviewers label the same assessment:
 - Treat missing, stale, or mismatched `clinicalScaleEstimateVersion` values as
   adjudication blockers; both raw reviewer sheets and the final adjudicated row
   must preserve the current estimator version before labels can count.
+- Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
+  incomplete, or out-of-range reviewer rows as adjudication blockers. They should
+  be recollected from a blinded current-version sheet rather than resolved by
+  consensus.
 
 The reviewer-agreement report uses the same tolerance targets as the clinical
 validation gate: House-Brackmann within one grade, Sunnybrook composite within
-10 points, and eFACE totals/domains within 10 points. The adjudication sheet keeps
-both raw reviewer values and raw estimator versions in audit columns and leaves
-the mergeable target columns blank until a consensus label is entered.
+10 points, and eFACE totals/domains within 10 points. It also reports reviewer
+sheet metadata issues before any adjudicated row can be merged. The adjudication
+sheet keeps both raw reviewer values and raw estimator versions in audit columns
+and leaves the mergeable target columns blank until a consensus label is entered.
 
 ## Required Artifacts Before Enabling Clinical-Facing Scores
 

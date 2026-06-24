@@ -28,7 +28,7 @@ function reviewerCsv(rows) {
       row.sourceLabelSheetMode ?? "blinded",
       row.reviewBlinded ?? "yes",
       row.labelSource ?? "clinician-assigned",
-      "clinician",
+      row.reviewerRole ?? "clinician",
       "2026-06-24T10:00:00.000Z",
       row.notes ?? "",
     ].join(",")),
@@ -59,10 +59,15 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.comparedAssessmentCount, 4);
   assert.equal(report.summary.adjudicationRequiredCount, 4);
   assert.equal(report.summary.requiredClinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.summary.reviewerAEligibleAssessmentCount, 3);
+  assert.equal(report.summary.reviewerBEligibleAssessmentCount, 3);
+  assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 0);
   assert.equal(report.summary.reviewerAEstimateVersionCounts.v1, 3);
   assert.equal(report.summary.reviewerBEstimateVersionCounts.v1, 3);
   assert.equal(report.summary.estimateVersionMismatchCount, 0);
   assert.deepEqual(report.estimateVersionMismatches, []);
+  assert.deepEqual(report.reviewerSheetIssues, []);
   assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 2);
   assert.equal(report.byScale.houseBrackmannGrade.exactMatchCount, 1);
   assert.equal(report.byScale.houseBrackmannGrade.withinToleranceCount, 1);
@@ -156,4 +161,47 @@ test("clinical-scale reviewer agreement blocks stale or mismatched estimator pro
   assert.match(report.blockingReasons.join("\n"), /reviewer sheets disagree for 2 assessment labels/);
   assert.match(report.adjudicationRows[0].disagreementSummary, /Estimator version/);
   assert.equal(report.adjudicationRows.find((row) => row.assessmentId === "assessment-1:clinical-scale").clinicalScaleEstimateVersion, "");
+});
+
+test("clinical-scale reviewer agreement blocks unblinded or non-independent reviewer sheets", () => {
+  const reviewerA = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+      sourceLabelSheetMode: "unblinded",
+      reviewBlinded: "no",
+      labelSource: "copied from Mirror estimate",
+      reviewerRole: "developer rehearsal",
+    },
+  ]);
+  const reviewerB = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+      clinicianConfidence: "uncertain",
+      labelSource: "",
+    },
+  ]);
+
+  const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.reviewerAEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerBEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerAIneligibleAssessmentCount, 1);
+  assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["reviewer role is marked non-clinical or rehearsal"], 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["source label sheet was not generated in blinded mode"], 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["review was not marked blinded to Mirror estimates"], 1);
+  assert.equal(report.summary.reviewerAIneligibleReasons["label source is marked non-independent or copied"], 1);
+  assert.equal(report.summary.reviewerBIneligibleReasons["clinician confidence is uncertain"], 1);
+  assert.equal(report.summary.reviewerBIneligibleReasons["missing independent clinical label source"], 1);
+  assert.equal(report.reviewerSheetIssues.length, 2);
+  assert.match(report.blockingReasons.join("\n"), /reviewerA: 1 labels do not meet blinded independent clinical review metadata/);
+  assert.match(report.blockingReasons.join("\n"), /reviewerB: 1 labels do not meet blinded independent clinical review metadata/);
 });

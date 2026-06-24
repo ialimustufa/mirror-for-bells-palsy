@@ -69,6 +69,9 @@ checks for:
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version provenance for each reviewer sheet; stale, missing, or mismatched
   versions are release blockers until adjudicated from current-version evidence.
+- Reviewer-agreement reports must also block unblinded, non-independent,
+  non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
+  reviewer rows before adjudication output can support readiness.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced
   clinical-scale agreement reports must have 95% Wilson lower bounds meeting the
   configured 80% agreement floor.
