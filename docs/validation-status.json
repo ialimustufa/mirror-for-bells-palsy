@@ -16,7 +16,9 @@
     "minUsableMovementCoverageRatio": 0.8,
     "confidenceInterval": "wilson-95",
     "clinicalScaleEstimateVersion": 5,
-    "reviewProtocol": "docs/clinical-scale-review-protocol.md"
+    "reviewProtocol": "docs/clinical-scale-review-protocol.md",
+    "requiresExplicitClinicalConfidence": true,
+    "requiresIsoReviewTimestamp": true
   },
   "clinicalScaleAgreementReports": [],
   "clinicalScaleReviewerAgreementReports": [],

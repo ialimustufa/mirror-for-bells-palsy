@@ -67,8 +67,9 @@ checks for:
   summaries for each enabled House-Brackmann/Sunnybrook/eFACE support value, or
   if the status file weakens the documented 30-assessment, 10-case, 80%
   observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
-  Wilson-confidence-interval, current-estimator-version, review-protocol, or
-  House-Brackmann case-mix floors.
+  Wilson-confidence-interval, current-estimator-version, review-protocol,
+  explicit clinical-confidence, UTC ISO review-timestamp, or House-Brackmann
+  case-mix floors.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
   from the current clinical-scale estimator version with `clinicianConfidence`

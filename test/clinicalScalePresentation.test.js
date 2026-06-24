@@ -263,6 +263,8 @@ test("clinical scale presentation policy fails closed when the runtime validatio
     { confidenceInterval: "wald-95", blocker: /confidenceInterval/ },
     { clinicalScaleEstimateVersion: validationStatus.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion - 1, blocker: /clinicalScaleEstimateVersion/ },
     { reviewProtocol: "docs/other-protocol.md", blocker: /reviewProtocol/ },
+    { requiresExplicitClinicalConfidence: false, blocker: /requiresExplicitClinicalConfidence/ },
+    { requiresIsoReviewTimestamp: false, blocker: /requiresIsoReviewTimestamp/ },
   ];
 
   for (const weakStandard of weakStandards) {

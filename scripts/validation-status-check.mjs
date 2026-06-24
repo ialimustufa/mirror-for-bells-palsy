@@ -252,6 +252,14 @@ function assertClinicalScaleMinimumStandard(value) {
     `clinicalScaleMinimumStandard.clinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
   );
   assertCondition(value.reviewProtocol === "docs/clinical-scale-review-protocol.md", "clinicalScaleMinimumStandard.reviewProtocol must reference docs/clinical-scale-review-protocol.md");
+  assertCondition(
+    value.requiresExplicitClinicalConfidence === true,
+    "clinicalScaleMinimumStandard.requiresExplicitClinicalConfidence must be true",
+  );
+  assertCondition(
+    value.requiresIsoReviewTimestamp === true,
+    "clinicalScaleMinimumStandard.requiresIsoReviewTimestamp must be true",
+  );
 }
 
 function assertTextMatches(text, pattern, artifactPath, description) {

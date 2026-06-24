@@ -66,6 +66,12 @@ function clinicalScaleValidationStandardBlockers(status = DEFAULT_VALIDATION_STA
   if (standard.reviewProtocol !== REQUIRED_REVIEW_PROTOCOL) {
     blockers.push(`reviewProtocol must be ${REQUIRED_REVIEW_PROTOCOL}`);
   }
+  if (standard.requiresExplicitClinicalConfidence !== true) {
+    blockers.push("requiresExplicitClinicalConfidence must be true");
+  }
+  if (standard.requiresIsoReviewTimestamp !== true) {
+    blockers.push("requiresIsoReviewTimestamp must be true");
+  }
   return blockers;
 }
 

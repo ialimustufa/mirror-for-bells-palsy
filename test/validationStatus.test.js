@@ -73,6 +73,8 @@ const BASE_STATUS = {
     confidenceInterval: "wilson-95",
     clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
     reviewProtocol: "docs/clinical-scale-review-protocol.md",
+    requiresExplicitClinicalConfidence: true,
+    requiresIsoReviewTimestamp: true,
   },
   clinicalScaleAgreementReports: [],
   clinicalScaleReviewerAgreementReports: [],
@@ -1710,6 +1712,29 @@ test("validation status rejects missing clinical scale review protocol", () => {
       },
     }),
     /reviewProtocol/,
+  );
+});
+
+test("validation status rejects missing clinical review metadata requirements", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        ...BASE_STATUS.clinicalScaleMinimumStandard,
+        requiresExplicitClinicalConfidence: false,
+      },
+    }),
+    /requiresExplicitClinicalConfidence/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        ...BASE_STATUS.clinicalScaleMinimumStandard,
+        requiresIsoReviewTimestamp: false,
+      },
+    }),
+    /requiresIsoReviewTimestamp/,
   );
 });
 

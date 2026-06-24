@@ -24,7 +24,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/validation-status.json",
-    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i, /"clinicalScaleAvailability"/i, /"clinicalScaleReviewPackageVerificationReports"/i, /clinical-scale-review-protocol\.md/i],
+    patterns: [/"schemaVersion": 1/i, /"clinicalFacingScoresAllowed":\s*(true|false)/i, /"clinicalScaleAvailability"/i, /"clinicalScaleReviewPackageVerificationReports"/i, /clinical-scale-review-protocol\.md/i, /"requiresExplicitClinicalConfidence":\s*true/i, /"requiresIsoReviewTimestamp":\s*true/i],
   },
   {
     path: "docs/clinical-scale-review-protocol.md",
