@@ -1276,7 +1276,10 @@ Clinical review package verification report paths must point to JSON
 stable row identities, hidden estimate-value columns, unchanged
 estimate-provenance columns, no verification errors, and at least the configured
 minimum reviewed clinical-scale assessment rows before clinical-facing support
-can be enabled.
+can be enabled. Clinical agreement reports used for enabled scales must carry
+`sourceDatasetSha256`, and that value must match one of the listed passed review
+package verification reports so release evidence traces back to the blinded
+source dataset package.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

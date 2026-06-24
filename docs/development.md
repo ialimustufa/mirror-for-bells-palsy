@@ -68,8 +68,8 @@ checks for:
   if the status file weakens the documented 30-assessment, 10-case, 80%
   observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
   Wilson-confidence-interval, current-estimator-version, review-protocol,
-  explicit clinical-confidence, UTC ISO review-timestamp, or House-Brackmann
-  case-mix floors.
+  explicit clinical-confidence, UTC ISO review-timestamp, source-dataset
+  SHA-256 traceability, or House-Brackmann case-mix floors.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
   from the current clinical-scale estimator version with `clinicianConfidence`
@@ -89,7 +89,8 @@ checks for:
   comparisons, plus complete resting-metric provenance, plus an eligible blinded
   independent label count meeting the minimum reviewed-assessment floor, plus an
   eligible distinct validation-case count meeting the `validationCaseId` floor,
-  an agreement sample plan for the primary scale Wilson gates, and unique
+  `sourceDatasetSha256` matching a verified blinded clinical review package, an
+  agreement sample plan for the primary scale Wilson gates, and unique
   assessment-id controls.
 - Clinical-scale agreement reports can be committed as Markdown for human
   review or as structured JSON for machine release evidence. Structured
@@ -100,7 +101,9 @@ checks for:
   their within-tolerance numerator and label denominator, and Wilson bounds must
   match those same counts. Each referenced agreement artifact must include a UTC
   ISO `generatedAt` timestamp for auditability, and the status `updatedAt` date
-  must not precede any referenced artifact generation date.
+  must not precede any referenced artifact generation date. Agreement artifacts
+  must also include `sourceDatasetSha256` so status validation can tie the
+  reviewed labels back to a listed passed review-package verification report.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` and review-package verification JSON
   artifacts in `clinicalScaleReviewPackageVerificationReports` before

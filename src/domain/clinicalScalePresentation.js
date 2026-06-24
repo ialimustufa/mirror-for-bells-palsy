@@ -72,6 +72,9 @@ function clinicalScaleValidationStandardBlockers(status = DEFAULT_VALIDATION_STA
   if (standard.requiresIsoReviewTimestamp !== true) {
     blockers.push("requiresIsoReviewTimestamp must be true");
   }
+  if (standard.requiresSourceDatasetSha256 !== true) {
+    blockers.push("requiresSourceDatasetSha256 must be true");
+  }
   return blockers;
 }
 

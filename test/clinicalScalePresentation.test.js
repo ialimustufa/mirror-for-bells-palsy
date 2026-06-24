@@ -265,6 +265,7 @@ test("clinical scale presentation policy fails closed when the runtime validatio
     { reviewProtocol: "docs/other-protocol.md", blocker: /reviewProtocol/ },
     { requiresExplicitClinicalConfidence: false, blocker: /requiresExplicitClinicalConfidence/ },
     { requiresIsoReviewTimestamp: false, blocker: /requiresIsoReviewTimestamp/ },
+    { requiresSourceDatasetSha256: false, blocker: /requiresSourceDatasetSha256/ },
   ];
 
   for (const weakStandard of weakStandards) {

@@ -15,6 +15,7 @@ const PRIMARY_CLINICAL_SCALE_CONFIG = Object.freeze({
   },
 });
 const PRIMARY_CLINICAL_SCALE_KEYS = Object.freeze(Object.keys(PRIMARY_CLINICAL_SCALE_CONFIG));
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
 
 function finiteOrNull(value) {
   return Number.isFinite(value) ? Number(value) : null;
@@ -39,6 +40,12 @@ function clinicalValidationReportFrom(input = {}, options = {}) {
   if (input?.clinicalScales?.kind === "mirror-clinical-scale-validation-report") return input.clinicalScales;
   if (Array.isArray(input)) return evaluateClinicalScaleEstimates(input, options);
   return evaluateClinicalScaleEstimates([input], options);
+}
+
+function sourceDatasetSha256From(input = {}, clinicalValidation = {}) {
+  const value = clinicalValidation.sourceDatasetSha256 ?? input.sourceDatasetSha256 ?? input.clinicalScales?.sourceDatasetSha256;
+  const text = String(value ?? "").trim().toLowerCase();
+  return SHA256_HEX_PATTERN.test(text) ? text : null;
 }
 
 function summarizeScaleReadiness(scaleKey, scaleReport = {}, thresholds) {
@@ -102,6 +109,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   const thresholds = normalizeThresholds(options);
   const generatedAt = options.generatedAt ?? new Date().toISOString();
   const clinicalValidation = clinicalValidationReportFrom(input, thresholds);
+  const sourceDatasetSha256 = sourceDatasetSha256From(input, clinicalValidation);
   const byScale = Object.fromEntries(
     PRIMARY_CLINICAL_SCALE_KEYS.map((scaleKey) => [
       scaleKey,
@@ -130,6 +138,9 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   if (clinicalValidation.standard?.requiresV5ScaleInputProvenance !== true) {
     commonBlockingReasons.push("scaleInputProvenance: needs validation report with Sunnybrook/eFACE input controls");
   }
+  if (!sourceDatasetSha256) {
+    commonBlockingReasons.push("sourceDatasetSha256: needs validation report tied to a hashed source validation dataset");
+  }
   if (!clinicalValidation.caseMix) {
     commonBlockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
   } else if (clinicalValidation.caseMix.blockingReasons?.length) {
@@ -152,6 +163,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
   return {
     kind: "mirror-clinical-scale-readiness-report",
     generatedAt,
+    sourceDatasetSha256,
     status,
     recommendation,
     thresholds: {
@@ -190,6 +202,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       caseMix: clinicalValidation.caseMix ?? null,
       readyForClinicalFacingScoring: false,
       clinicalFacingScoresAllowedByReportAlone: false,
+      sourceDatasetSha256,
     },
     byScale,
     blockingReasons,

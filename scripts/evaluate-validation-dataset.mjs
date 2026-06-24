@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import {
   evaluateClinicalScaleEstimates,
@@ -10,14 +11,15 @@ import {
 async function readValidationRecords(path) {
   const text = await readFile(path, "utf8");
   const trimmed = text.trim();
-  if (!trimmed) return [];
-  if (trimmed.startsWith("[")) return JSON.parse(trimmed);
+  const sourceDatasetSha256 = createHash("sha256").update(text).digest("hex");
+  if (!trimmed) return { records: [], sourceDatasetSha256 };
+  if (trimmed.startsWith("[")) return { records: JSON.parse(trimmed), sourceDatasetSha256 };
   const records = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim()) continue;
     records.push(JSON.parse(line));
   }
-  return records;
+  return { records, sourceDatasetSha256 };
 }
 
 const path = process.argv[2];
@@ -26,17 +28,18 @@ if (!path) {
   process.exit(1);
 }
 
-const records = await readValidationRecords(path);
+const { records, sourceDatasetSha256 } = await readValidationRecords(path);
 const samples = extractValidationFrameRecords(records);
 const frameSamples = evaluateValidationFrameSamples(samples);
 const assessmentClinicalScales = extractAssessmentClinicalScaleRecords(records);
 const clinicalScales = assessmentClinicalScales.length
-  ? evaluateClinicalScaleEstimates(assessmentClinicalScales)
+  ? evaluateClinicalScaleEstimates(assessmentClinicalScales, { sourceDatasetSha256 })
   : null;
 const result = clinicalScales
   ? {
     kind: "mirror-validation-dataset-evaluation-report",
     generatedAt: clinicalScales.generatedAt,
+    sourceDatasetSha256,
     frameSamples,
     clinicalScales,
   }

@@ -6,6 +6,7 @@ import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js
 const DEFAULT_STATUS_PATH = "docs/validation-status.json";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const ISO_TIMESTAMP_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const DEFAULT_MIN_DISTINCT_CLINICAL_CASES = 10;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
@@ -68,6 +69,10 @@ function assertStringArray(value, field) {
 function assertIsoTimestamp(value, field) {
   assertCondition(typeof value === "string" && ISO_TIMESTAMP_RE.test(value), `${field} must be a UTC ISO timestamp`);
   assertCondition(!Number.isNaN(Date.parse(value)), `${field} must be a valid UTC ISO timestamp`);
+}
+
+function assertSha256(value, field) {
+  assertCondition(typeof value === "string" && SHA256_HEX_RE.test(value), `${field} must be a SHA-256 hex string`);
 }
 
 function assertArtifactsNotNewerThanStatus(status, artifactGroups) {
@@ -260,6 +265,10 @@ function assertClinicalScaleMinimumStandard(value) {
     value.requiresIsoReviewTimestamp === true,
     "clinicalScaleMinimumStandard.requiresIsoReviewTimestamp must be true",
   );
+  assertCondition(
+    value.requiresSourceDatasetSha256 === true,
+    "clinicalScaleMinimumStandard.requiresSourceDatasetSha256 must be true",
+  );
 }
 
 function assertTextMatches(text, pattern, artifactPath, description) {
@@ -374,6 +383,7 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   assertCondition(report?.kind === "mirror-clinical-scale-agreement-report", `${artifactPath} must be a mirror-clinical-scale-agreement-report`);
   assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
   assertIsoTimestamp(report.generatedAt, `${artifactPath}.generatedAt`);
+  assertSha256(report.sourceDatasetSha256, `${artifactPath}.sourceDatasetSha256`);
   assertCondition(typeof report.status === "string" && report.status.length > 0, `${artifactPath}.status must be present`);
   const standard = report.evidenceStandard ?? report.standard;
   assertCondition(standard && typeof standard === "object", `${artifactPath} must include an evidenceStandard object`);
@@ -407,6 +417,10 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   assertCondition(
     standard.requiresIsoReviewTimestamp === true,
     `${artifactPath}.evidenceStandard.requiresIsoReviewTimestamp must be true`,
+  );
+  assertCondition(
+    standard.requiresSourceDatasetSha256 === true,
+    `${artifactPath}.evidenceStandard.requiresSourceDatasetSha256 must be true`,
   );
   const summary = report.summary;
   assertCondition(summary && typeof summary === "object", `${artifactPath} must include a summary object`);
@@ -446,6 +460,7 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
     "recognizedClinicalReviewerRole",
     "explicitClinicalConfidence",
     "isoReviewTimestamp",
+    "sourceDatasetHashTraceability",
   ]) {
     assertCondition(controls[controlKey] === true, `${artifactPath}.referenceStandardControls.${controlKey} must be true`);
   }
@@ -466,6 +481,7 @@ function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   return {
     path: artifactPath,
     generatedAt: report.generatedAt,
+    sourceDatasetSha256: report.sourceDatasetSha256.toLowerCase(),
     status: report.status,
     reviewedClinicalScaleAssessmentCount: summary.reviewedClinicalScaleAssessmentCount,
     distinctClinicalCaseCount: summary.distinctClinicalCaseCount,
@@ -506,7 +522,9 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   }
   assertTextMatches(text, /# Mirror Clinical Scale Agreement Report/i, artifactPath, "the Mirror clinical-scale agreement report heading");
   const generatedAt = text.match(/^Generated:\s*([^\s]+)/im)?.[1]?.trim();
+  const sourceDatasetSha256 = text.match(/Source dataset SHA-256:\s*([a-f0-9]{64})/i)?.[1]?.trim();
   assertIsoTimestamp(generatedAt, `${artifactPath}.Generated`);
+  assertSha256(sourceDatasetSha256, `${artifactPath}.Source dataset SHA-256`);
   assertTextMatches(text, /Status:\s*\S+/i, artifactPath, "a clinical-scale readiness status");
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
   assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
@@ -540,6 +558,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /complete resting-metric keys/i, artifactPath, "the complete resting-metric provenance control");
   assertTextMatches(text, /complete-resting-metrics calculation flag/i, artifactPath, "the complete-resting-metrics calculation control");
   assertTextMatches(text, /missing.*invalid estimates are reported in that scale'?s denominator/i, artifactPath, "the scale-specific missing-estimate denominator control");
+  assertTextMatches(text, /Source dataset control:\s*counted agreement evidence requires `sourceDatasetSha256` matching a verified blinded clinical review package/i, artifactPath, "the source dataset hash traceability control");
   assertTextMatches(text, /valid in-range target for that specific primary scale/i, artifactPath, "the scale-specific primary target validity control");
   assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
   assertTextMatches(text, /Reviewer identity control:\s*counted labels require a pseudonymous `reviewerId`/i, artifactPath, "the pseudonymous reviewer identity control");
@@ -579,6 +598,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   return {
     path: artifactPath,
     generatedAt,
+    sourceDatasetSha256: sourceDatasetSha256.toLowerCase(),
     status: text.match(/Status:\s*([^\n]+)/i)?.[1]?.trim() ?? null,
     reviewedClinicalScaleAssessmentCount,
     distinctClinicalCaseCount,
@@ -951,7 +971,13 @@ function clinicalReviewPackageVerificationReportMeetsMinimum(report, status) {
   );
 }
 
-function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports) {
+function verifiedReviewPackageForClinicalAgreement(clinicalReport, clinicalScaleReviewPackageVerificationReports) {
+  return clinicalScaleReviewPackageVerificationReports.find((report) => (
+    report.sourceDatasetSha256?.toLowerCase() === clinicalReport.sourceDatasetSha256?.toLowerCase()
+  ));
+}
+
+function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports, clinicalScaleReviewPackageVerificationReports) {
   for (const scaleKey of enabledClinicalScaleKeys(status)) {
     const fieldPrefix = `clinicalScaleAvailability.${scaleKey}`;
     const scale = status.clinicalScaleAvailability[scaleKey];
@@ -964,6 +990,10 @@ function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementRepo
     const reviewerRow = reviewerKey ? reviewerReport.byScale?.[reviewerKey] : null;
     assertCondition(clinicalRow, `${fieldPrefix}.clinicalAgreementReport must include a ${scaleKey} agreement row`);
     assertCondition(reviewerRow, `${fieldPrefix}.reviewerAgreementReport must include a ${scaleKey} reviewer agreement row`);
+    assertCondition(
+      verifiedReviewPackageForClinicalAgreement(clinicalReport, clinicalScaleReviewPackageVerificationReports),
+      `${fieldPrefix}.clinicalAgreementReport sourceDatasetSha256 must match a listed passed clinical review package verification report`,
+    );
     assertCondition(scale.clinicalScaleEstimateVersion === clinicalReport.clinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the clinical agreement report`);
     assertCondition(scale.clinicalScaleEstimateVersion === reviewerReport.requiredClinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the reviewer agreement report`);
     assertCondition(scale.reviewedLabelCount === clinicalRow.labeledCount, `${fieldPrefix}.reviewedLabelCount must match the referenced clinical agreement report`);
@@ -1166,7 +1196,7 @@ async function validateStatusArtifacts(status, options = {}) {
       reviewerReportMeetingMinimum,
       "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, distinct pseudonymous reviewer ids, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
     );
-    clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports);
+    clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports, clinicalScaleReviewPackageVerificationReports);
   }
   if (status.clinicalScaleReviewPackageVerificationReports.length > 0) {
     const verifiedReviewPackage = clinicalScaleReviewPackageVerificationReports.find((report) => clinicalReviewPackageVerificationReportMeetsMinimum(report, status));

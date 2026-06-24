@@ -7,6 +7,7 @@ import {
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
 
 function scaleReport({
   labeledCount,
@@ -47,6 +48,7 @@ function validationReport(overrides = {}) {
   return {
     kind: "mirror-clinical-scale-validation-report",
     generatedAt: "2026-06-24T00:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
     standard: {
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
@@ -113,6 +115,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Minimum Wilson lower-bound agreement: 80\.0%/);
   assert.match(markdown, /Distinct validation case minimum: 10/);
   assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
+  assert.match(markdown, new RegExp(`Source dataset SHA-256: ${SOURCE_DATASET_SHA256}`));
   assert.match(markdown, /Minimum usable movement coverage: 80\.0%/);
   assert.match(markdown, /Estimator input provenance: counted current-version rows preserve used\/omitted movement IDs/);
   assert.match(markdown, /Sunnybrook\/eFACE input-completeness provenance/);
@@ -155,12 +158,13 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /usable-movements-only calculation flag/);
   assert.match(markdown, /House-Brackmann estimates require the gentle eye-closure input/);
   assert.match(markdown, /missing, incomplete-input, or invalid estimates are reported in that scale's denominator/);
+  assert.match(markdown, /Source dataset control: counted agreement evidence requires `sourceDatasetSha256` matching a verified blinded clinical review package/);
   assert.match(markdown, /valid in-range target for that specific primary scale/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
   assert.match(markdown, /Reviewer identity control: counted labels require a pseudonymous `reviewerId`/);
   assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role and `clinicianConfidence` set to high or medium/);
   assert.match(markdown, /Review timestamp control: counted labels require `reviewedAt` as a UTC ISO timestamp/);
-  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, `reviewedAt`, estimator `version`, estimate evidence tier\/coverage\/input-provenance controls, `labelSource`, and clinical `reviewerRole`/);
+  assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, `clinicianConfidence`, `reviewedAt`, `sourceDatasetSha256`, estimator `version`, estimate evidence tier\/coverage\/input-provenance controls, `labelSource`, and clinical `reviewerRole`/);
   assert.match(markdown, /Primary target fields then count only for the scale where a valid target is present/);
   assert.match(markdown, /human-reviewed release decision/);
   assert.match(markdown, /TRIPOD\+AI/);
@@ -174,6 +178,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.kind, "mirror-clinical-scale-agreement-report");
   assert.equal(report.schemaVersion, 1);
   assert.equal(report.generatedAt, "2026-06-24T12:00:00.000Z");
+  assert.equal(report.sourceDatasetSha256, SOURCE_DATASET_SHA256);
   assert.equal(report.status, "meets-clinical-scale-confidence-standard");
   assert.equal(report.evidenceStandard.minAgreementRate, 0.8);
   assert.equal(report.evidenceStandard.minAgreementWilsonLowerBound, 0.8);
@@ -183,6 +188,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.evidenceStandard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(report.evidenceStandard.requiresExplicitClinicalConfidence, true);
   assert.equal(report.evidenceStandard.requiresIsoReviewTimestamp, true);
+  assert.equal(report.evidenceStandard.requiresSourceDatasetSha256, true);
   assert.equal(report.summary.reviewedClinicalScaleAssessmentCount, 30);
   assert.equal(report.summary.distinctClinicalCaseCount, 30);
   assert.equal(report.summary.eligibleBlindedIndependentLabelCount, 30);
@@ -195,6 +201,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.referenceStandardControls.sourceLabelSheetModeBlinded, true);
   assert.equal(report.referenceStandardControls.explicitClinicalConfidence, true);
   assert.equal(report.referenceStandardControls.isoReviewTimestamp, true);
+  assert.equal(report.referenceStandardControls.sourceDatasetHashTraceability, true);
   assert.equal(report.referenceStandardControls.houseBrackmannRequiredInput, true);
   assert.equal(report.referenceStandardControls.minUsableMovementCoverageRatio, 0.8);
   assert.equal(report.clinicalScaleAvailabilityRecommendation.houseBrackmann.evidenceMeetsMinimum, true);

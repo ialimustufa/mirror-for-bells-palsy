@@ -95,7 +95,7 @@ stale and do not count toward the release agreement gate.
 ## Clinical Safety
 
 These estimates are not diagnosis, prognosis, treatment advice, or validated endpoints. They remain disabled as clinical-facing validated scores while `docs/validation-status.json` has `clinicalFacingScoresAllowed: false`.
-The app and printable report copy read that status through `src/domain/clinicalScalePresentation.js`, so the current release presents values as Mirror estimates even when the assessment evidence standard is met. The runtime presentation gate also requires the explicit `clinical-scale-agreement-reviewed` status, a schema-v1 dated status file, reviewed dataset/frame/assessment coverage, ready exercise coverage from threshold calibration, clinical and reviewer agreement report paths, threshold report paths, and the status file's minimum standard before using clinical-facing wording: 30 reviewed assessments, 10 distinct validation cases, 80% observed agreement, an 80% Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence intervals, the current clinical-scale estimator version, and the House-Brackmann severity-band floors must all remain intact. The status file must record per-scale `clinicalScaleAvailability` evidence for House-Brackmann, Sunnybrook, and eFACE before that scale can be shown as support: the clinical agreement report path, reviewer agreement report path, current estimator version, reviewed-label count, distinct-case count, observed agreement rate, Wilson lower bound, reviewer paired-label count, reviewer distinct-case count, reviewer observed agreement rate, and reviewer Wilson lower bound. These fields let future releases keep a weaker scale in estimate mode while a separately reviewed scale is shown as clinical-scale support, but only after the global reviewed-data release gate is enabled. A global clinical-facing status is invalid unless at least one primary scale is explicitly enabled.
+The app and printable report copy read that status through `src/domain/clinicalScalePresentation.js`, so the current release presents values as Mirror estimates even when the assessment evidence standard is met. The runtime presentation gate also requires the explicit `clinical-scale-agreement-reviewed` status, a schema-v1 dated status file, reviewed dataset/frame/assessment coverage, ready exercise coverage from threshold calibration, clinical and reviewer agreement report paths, threshold report paths, and the status file's minimum standard before using clinical-facing wording: 30 reviewed assessments, 10 distinct validation cases, 80% observed agreement, an 80% Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence intervals, the current clinical-scale estimator version, source-dataset SHA-256 traceability, and the House-Brackmann severity-band floors must all remain intact. The status file must record per-scale `clinicalScaleAvailability` evidence for House-Brackmann, Sunnybrook, and eFACE before that scale can be shown as support: the clinical agreement report path, reviewer agreement report path, current estimator version, reviewed-label count, distinct-case count, observed agreement rate, Wilson lower bound, reviewer paired-label count, reviewer distinct-case count, reviewer observed agreement rate, and reviewer Wilson lower bound. These fields let future releases keep a weaker scale in estimate mode while a separately reviewed scale is shown as clinical-scale support, but only after the global reviewed-data release gate is enabled. A global clinical-facing status is invalid unless at least one primary scale is explicitly enabled.
 Users can hide optional clinical-scale estimates in Progress preferences. That
 display setting affects assessment summaries, assessment history, and printable
 reports; it does not erase stored assessment data or validation export fields.
@@ -110,7 +110,10 @@ intervals from those counts. Referenced clinical-scale agreement,
 reviewer-agreement, clinical review package verification, and threshold
 calibration artifacts must include UTC ISO `generatedAt` timestamps, and
 `docs/validation-status.json` must be dated on or after those artifact
-generation dates.
+generation dates. Clinical-scale agreement artifacts must also include
+`sourceDatasetSha256`, and `npm run validation:status` rejects enabled
+clinical-facing support unless that hash matches a listed passed clinical review
+package verification report for the blinded source package.
 
 ## Validation Workflow
 
@@ -268,8 +271,10 @@ House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
 current clinical-scale estimator version, the 80% usable-movement coverage
 floor, the complete/minimum estimate evidence-tier gate, complete resting-metric
 provenance, and the `sourceLabelSheetMode`/`reviewBlinded`/estimator
-`version`/`labelSource`/`validationCaseId`/`reviewerId`/`reviewedAt` controls before a
-clinical agreement artifact can support clinical-facing score availability.
+`version`/`labelSource`/`validationCaseId`/`reviewerId`/`reviewedAt` controls,
+plus `sourceDatasetSha256` matching a verified blinded clinical review package,
+before a clinical agreement artifact can support clinical-facing score
+availability.
 Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,
 independent clinician sheets with qualifying complete/minimum estimate evidence,

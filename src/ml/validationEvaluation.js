@@ -65,6 +65,7 @@ const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   confidenceLevel: 0.95,
   clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
 });
+const SHA256_HEX_PATTERN = /^[a-f0-9]{64}$/i;
 const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
   0.9: 1.6448536269514722,
   0.95: 1.959963984540054,
@@ -1038,6 +1039,9 @@ function evaluateClinicalScaleEstimates(records = [], options = {}) {
   return {
     kind: "mirror-clinical-scale-validation-report",
     generatedAt: options.generatedAt ?? new Date().toISOString(),
+    sourceDatasetSha256: SHA256_HEX_PATTERN.test(String(options.sourceDatasetSha256 ?? "").trim())
+      ? String(options.sourceDatasetSha256).trim().toLowerCase()
+      : null,
     standard: {
       minAgreementRate,
       minAgreementWilsonLowerBound,

@@ -319,7 +319,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   cases counted through `validationCaseId`.
 - A clinical-scale validation report from `npm run validate:dataset`.
 - A clinical-scale readiness report from
-  `npm run validation:clinical-readiness`.
+  `npm run validation:clinical-readiness` with `sourceDatasetSha256` preserved
+  from the reviewed validation dataset.
 - A clinical-scale reviewer-agreement report from
   `npm run validation:reviewer-agreement` showing current-version, blinded,
   independent clinician sheets with at least 30 paired labels on every enabled
@@ -333,6 +334,9 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   estimate-value columns, unchanged estimate-provenance columns, and the current
   80% observed/Wilson release standard before labels were merged. This report
   must be listed in `clinicalScaleReviewPackageVerificationReports`.
+- A clinical-scale agreement report from `npm run validation:clinical-report`
+  whose `sourceDatasetSha256` matches a listed passed clinical review package
+  verification report.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable

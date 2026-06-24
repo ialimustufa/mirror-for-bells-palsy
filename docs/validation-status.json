@@ -18,7 +18,8 @@
     "clinicalScaleEstimateVersion": 5,
     "reviewProtocol": "docs/clinical-scale-review-protocol.md",
     "requiresExplicitClinicalConfidence": true,
-    "requiresIsoReviewTimestamp": true
+    "requiresIsoReviewTimestamp": true,
+    "requiresSourceDatasetSha256": true
   },
   "clinicalScaleAgreementReports": [],
   "clinicalScaleReviewerAgreementReports": [],

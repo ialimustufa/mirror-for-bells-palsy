@@ -19,6 +19,7 @@ const REVIEWER_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-reviewer-
 const REVIEW_PACKAGE_VERIFICATION_REPORT_PATH = "docs/validation/clinical-scale-review-package-verification-2026-06-24.json";
 const THRESHOLD_CALIBRATION_REPORT_PATH = "docs/validation/threshold-calibration-2026-06-23.json";
 const TEST_WILSON_Z_95 = 1.959963984540054;
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
 
 function enabledScaleEvidence(overrides = {}) {
   return {
@@ -75,6 +76,7 @@ const BASE_STATUS = {
     reviewProtocol: "docs/clinical-scale-review-protocol.md",
     requiresExplicitClinicalConfidence: true,
     requiresIsoReviewTimestamp: true,
+    requiresSourceDatasetSha256: true,
   },
   clinicalScaleAgreementReports: [],
   clinicalScaleReviewerAgreementReports: [],
@@ -95,6 +97,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 ## Evidence Standard
 
 - Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}
+- Source dataset SHA-256: ${SOURCE_DATASET_SHA256}
 - Distinct validation case minimum: 10
 - Minimum usable movement coverage: 80.0%
 - Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, House-Brackmann required-input provenance, Sunnybrook/eFACE input-completeness provenance, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.
@@ -147,6 +150,7 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 - Unique assessment control: counted labels require one stable assessment id per reviewed clinical-scale row; duplicate or missing assessment ids are excluded and block release readiness.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
 - Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
+- Source dataset control: counted agreement evidence requires \`sourceDatasetSha256\` matching a verified blinded clinical review package.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer identity control: counted labels require a pseudonymous \`reviewerId\`; reviewer-agreement sheets must use distinct reviewer ids to support independent-review evidence.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and \`clinicianConfidence\` set to high or medium; blank, low, or uncertain confidence rows are excluded.
@@ -156,7 +160,7 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, \`clinicianConfidence\`, \`reviewedAt\`, estimator \`version\`, estimate evidence tier/coverage/input-provenance controls, \`labelSource\`, pseudonymous \`reviewerId\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, \`clinicianConfidence\`, \`reviewedAt\`, \`sourceDatasetSha256\`, estimator \`version\`, estimate evidence tier/coverage/input-provenance controls, \`labelSource\`, pseudonymous \`reviewerId\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -179,6 +183,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
     kind: "mirror-clinical-scale-agreement-report",
     schemaVersion: 1,
     generatedAt: "2026-06-24T00:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
     status: "meets-clinical-scale-confidence-standard",
     recommendation: "allow-controlled-estimate-availability-after-human-review",
     evidenceStandard: {
@@ -194,6 +199,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       requiresExplicitClinicalConfidence: true,
       requiresIsoReviewTimestamp: true,
+      requiresSourceDatasetSha256: true,
     },
     summary: {
       reviewedClinicalScaleAssessmentCount: 30,
@@ -264,6 +270,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
       recognizedClinicalReviewerRole: true,
       explicitClinicalConfidence: true,
       isoReviewTimestamp: true,
+      sourceDatasetHashTraceability: true,
     },
     note: "This report packages reviewed agreement evidence for Mirror clinical-scale estimates. It does not convert estimates into clinician-assigned grades and does not provide diagnosis, prognosis, or treatment advice.",
   };
@@ -290,6 +297,7 @@ function passingThresholdReport({ readyExercises = 5 } = {}) {
 function passingClinicalReviewPackageVerificationReport({
   assessmentClinicalScaleRows = 30,
   generatedAt = "2026-06-24T00:00:00.000Z",
+  sourceDatasetSha256 = SOURCE_DATASET_SHA256,
   controls = {},
   errors = [],
   status = "passed",
@@ -300,7 +308,7 @@ function passingClinicalReviewPackageVerificationReport({
     generatedAt,
     status,
     packageId: "clinical-review-2026-06-24",
-    sourceDatasetSha256: "a".repeat(64),
+    sourceDatasetSha256,
     summary: {
       labelRows: assessmentClinicalScaleRows,
       frameSampleRows: 0,
@@ -1170,6 +1178,85 @@ test("validation status artifacts reject structured clinical agreement reports w
   );
 });
 
+test("validation status artifacts reject clinical agreement reports without source hash controls", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      sunnybrook: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      eface: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+    },
+  };
+  const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport());
+  delete structuredReport.sourceDatasetSha256;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: JSON.stringify(structuredReport),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /sourceDatasetSha256/,
+  );
+
+  const reportWithoutReferenceControl = JSON.parse(passingStructuredClinicalAgreementReport());
+  delete reportWithoutReferenceControl.referenceStandardControls.sourceDatasetHashTraceability;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: JSON.stringify(reportWithoutReferenceControl),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /referenceStandardControls\.sourceDatasetHashTraceability/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports without a matching verified review package source hash", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [CLINICAL_AGREEMENT_REPORT_PATH]: passingClinicalAgreementReport(),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]: passingClinicalReviewPackageVerificationReport({ sourceDatasetSha256: "b".repeat(64) }),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /sourceDatasetSha256 must match a listed passed clinical review package verification report/,
+  );
+});
+
 test("validation status evidence helper derives per-scale status summaries from reports", () => {
   const clinicalAgreementReport = validateClinicalScaleAgreementReportText(passingClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
   const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(passingClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
@@ -1735,6 +1822,16 @@ test("validation status rejects missing clinical review metadata requirements", 
       },
     }),
     /requiresIsoReviewTimestamp/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      clinicalScaleMinimumStandard: {
+        ...BASE_STATUS.clinicalScaleMinimumStandard,
+        requiresSourceDatasetSha256: false,
+      },
+    }),
+    /requiresSourceDatasetSha256/,
   );
 });
 

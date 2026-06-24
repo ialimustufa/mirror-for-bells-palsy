@@ -4,6 +4,7 @@ import { assessClinicalScaleReadiness, clinicalValidationReportFrom } from "../s
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
 
 function scaleReport({ labeledCount, withinToleranceCount, agreementRate = withinToleranceCount / labeledCount, lower = 0.82, upper = 1 }) {
   return {
@@ -26,6 +27,7 @@ function clinicalValidationReport(overrides = {}) {
   return {
     kind: "mirror-clinical-scale-validation-report",
     generatedAt: "2026-06-24T00:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
     standard: {
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
@@ -232,8 +234,19 @@ test("clinical scale readiness reports confidence standard without enabling clin
   assert.equal(report.validationSummary.clinicalFacingScoresAllowedByReportAlone, false);
   assert.equal(report.validationSummary.excludedClinicalLabelCount, 0);
   assert.equal(report.validationSummary.distinctClinicalCaseCount, 30);
+  assert.equal(report.validationSummary.sourceDatasetSha256, SOURCE_DATASET_SHA256);
+  assert.equal(report.sourceDatasetSha256, SOURCE_DATASET_SHA256);
   assert.equal(report.validationSummary.caseMix.representedSeverityBandCount, 3);
   assert.equal(report.byScale.houseBrackmann.agreementRate, 1);
   assert.equal(report.thresholds.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.deepEqual(report.thresholds.confidenceInterval, { method: "wilson-score", confidenceLevel: 0.95 });
+});
+
+test("clinical scale readiness fails closed without source dataset hash traceability", () => {
+  const source = clinicalValidationReport({ sourceDatasetSha256: null });
+  const report = assessClinicalScaleReadiness(source, { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.equal(report.sourceDatasetSha256, null);
+  assert.match(report.blockingReasons.join("\n"), /sourceDatasetSha256/);
 });
