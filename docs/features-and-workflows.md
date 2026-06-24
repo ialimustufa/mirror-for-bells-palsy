@@ -54,6 +54,7 @@ The `/try` route is a standalone showcase of the underlying face tracker, indepe
 - Per-region activation glows that pulse on the camera as the matching muscle engages.
 - A ranked **Active muscles** panel with left/right activation bars, peak-hold ticks, and a live expression chip.
 - A face-position panel showing posture state and head drift in degrees.
+- A dismissible header card and footer acknowledgement linking to OpenAI and Render with UTM-tagged URLs for the credited support.
 
 It is intentionally minimal: no scoring lock and no session machinery, so a first-time visitor can see the tracker working immediately.
 

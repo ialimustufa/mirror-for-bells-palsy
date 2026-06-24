@@ -6,8 +6,8 @@ Important: Mirror supports practice and self-tracking, but it does not diagnose,
 
 ## Try It
 
-- How it works, for anyone to try: [mirror-for-bells-palsy.onrender.com/try](https://mirror-for-bells-palsy.onrender.com/try)
-- Full practice app for folks who have Bell's palsy: [mirror-for-bells-palsy.onrender.com](https://mirror-for-bells-palsy.onrender.com/)
+- How it works, for anyone to try: [mirror.iali.in/try](https://mirror.iali.in/try) ([Render fallback](https://mirror-for-bells-palsy.onrender.com/try))
+- Full practice app for folks who have Bell's palsy: [mirror.iali.in](https://mirror.iali.in/) ([Render fallback](https://mirror-for-bells-palsy.onrender.com/))
 
 ## What Matters
 
@@ -59,6 +59,8 @@ Mirror is free for personal, non-commercial use. Commercial use requires prior w
 - LinkedIn: [in/ialimustufa](https://www.linkedin.com/in/ialimustufa/)
 
 ## Thanks
+
+Supported by [OpenAI](https://developers.openai.com/?utm_source=mirror-for-bells-palsy&utm_medium=referral&utm_campaign=readme&utm_content=openai-credit) with $600 in credits and [Render](https://render.com/?utm_source=mirror-for-bells-palsy&utm_medium=referral&utm_campaign=readme&utm_content=render-credit) with $250 in credits.
 
 Huge thanks to **Vaibhav (VB) Srivastav** from OpenAI for 6 months of ChatGPT Pro (worth ~$600). It directly funded the usage of Codex 5.5 that went into shipping this.
 
