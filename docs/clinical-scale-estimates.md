@@ -117,6 +117,11 @@ Mirror's current estimates in read-only reference columns for audit, but the
   label came from a blinded sheet and was independently clinician-assigned or
   adjudicated before it is counted by readiness tooling
 
+Validation label schema v4 lists the three primary scale fields as
+`primaryTargetFields`, not all-or-nothing required fields. A row needs at least
+one valid primary target to count, and each valid target counts only for its own
+scale's denominator.
+
 Normal, non-blinded label sheets also include read-only estimate value columns.
 Blinded label sheets hide the estimate values, but preserve non-revealing
 provenance columns for `estimateStatus`, `estimateEvidenceTier`,

@@ -2,7 +2,7 @@ import { summarizeAssessmentSession } from "./assessment";
 
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 3;
+const VALIDATION_LABEL_SCHEMA_VERSION = 4;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
@@ -11,7 +11,8 @@ const CLINICIAN_CONFIDENCE_LABELS = ["high", "medium", "low", "uncertain"];
 const HOUSE_BRACKMANN_LABELS = ["I", "II", "III", "IV", "V", "VI"];
 const STANDARD_REVIEWER_ROLES = ["clinician", "user", "developer"];
 const FRAME_LABEL_REQUIRED_FIELDS = ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"];
-const ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS = ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"];
+const ASSESSMENT_CLINICAL_PRIMARY_TARGET_FIELDS = ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"];
+const ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS = [];
 
 function recordArray(value) {
   return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
@@ -134,6 +135,9 @@ function buildLabelSchema() {
     },
     assessmentClinicalScale: {
       requiredFields: ASSESSMENT_CLINICAL_LABEL_REQUIRED_FIELDS,
+      primaryTargetFields: ASSESSMENT_CLINICAL_PRIMARY_TARGET_FIELDS,
+      minimumValidPrimaryTargetsForCounting: 1,
+      targetCounting: "scale-by-scale",
       fields: assessmentClinicalFields,
     },
   };

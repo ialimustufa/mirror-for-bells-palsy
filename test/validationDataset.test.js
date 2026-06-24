@@ -79,9 +79,12 @@ test("validation dataset exports labeled frame sample templates", async () => {
   assert.equal(manifest.summary.assessmentClinicalScaleRecords, 1);
   assert.deepEqual(manifest.summary.exercises, ["eye-close"]);
   assert.equal(manifest.summary.containsLandmarks, true);
-  assert.equal(manifest.labelSchema.version, 3);
+  assert.equal(manifest.labelSchema.version, 4);
   assert.deepEqual(manifest.labelSchema.requiredFields, ["intendedMovement", "affectedSide", "quality", "visibleMovementLevel", "coactivationNotes"]);
-  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.requiredFields, []);
+  assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.primaryTargetFields, ["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.minimumValidPrimaryTargetsForCounting, 1);
+  assert.equal(manifest.labelSchema.assessmentClinicalScale.targetCounting, "scale-by-scale");
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateStatus.default, "record.estimate.status");
   assert.deepEqual(manifest.labelSchema.assessmentClinicalScale.fields.estimateUsableMovementCoverageRatio.range, [0, 1]);
   assert.equal(manifest.labelSchema.assessmentClinicalScale.fields.estimateUsedMovementExerciseIds.default, "record.estimate.evidence.estimatedMovementExerciseIds");

@@ -87,7 +87,8 @@ Exclude an assessment row from clinical readiness counts when:
   `houseBrackmannGrade` I-VI/1-6, `sunnybrookComposite` 0-100, and
   `efaceTotal` 0-100. A missing or out-of-range target removes that specific
   scale from its denominator, but it does not remove other valid primary targets
-  on the same assessment.
+  on the same assessment. Validation label schema v4 records these columns as
+  `primaryTargetFields` rather than all-or-nothing required fields.
 
 The evaluator enforces row-level provenance exclusions before counting reviewed
 clinical-scale assessments. Valid primary targets then count scale by scale.

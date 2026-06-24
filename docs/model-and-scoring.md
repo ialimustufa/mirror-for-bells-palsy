@@ -997,9 +997,12 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - Assessment clinical-scale rows include estimate status, evidence tier, usable
   movement coverage, used/omitted movement exercise IDs, and the
   usable-movements-only calculation flag so reviewer sheets remain tied to the
-  exact estimator inputs. Label schema v3 also carries House-Brackmann
+  exact estimator inputs. Label schema v4 also carries House-Brackmann
   input-completeness provenance: required exercise IDs, used exercise IDs,
-  missing required exercise IDs, and the complete flag.
+  missing required exercise IDs, and the complete flag. It lists
+  `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
+  target fields rather than required fields because valid targets count
+  scale-by-scale.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
@@ -1008,6 +1011,8 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - A `label` template on each assessment clinical-scale row with
   `houseBrackmannGrade`, `sunnybrookComposite`, `efaceTotal`, optional eFACE
   domain scores, reviewer confidence, reviewer role, review time, and notes.
+  At least one valid primary target is needed for a row to count, and each
+  valid primary target counts only for its own scale.
 
 Label fields start empty except for values Mirror can infer locally, such as the
 sample's intended exercise and the profile affected side. A reviewed validation set
