@@ -1,8 +1,10 @@
 import { LABEL_COLUMNS, parseCsv } from "./validationLabels.js";
-import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../domain/clinicalScales.js";
+import { CLINICAL_SCALE_ESTIMATE_VERSION, STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales.js";
 
 const PRIMARY_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 const VALID_CLINICAL_SCALE_EVIDENCE_TIERS = new Set(["complete-standard-assessment", "minimum-standard-assessment"]);
+const STANDARD_SCALE_MOVEMENT_IDS = Object.freeze(STANDARD_SCALE_MOVEMENTS.map((movement) => movement.exerciseId));
+const STANDARD_SCALE_MOVEMENT_ID_SET = new Set(STANDARD_SCALE_MOVEMENT_IDS);
 const CLINICAL_REVIEWER_ROLE_PATTERN = /\b(clinician|physician|doctor|otolaryngologist|neurologist|surgeon|therapist|physiotherapist|pathologist)\b|\bent\b|\bslp\b/i;
 const NON_CLINICAL_REVIEWER_ROLE_PATTERN = /\b(non[-\s]?clinician|developer|engineer|user|self|patient|caregiver|demo|test|rehearsal|practice)\b/i;
 const UNCERTAIN_CLINICAL_CONFIDENCE_PATTERN = /\b(uncertain|low|unusable|not[-\s]?confident|insufficient)\b/i;
@@ -202,6 +204,72 @@ function normalizedEstimateEvidenceText(row = {}, key) {
   return String(row?.[key] ?? "").trim();
 }
 
+function estimateEvidenceColumnPresent(row = {}, key) {
+  const presenceKey = `__${key}ColumnPresent`;
+  return row?.[presenceKey] !== false;
+}
+
+function estimateMovementIdList(row = {}, key) {
+  return normalizedEstimateEvidenceText(row, key)
+    .split("|")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function estimateBooleanValue(row = {}, key) {
+  const text = normalizedEstimateEvidenceText(row, key);
+  if (/^(true|yes|y|1)$/i.test(text)) return true;
+  if (/^(false|no|n|0)$/i.test(text)) return false;
+  return null;
+}
+
+function hasDuplicates(values = []) {
+  return new Set(values).size !== values.length;
+}
+
+function estimateMovementProvenanceReasons(row = {}) {
+  const reasons = [];
+  const usedText = normalizedEstimateEvidenceText(row, "estimateUsedMovementExerciseIds");
+  const used = estimateMovementIdList(row, "estimateUsedMovementExerciseIds");
+  const omitted = estimateMovementIdList(row, "estimateOmittedMovementExerciseIds");
+  const usedSet = new Set(used);
+  const omittedSet = new Set(omitted);
+  const usableCount = estimateMovementCount(row, "estimateUsableMovementCount");
+  const requiredCount = estimateMovementCount(row, "estimateRequiredMovementCount");
+  const calculationUsesOnlyUsableMovements = estimateBooleanValue(row, "estimateCalculationUsesOnlyUsableMovements");
+  if (
+    !estimateEvidenceColumnPresent(row, "estimateUsedMovementExerciseIds")
+    || !estimateEvidenceColumnPresent(row, "estimateOmittedMovementExerciseIds")
+    || !usedText
+  ) {
+    reasons.push("clinical scale estimate movement provenance is missing");
+  }
+  if (
+    !estimateEvidenceColumnPresent(row, "estimateCalculationUsesOnlyUsableMovements")
+    || calculationUsesOnlyUsableMovements !== true
+  ) {
+    reasons.push("clinical scale estimate usable-movement calculation flag is missing or false");
+  }
+  const hasUnknownIds = [...used, ...omitted].some((exerciseId) => !STANDARD_SCALE_MOVEMENT_ID_SET.has(exerciseId));
+  const hasOverlap = used.some((exerciseId) => omittedSet.has(exerciseId));
+  const hasAllStandardIds = STANDARD_SCALE_MOVEMENT_IDS.every((exerciseId) => usedSet.has(exerciseId) || omittedSet.has(exerciseId));
+  const hasExpectedUsedCount = usableCount == null || used.length === usableCount;
+  const hasExpectedOmittedCount = usableCount == null || requiredCount == null || omitted.length === Math.max(0, requiredCount - usableCount);
+  if (
+    hasUnknownIds
+    || hasDuplicates(used)
+    || hasDuplicates(omitted)
+    || hasOverlap
+    || !hasAllStandardIds
+    || !hasExpectedUsedCount
+    || !hasExpectedOmittedCount
+    || requiredCount !== STANDARD_SCALE_MOVEMENT_IDS.length
+  ) {
+    reasons.push("clinical scale estimate movement provenance is inconsistent");
+  }
+  return reasons;
+}
+
 function estimateEvidenceReasons(row = {}, options = {}) {
   const minUsableMovementCoverageRatio = options.minUsableMovementCoverageRatio
     ?? DEFAULT_REVIEWER_AGREEMENT_STANDARD.minUsableMovementCoverageRatio;
@@ -216,6 +284,7 @@ function estimateEvidenceReasons(row = {}, options = {}) {
   if (!Number.isFinite(coverageRatio) || coverageRatio < minUsableMovementCoverageRatio) {
     reasons.push("clinical scale estimate movement coverage is below the minimum standard");
   }
+  reasons.push(...estimateMovementProvenanceReasons(row));
   return reasons;
 }
 
@@ -392,6 +461,9 @@ function reviewerRowsByAssessmentId(csvText = "") {
     if (!assessmentId) continue;
     const next = {};
     for (const column of LABEL_COLUMNS) next[column] = valueFromRow(row, indexByHeader, column);
+    next.__estimateUsedMovementExerciseIdsColumnPresent = indexByHeader.estimateUsedMovementExerciseIds != null;
+    next.__estimateOmittedMovementExerciseIdsColumnPresent = indexByHeader.estimateOmittedMovementExerciseIds != null;
+    next.__estimateCalculationUsesOnlyUsableMovementsColumnPresent = indexByHeader.estimateCalculationUsesOnlyUsableMovements != null;
     out.set(assessmentId, next);
   }
   return out;

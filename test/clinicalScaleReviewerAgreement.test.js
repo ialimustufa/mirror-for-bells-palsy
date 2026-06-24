@@ -46,6 +46,39 @@ function reviewerCsv(rows) {
   ].join("\n");
 }
 
+function legacyReviewerCsvWithoutMovementProvenance(rows) {
+  return [
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    ...rows.map((row) => [
+      "assessmentClinicalScale",
+      "",
+      row.assessmentId,
+      row.sessionId ?? row.assessmentId.replace(":clinical-scale", ""),
+      row.sessionTs ?? "",
+      row.date ?? "2026-06-24",
+      row.estimateStatus ?? "estimated",
+      row.estimateEvidenceTier ?? "complete-standard-assessment",
+      row.estimateUsableMovementCoverageRatio ?? 1,
+      row.estimateUsableMovementCount ?? 5,
+      row.estimateRequiredMovementCount ?? 5,
+      row.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION,
+      row.houseBrackmannGrade ?? "",
+      row.sunnybrookComposite ?? "",
+      row.efaceTotal ?? "",
+      row.efaceStatic ?? "",
+      row.efaceDynamic ?? "",
+      row.efaceSynkinesis ?? "",
+      row.clinicianConfidence ?? "high",
+      row.sourceLabelSheetMode ?? "blinded",
+      row.reviewBlinded ?? "yes",
+      row.labelSource ?? "clinician-assigned",
+      row.reviewerRole ?? "clinician",
+      "2026-06-24T10:00:00.000Z",
+      row.notes ?? "",
+    ].join(",")),
+  ].join("\n");
+}
+
 test("clinical-scale reviewer agreement reports per-scale agreement and adjudication rows", () => {
   const reviewerA = reviewerCsv([
     { assessmentId: "assessment-1:clinical-scale", houseBrackmannGrade: "III", sunnybrookComposite: 76, efaceTotal: 73, efaceStatic: 80 },
@@ -305,6 +338,35 @@ test("clinical-scale reviewer agreement blocks insufficient estimate evidence pr
   assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
   assert.match(report.blockingReasons.join("\n"), /estimateEvidence: reviewer sheets disagree/);
   assert.match(report.adjudicationRows[0].disagreementSummary, /Estimate evidence/);
+});
+
+test("clinical-scale reviewer agreement blocks reviewer sheets without movement provenance columns", () => {
+  const rows = [{
+    assessmentId: "assessment-1:clinical-scale",
+    houseBrackmannGrade: "III",
+    sunnybrookComposite: 76,
+    efaceTotal: 73,
+  }];
+
+  const report = compareClinicalScaleReviewerLabels(
+    legacyReviewerCsvWithoutMovementProvenance(rows),
+    legacyReviewerCsvWithoutMovementProvenance(rows),
+    { generatedAt: "2026-06-24T12:00:00.000Z" },
+  );
+
+  assert.equal(report.summary.reviewerAEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerBEligibleAssessmentCount, 0);
+  assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 1);
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.summary.excludedReviewerPairCount, 1);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
+  assert.equal(report.summary.reviewerAIneligibleReasons["clinical scale estimate movement provenance is missing"], 1);
+  assert.equal(report.summary.reviewerBIneligibleReasons["clinical scale estimate usable-movement calculation flag is missing or false"], 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer A: clinical scale estimate movement provenance is missing"], 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer B: clinical scale estimate movement provenance is missing"], 1);
+  assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 0);
+  assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
 });
 
 test("clinical-scale reviewer agreement blocks mismatched omitted movement provenance", () => {
