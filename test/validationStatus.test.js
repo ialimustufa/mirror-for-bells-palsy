@@ -54,7 +54,7 @@ const HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY = {
 
 const BASE_STATUS = {
   schemaVersion: 1,
-  updatedAt: "2026-06-23",
+  updatedAt: "2026-06-24",
   status: "tooling-ready-needs-reviewed-data",
   reviewedDatasetCount: 0,
   reviewedFrameCount: 0,
@@ -892,6 +892,35 @@ test("validation status rejects reviewer and threshold artifacts without ISO gen
   assert.throws(
     () => validateThresholdCalibrationReportText(JSON.stringify(thresholdReport), THRESHOLD_CALIBRATION_REPORT_PATH),
     /generatedAt must be a UTC ISO timestamp/,
+  );
+});
+
+test("validation status artifacts reject reports generated after the status decision date", async () => {
+  const status = {
+    ...BASE_STATUS,
+    updatedAt: "2026-06-23",
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [CLINICAL_AGREEMENT_REPORT_PATH]: passingClinicalAgreementReport(),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /generatedAt must not be after validation status updatedAt 2026-06-23/,
   );
 });
 

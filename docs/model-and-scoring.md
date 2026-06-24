@@ -1251,7 +1251,8 @@ confidence-standard status. Structured clinical agreement JSON artifacts must be
 machine release evidence, and observed agreement rates must match the reported
 within-tolerance counts, label denominators, and Wilson score intervals. Every
 clinical agreement, reviewer-agreement, and threshold calibration artifact must
-include a UTC ISO `generatedAt` timestamp.
+include a UTC ISO `generatedAt` timestamp that is not later than the validation
+status `updatedAt` date.
 Clinical reviewer-agreement report paths must point to JSON
 `mirror-clinical-scale-reviewer-agreement-report` schema-v1 artifacts with
 current-version eligible reviewer sheets, within-tolerance rates that match the

@@ -108,7 +108,8 @@ cross-checks observed agreement rates against their within-tolerance counts and
 label or paired-label denominators, then recomputes the reported Wilson score
 intervals from those counts. Referenced clinical-scale agreement,
 reviewer-agreement, and threshold calibration artifacts must include UTC ISO
-`generatedAt` timestamps.
+`generatedAt` timestamps, and `docs/validation-status.json` must be dated on or
+after those artifact generation dates.
 
 ## Validation Workflow
 

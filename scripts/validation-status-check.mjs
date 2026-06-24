@@ -69,6 +69,18 @@ function assertIsoTimestamp(value, field) {
   assertCondition(!Number.isNaN(Date.parse(value)), `${field} must be a valid UTC ISO timestamp`);
 }
 
+function assertArtifactsNotNewerThanStatus(status, artifactGroups) {
+  for (const artifacts of artifactGroups) {
+    for (const artifact of artifacts) {
+      const artifactDate = artifact.generatedAt?.slice(0, 10);
+      assertCondition(
+        typeof artifactDate === "string" && artifactDate <= status.updatedAt,
+        `${artifact.path} generatedAt must not be after validation status updatedAt ${status.updatedAt}`,
+      );
+    }
+  }
+}
+
 function assertIntegerAtLeast(value, minimum, field) {
   assertCondition(Number.isInteger(value) && value >= minimum, `${field} must be an integer at least ${minimum}`);
 }
@@ -1028,6 +1040,11 @@ async function validateStatusArtifacts(status, options = {}) {
     const text = await readArtifactText(artifactPath, options);
     thresholdCalibrationReports.push(validateThresholdCalibrationReportText(text, artifactPath));
   }
+  assertArtifactsNotNewerThanStatus(status, [
+    clinicalAgreementReports,
+    clinicalReviewerAgreementReports,
+    thresholdCalibrationReports,
+  ]);
   if (status.clinicalScaleAgreementReports.length > 0) {
     const requiredScaleKeys = status.clinicalFacingScoresAllowed ? enabledClinicalScaleKeys(status) : CLINICAL_SCALE_AVAILABILITY_KEYS;
     const reportMeetingMinimum = clinicalAgreementReports.find((report) => clinicalAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));

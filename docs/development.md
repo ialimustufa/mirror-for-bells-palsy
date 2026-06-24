@@ -97,7 +97,8 @@ checks for:
   controls without parsing tables. Reported observed agreement rates must match
   their within-tolerance numerator and label denominator, and Wilson bounds must
   match those same counts. Each referenced agreement artifact must include a UTC
-  ISO `generatedAt` timestamp for auditability.
+  ISO `generatedAt` timestamp for auditability, and the status `updatedAt` date
+  must not precede any referenced artifact generation date.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
@@ -126,7 +127,8 @@ checks for:
   scale-input/resting-metric provenance, before adjudication output can support
   readiness. Reviewer observed agreement rates must match the within-tolerance
   paired-label counts, and reviewer Wilson bounds must match those counts. The
-  report must include a UTC ISO `generatedAt` timestamp.
+  report must include a UTC ISO `generatedAt` timestamp no later than the status
+  `updatedAt` date.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, zero incomplete
