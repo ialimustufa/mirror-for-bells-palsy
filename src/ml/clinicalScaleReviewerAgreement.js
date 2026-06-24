@@ -1274,6 +1274,7 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   }
   return {
     kind: "mirror-clinical-scale-reviewer-agreement-report",
+    schemaVersion: 1,
     generatedAt: options.generatedAt ?? new Date().toISOString(),
     reviewerA: options.reviewerA ?? "reviewer-a",
     reviewerB: options.reviewerB ?? "reviewer-b",

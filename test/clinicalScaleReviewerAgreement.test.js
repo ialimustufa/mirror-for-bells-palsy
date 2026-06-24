@@ -163,6 +163,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   });
 
   assert.equal(report.kind, "mirror-clinical-scale-reviewer-agreement-report");
+  assert.equal(report.schemaVersion, 1);
   assert.equal(report.summary.reviewerAAssessmentCount, 3);
   assert.equal(report.summary.reviewerBAssessmentCount, 3);
   assert.equal(report.summary.comparedAssessmentCount, 4);

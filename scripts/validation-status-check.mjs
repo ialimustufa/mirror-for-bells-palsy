@@ -235,6 +235,7 @@ function primaryScaleAgreementRowFromJson(report, artifactPath, scaleKey, scaleL
 
 function validateClinicalScaleAgreementReportJson(report, artifactPath) {
   assertCondition(report?.kind === "mirror-clinical-scale-agreement-report", `${artifactPath} must be a mirror-clinical-scale-agreement-report`);
+  assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
   assertCondition(typeof report.status === "string" && report.status.length > 0, `${artifactPath}.status must be present`);
   const standard = report.evidenceStandard ?? report.standard;
   assertCondition(standard && typeof standard === "object", `${artifactPath} must include an evidenceStandard object`);
@@ -465,6 +466,7 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     throw new Error(`${artifactPath} must be a JSON clinical-scale reviewer-agreement report: ${error.message}`);
   }
   assertCondition(report?.kind === "mirror-clinical-scale-reviewer-agreement-report", `${artifactPath} must be a mirror-clinical-scale-reviewer-agreement-report`);
+  assertCondition(report.schemaVersion === 1, `${artifactPath}.schemaVersion must be 1`);
   assertCondition(report.standard && typeof report.standard === "object", `${artifactPath} must include a reviewer agreement standard object`);
   assertCondition(report.standard.minAgreementRate === 0.8, `${artifactPath}.standard.minAgreementRate must be 0.8`);
   assertCondition(

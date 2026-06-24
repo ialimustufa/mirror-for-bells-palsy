@@ -169,6 +169,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   const report = buildClinicalScaleAgreementReport(validationReport(), { generatedAt: "2026-06-24T12:00:00.000Z" });
 
   assert.equal(report.kind, "mirror-clinical-scale-agreement-report");
+  assert.equal(report.schemaVersion, 1);
   assert.equal(report.generatedAt, "2026-06-24T12:00:00.000Z");
   assert.equal(report.status, "meets-clinical-scale-confidence-standard");
   assert.equal(report.evidenceStandard.minAgreementRate, 0.8);

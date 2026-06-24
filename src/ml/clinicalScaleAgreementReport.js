@@ -292,6 +292,7 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
 
   return {
     kind: "mirror-clinical-scale-agreement-report",
+    schemaVersion: 1,
     generatedAt,
     status: readiness.status ?? "unknown",
     recommendation: readiness.recommendation ?? "unknown",

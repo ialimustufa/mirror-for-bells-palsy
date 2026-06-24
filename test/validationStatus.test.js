@@ -169,6 +169,7 @@ function houseBrackmannOnlyClinicalAgreementReport() {
 function passingStructuredClinicalAgreementReport(overrides = {}) {
   const report = {
     kind: "mirror-clinical-scale-agreement-report",
+    schemaVersion: 1,
     generatedAt: "2026-06-24T00:00:00.000Z",
     status: "meets-clinical-scale-confidence-standard",
     recommendation: "allow-controlled-estimate-availability-after-human-review",
@@ -286,6 +287,7 @@ function passingClinicalReviewerAgreementReport({
   const representedSeverityBandCount = sameBandCount >= 3 ? 3 : 0;
   return JSON.stringify({
     kind: "mirror-clinical-scale-reviewer-agreement-report",
+    schemaVersion: 1,
     generatedAt: "2026-06-24T00:00:00.000Z",
     reviewerA: "clinician-a",
     reviewerB: "clinician-b",
@@ -723,6 +725,68 @@ test("validation status artifacts accept structured clinical agreement reports",
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound, 0.887);
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.agreementWilsonLowerBound, 0.887);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
+});
+
+test("validation status artifacts reject unversioned structured clinical agreement reports", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      sunnybrook: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      eface: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+    },
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: passingStructuredClinicalAgreementReport({ schemaVersion: 2 }),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /clinical-scale-agreement-2026-06-24\.json\.schemaVersion must be 1/,
+  );
+});
+
+test("validation status artifacts reject unversioned clinical reviewer agreement reports", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  delete reviewerReport.schemaVersion;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [CLINICAL_AGREEMENT_REPORT_PATH]: passingClinicalAgreementReport(),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: JSON.stringify(reviewerReport),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /clinical-scale-reviewer-agreement-2026-06-24\.json\.schemaVersion must be 1/,
+  );
 });
 
 test("validation status artifacts reject structured clinical agreement reports without required controls", async () => {

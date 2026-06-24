@@ -101,6 +101,9 @@ display setting affects assessment summaries, assessment history, and printable
 reports; it does not erase stored assessment data or validation export fields.
 
 Before these estimates can be presented as validated clinical grades, the repo needs clinician-reviewed validation data proving agreement with target HB, Sunnybrook, and eFACE ratings. The current release gate still fails closed for clinical-facing validated scoring until reviewed datasets exist.
+Structured clinical-scale agreement and reviewer-agreement JSON reports used by
+that gate must declare schema version 1 so stale machine-readable evidence is
+rejected instead of silently interpreted as current.
 
 ## Validation Workflow
 

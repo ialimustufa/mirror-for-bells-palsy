@@ -90,9 +90,10 @@ checks for:
   an agreement sample plan for the primary scale Wilson gates, and unique
   assessment-id controls.
 - Clinical-scale agreement reports can be committed as Markdown for human
-  review or as structured JSON for machine release evidence. The JSON format is
-  preferred for status updates because `npm run validation:status` can validate
-  the counts, Wilson intervals, House-Brackmann case mix, and reference-standard
+  review or as structured JSON for machine release evidence. Structured
+  clinical-scale agreement JSON must use schema v1. The JSON format is preferred
+  for status updates because `npm run validation:status` can validate the
+  counts, Wilson intervals, House-Brackmann case mix, and reference-standard
   controls without parsing tables.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
@@ -113,7 +114,9 @@ checks for:
   or missing/incomplete scale-input or resting-metric provenance, plus duplicate
   or missing assessment ids, are release blockers until recollected from
   qualifying current-version evidence.
-- Reviewer-agreement reports must also block unblinded, non-independent,
+- Reviewer-agreement reports must use
+  `mirror-clinical-scale-reviewer-agreement-report` schema v1 and must also
+  block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
   reviewer rows, plus rows paired with insufficient estimate status, evidence
   tier, usable-movement coverage, used/omitted movement provenance, or
