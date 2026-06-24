@@ -176,6 +176,11 @@ function assertClinicalScaleAvailabilityEvidence(status, scaleKey, scale) {
     status.clinicalScaleReviewerAgreementReports.includes(scale.reviewerAgreementReport),
     `${fieldPrefix}.reviewerAgreementReport must reference a listed clinical scale reviewer agreement report`,
   );
+  assertSha256(scale.sourceDatasetSha256, `${fieldPrefix}.sourceDatasetSha256`);
+  assertCondition(
+    status.clinicalScaleReviewPackageVerificationReports.includes(scale.clinicalReviewPackageVerificationReport),
+    `${fieldPrefix}.clinicalReviewPackageVerificationReport must reference a listed clinical review package verification report`,
+  );
   assertCondition(
     scale.clinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion,
     `${fieldPrefix}.clinicalScaleEstimateVersion must be ${status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion}`,
@@ -993,13 +998,22 @@ function clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementRepo
     const reviewerRow = reviewerKey ? reviewerReport.byScale?.[reviewerKey] : null;
     assertCondition(clinicalRow, `${fieldPrefix}.clinicalAgreementReport must include a ${scaleKey} agreement row`);
     assertCondition(reviewerRow, `${fieldPrefix}.reviewerAgreementReport must include a ${scaleKey} reviewer agreement row`);
+    const reviewPackageReport = verifiedReviewPackageForClinicalAgreement(clinicalReport, clinicalScaleReviewPackageVerificationReports);
     assertCondition(
-      verifiedReviewPackageForClinicalAgreement(clinicalReport, clinicalScaleReviewPackageVerificationReports),
+      reviewPackageReport,
       `${fieldPrefix}.clinicalAgreementReport sourceDatasetSha256 must match a listed passed clinical review package verification report`,
+    );
+    assertCondition(
+      scale.sourceDatasetSha256.toLowerCase() === clinicalReport.sourceDatasetSha256,
+      `${fieldPrefix}.sourceDatasetSha256 must match the clinical agreement report`,
     );
     assertCondition(
       reviewerReport.sourceDatasetSha256 === clinicalReport.sourceDatasetSha256,
       `${fieldPrefix}.reviewerAgreementReport sourceDatasetSha256 must match the clinical agreement report`,
+    );
+    assertCondition(
+      scale.clinicalReviewPackageVerificationReport === reviewPackageReport?.path,
+      `${fieldPrefix}.clinicalReviewPackageVerificationReport must match the verified review package for the source dataset`,
     );
     assertCondition(scale.clinicalScaleEstimateVersion === clinicalReport.clinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the clinical agreement report`);
     assertCondition(scale.clinicalScaleEstimateVersion === reviewerReport.requiredClinicalScaleEstimateVersion, `${fieldPrefix}.clinicalScaleEstimateVersion must match the reviewer agreement report`);
@@ -1020,16 +1034,30 @@ function assertRecognizedScaleKeys(scaleKeys, field = "enabledScaleKeys") {
   }
 }
 
-function clinicalScaleEvidenceFromReports(clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey) {
+function clinicalScaleEvidenceFromReports(clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey, clinicalReviewPackageVerificationReport = null) {
   const clinicalRow = clinicalAgreementReport.primaryScaleAgreementRows?.[scaleKey];
   const reviewerKey = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.reviewerKey;
   const reviewerRow = reviewerKey ? clinicalReviewerAgreementReport.byScale?.[reviewerKey] : null;
   assertCondition(clinicalRow, `${scaleKey} clinical agreement row is missing`);
   assertCondition(reviewerRow, `${scaleKey} reviewer agreement row is missing`);
+  assertCondition(
+    clinicalAgreementReport.sourceDatasetSha256 === clinicalReviewerAgreementReport.sourceDatasetSha256,
+    `${scaleKey} clinical and reviewer agreement reports must have matching sourceDatasetSha256`,
+  );
+  assertCondition(
+    clinicalReviewPackageVerificationReport,
+    `${scaleKey} requires a verified clinical review package for sourceDatasetSha256`,
+  );
+  assertCondition(
+    clinicalReviewPackageVerificationReport.sourceDatasetSha256?.toLowerCase() === clinicalAgreementReport.sourceDatasetSha256,
+    `${scaleKey} clinical review package verification report must match sourceDatasetSha256`,
+  );
   return {
     clinicalFacingScoresAllowed: true,
     clinicalAgreementReport: clinicalAgreementReport.path,
     reviewerAgreementReport: clinicalReviewerAgreementReport.path,
+    clinicalReviewPackageVerificationReport: clinicalReviewPackageVerificationReport.path,
+    sourceDatasetSha256: clinicalAgreementReport.sourceDatasetSha256,
     clinicalScaleEstimateVersion: clinicalAgreementReport.clinicalScaleEstimateVersion,
     reviewedLabelCount: clinicalRow.labeledCount,
     distinctValidationCaseCount: clinicalAgreementReport.distinctClinicalCaseCount,
@@ -1049,6 +1077,10 @@ function clinicalScaleMeetsReportEvidence(status, clinicalAgreementReport, clini
 
 function buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options = {}) {
   assertClinicalScaleMinimumStandard(status?.clinicalScaleMinimumStandard);
+  const clinicalScaleReviewPackageVerificationReports = Array.isArray(options.clinicalScaleReviewPackageVerificationReports)
+    ? options.clinicalScaleReviewPackageVerificationReports
+    : [];
+  const clinicalReviewPackageVerificationReport = verifiedReviewPackageForClinicalAgreement(clinicalAgreementReport, clinicalScaleReviewPackageVerificationReports);
   const requestedEnabledScaleKeys = options.enabledScaleKeys;
   const enabledScaleKeys = requestedEnabledScaleKeys == null
     ? CLINICAL_SCALE_AVAILABILITY_KEYS.filter((scaleKey) => clinicalScaleMeetsReportEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey))
@@ -1067,7 +1099,7 @@ function buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport,
   return Object.fromEntries(CLINICAL_SCALE_AVAILABILITY_KEYS.map((scaleKey) => [
     scaleKey,
     enabledScaleKeys.includes(scaleKey)
-      ? clinicalScaleEvidenceFromReports(clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey)
+      ? clinicalScaleEvidenceFromReports(clinicalAgreementReport, clinicalReviewerAgreementReport, scaleKey, clinicalReviewPackageVerificationReport)
       : { clinicalFacingScoresAllowed: false },
   ]));
 }
@@ -1079,9 +1111,14 @@ function uniqueWithAppendedPath(paths = [], path) {
 }
 
 function buildClinicalScaleStatusEvidencePatch(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options = {}) {
+  const clinicalScaleReviewPackageVerificationReports = Array.isArray(options.clinicalScaleReviewPackageVerificationReports)
+    ? options.clinicalScaleReviewPackageVerificationReports
+    : [];
+  const clinicalReviewPackageVerificationReport = verifiedReviewPackageForClinicalAgreement(clinicalAgreementReport, clinicalScaleReviewPackageVerificationReports);
   return {
     clinicalScaleAgreementReports: uniqueWithAppendedPath(status?.clinicalScaleAgreementReports, clinicalAgreementReport.path),
     clinicalScaleReviewerAgreementReports: uniqueWithAppendedPath(status?.clinicalScaleReviewerAgreementReports, clinicalReviewerAgreementReport.path),
+    clinicalScaleReviewPackageVerificationReports: uniqueWithAppendedPath(status?.clinicalScaleReviewPackageVerificationReports, clinicalReviewPackageVerificationReport?.path),
     clinicalScaleAvailability: buildClinicalScaleAvailabilityEvidence(status, clinicalAgreementReport, clinicalReviewerAgreementReport, options),
   };
 }

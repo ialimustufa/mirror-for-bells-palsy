@@ -5,14 +5,15 @@ import {
   buildClinicalScaleStatusEvidencePatch,
   validateClinicalScaleAgreementReportText,
   validateClinicalScaleReviewerAgreementReportText,
+  validateClinicalScaleReviewPackageVerificationReportText,
   validateStatus,
 } from "./validation-status-check.mjs";
 
 const USAGE = [
-  "Usage: npm run validation:status-evidence -- <validation-status.json> <clinical-scale-agreement.md|json> <clinical-scale-reviewer-agreement.json> [--enable houseBrackmann,sunnybrook,eface] [--status-patch]",
+  "Usage: npm run validation:status-evidence -- <validation-status.json> <clinical-scale-agreement.md|json> <clinical-scale-reviewer-agreement.json> <clinical-review-package-verification.json> [--enable houseBrackmann,sunnybrook,eface] [--status-patch]",
   "",
   "Without --enable, the command enables only primary scales that meet both report-backed evidence gates.",
-  "Use --status-patch to also include the clinical and reviewer agreement report path arrays.",
+  "Use --status-patch to also include the clinical, reviewer, and review-package verification report path arrays.",
   "The generated JSON is a draft for human review; it does not edit docs/validation-status.json or bypass the global release gate.",
 ].join("\n");
 
@@ -36,11 +37,12 @@ function parseArgs(args) {
     }
     positional.push(arg);
   }
-  if (positional.length !== 3) throw new Error("expected status, clinical agreement, and reviewer agreement paths");
+  if (positional.length !== 4) throw new Error("expected status, clinical agreement, reviewer agreement, and clinical review package verification paths");
   return {
     statusPath: positional[0],
     clinicalAgreementPath: positional[1],
     reviewerAgreementPath: positional[2],
+    reviewPackageVerificationPath: positional[3],
     enabledScaleKeys,
     statusPatch,
   };
@@ -65,8 +67,13 @@ try {
     await readText(args.reviewerAgreementPath),
     args.reviewerAgreementPath,
   );
+  const reviewPackageVerificationReport = validateClinicalScaleReviewPackageVerificationReportText(
+    await readText(args.reviewPackageVerificationPath),
+    args.reviewPackageVerificationPath,
+  );
   const evidenceOptions = {
     enabledScaleKeys: args.enabledScaleKeys,
+    clinicalScaleReviewPackageVerificationReports: [reviewPackageVerificationReport],
   };
   const draft = args.statusPatch
     ? buildClinicalScaleStatusEvidencePatch(status, clinicalAgreementReport, reviewerAgreementReport, evidenceOptions)

@@ -19,7 +19,7 @@ npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-rep
 npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
 npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md
 npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.json
-npm run validation:status-evidence -- docs/validation-status.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.json docs/validation/clinical-scale-reviewer-agreement-YYYY-MM-DD.json --status-patch
+npm run validation:status-evidence -- docs/validation-status.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.json docs/validation/clinical-scale-reviewer-agreement-YYYY-MM-DD.json docs/validation/clinical-scale-review-package-verification-YYYY-MM-DD.json --status-patch
 npm run validation:status
 npm run release:check # lint + tests + build + release doc checks
 ```
@@ -110,10 +110,11 @@ checks for:
   clinical-facing clinical-scale support can be enabled.
 - `npm run validation:status-evidence` can draft the per-scale
   `clinicalScaleAvailability` evidence block from a clinical agreement report
-  and reviewer-agreement report. With `--status-patch`, it also drafts the
-  corresponding `clinicalScaleAgreementReports` and
-  `clinicalScaleReviewerAgreementReports` arrays so report paths and per-scale
-  evidence stay together. A reviewer still has to choose which eligible scales
+  reviewer-agreement report, and matching review-package verification report.
+  With `--status-patch`, it also drafts the corresponding
+  `clinicalScaleAgreementReports`, `clinicalScaleReviewerAgreementReports`, and
+  `clinicalScaleReviewPackageVerificationReports` arrays so report paths and
+  per-scale evidence stay together. A reviewer still has to choose which eligible scales
   to enable, add the reviewed package verification reports, and copy the
   reviewed fields into `docs/validation-status.json`; the helper does not edit
   the status file or bypass the clinical release gate.
@@ -149,7 +150,9 @@ checks for:
   paired-label counts, and reviewer Wilson bounds must match those counts. The
   report must include a UTC ISO `generatedAt` timestamp no later than the status
   `updatedAt` date, plus `sourceDatasetSha256` matching the clinical agreement
-  report and listed clinical review package verification report.
+  report and listed clinical review package verification report. Enabled
+  per-scale status entries must also repeat that `sourceDatasetSha256` and name
+  the matching `clinicalReviewPackageVerificationReport` path.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, zero incomplete

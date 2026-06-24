@@ -1212,18 +1212,20 @@ ready exercise coverage, schema-v1 dated status metadata, the explicit
 `clinicalFacingScoresAllowed` flag, and the explicit
 `clinical-scale-agreement-reviewed` status value. For every enabled scale in
 `clinicalScaleAvailability`, the runtime also requires a per-scale evidence
-summary pointing to the listed clinical and reviewer agreement reports and
-showing current estimator version, reviewed-label count, distinct-case count,
-observed agreement, Wilson lower bound, reviewer paired-label count, reviewer
-distinct-case count, reviewer observed agreement, and reviewer Wilson lower
-bound. `npm run validation:status` cross-checks those per-scale summaries
+summary pointing to the listed clinical agreement, reviewer-agreement, and
+clinical review package verification reports, repeating `sourceDatasetSha256`,
+and showing current estimator version, reviewed-label count, distinct-case
+count, observed agreement, Wilson lower bound, reviewer paired-label count,
+reviewer distinct-case count, reviewer observed agreement, and reviewer Wilson
+lower bound. `npm run validation:status` cross-checks those per-scale summaries
 against the parsed report artifacts, so a status file cannot promote a scale by
 entering unsupported counts, rates, Wilson lower bounds, or report paths. `npm
 run validation:status-evidence` can generate a draft of that status block from
-the reviewed artifacts; with `--status-patch`, it also drafts the matching
-clinical-agreement and reviewer-agreement report path arrays. The release
-decision remains a human-reviewed status file update. It also audits the
-machine-readable minimum standard before using clinical-facing wording: the
+the clinical agreement, reviewer-agreement, and review-package verification
+artifacts; with `--status-patch`, it also drafts the matching clinical,
+reviewer, and package-verification report path arrays. The release decision
+remains a human-reviewed status file update. It also audits the machine-readable
+minimum standard before using clinical-facing wording: the
 30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
 Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence
 interval, current clinical-scale estimator version, review protocol, and

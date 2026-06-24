@@ -26,6 +26,8 @@ function enabledScaleEvidence(overrides = {}) {
     clinicalFacingScoresAllowed: true,
     clinicalAgreementReport: CLINICAL_AGREEMENT_REPORT_PATH,
     reviewerAgreementReport: REVIEWER_AGREEMENT_REPORT_PATH,
+    clinicalReviewPackageVerificationReport: REVIEW_PACKAGE_VERIFICATION_REPORT_PATH,
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
     clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
     reviewedLabelCount: 30,
     distinctValidationCaseCount: 30,
@@ -606,6 +608,8 @@ test("validation status rejects enabled per-scale availability without evidence 
   const weakEvidence = [
     { override: { clinicalAgreementReport: "docs/validation/other-report.md" }, blocker: /houseBrackmann\.clinicalAgreementReport/ },
     { override: { reviewerAgreementReport: "docs/validation/other-reviewer-report.json" }, blocker: /houseBrackmann\.reviewerAgreementReport/ },
+    { override: { clinicalReviewPackageVerificationReport: "docs/validation/other-review-package.json" }, blocker: /houseBrackmann\.clinicalReviewPackageVerificationReport/ },
+    { override: { sourceDatasetSha256: "not-a-sha256" }, blocker: /houseBrackmann\.sourceDatasetSha256/ },
     { override: { clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1 }, blocker: /houseBrackmann\.clinicalScaleEstimateVersion/ },
     { override: { reviewedLabelCount: 29 }, blocker: /houseBrackmann\.reviewedLabelCount/ },
     { override: { distinctValidationCaseCount: 9 }, blocker: /houseBrackmann\.distinctValidationCaseCount/ },
@@ -1311,11 +1315,16 @@ test("validation status artifacts reject reviewer agreement reports with a misma
 test("validation status evidence helper derives per-scale status summaries from reports", () => {
   const clinicalAgreementReport = validateClinicalScaleAgreementReportText(passingClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
   const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(passingClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
-  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport);
+  const reviewPackageVerificationReport = validateClinicalScaleReviewPackageVerificationReportText(passingClinicalReviewPackageVerificationReport(), REVIEW_PACKAGE_VERIFICATION_REPORT_PATH);
+  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport, {
+    clinicalScaleReviewPackageVerificationReports: [reviewPackageVerificationReport],
+  });
 
   assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
   assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalAgreementReport, CLINICAL_AGREEMENT_REPORT_PATH);
   assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerAgreementReport, REVIEWER_AGREEMENT_REPORT_PATH);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalReviewPackageVerificationReport, REVIEW_PACKAGE_VERIFICATION_REPORT_PATH);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.sourceDatasetSha256, SOURCE_DATASET_SHA256);
   assert.equal(clinicalScaleAvailability.houseBrackmann.reviewedLabelCount, 30);
   assert.equal(clinicalScaleAvailability.houseBrackmann.distinctValidationCaseCount, 30);
   assert.equal(clinicalScaleAvailability.houseBrackmann.observedAgreementRate, 1);
@@ -1331,13 +1340,18 @@ test("validation status evidence helper derives per-scale status summaries from 
 test("validation status evidence helper keeps weak scales disabled unless explicitly requested", () => {
   const clinicalAgreementReport = validateClinicalScaleAgreementReportText(houseBrackmannOnlyClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
   const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(houseBrackmannOnlyClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
-  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport);
+  const reviewPackageVerificationReport = validateClinicalScaleReviewPackageVerificationReportText(passingClinicalReviewPackageVerificationReport(), REVIEW_PACKAGE_VERIFICATION_REPORT_PATH);
+  const evidenceOptions = {
+    clinicalScaleReviewPackageVerificationReports: [reviewPackageVerificationReport],
+  };
+  const clinicalScaleAvailability = buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport, evidenceOptions);
 
   assert.equal(clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
   assert.equal(clinicalScaleAvailability.sunnybrook.clinicalFacingScoresAllowed, false);
   assert.equal(clinicalScaleAvailability.eface.clinicalFacingScoresAllowed, false);
   assert.throws(
     () => buildClinicalScaleAvailabilityEvidence(BASE_STATUS, clinicalAgreementReport, reviewerAgreementReport, {
+      ...evidenceOptions,
       enabledScaleKeys: ["sunnybrook"],
     }),
     /clinical agreement report cannot support every requested enabled primary scale|clinical reviewer agreement report cannot support every requested enabled primary scale/,
@@ -1347,20 +1361,26 @@ test("validation status evidence helper keeps weak scales disabled unless explic
 test("validation status evidence patch includes report paths and scale summaries", () => {
   const clinicalAgreementReport = validateClinicalScaleAgreementReportText(passingClinicalAgreementReport(), CLINICAL_AGREEMENT_REPORT_PATH);
   const reviewerAgreementReport = validateClinicalScaleReviewerAgreementReportText(passingClinicalReviewerAgreementReport(), REVIEWER_AGREEMENT_REPORT_PATH);
+  const reviewPackageVerificationReport = validateClinicalScaleReviewPackageVerificationReportText(passingClinicalReviewPackageVerificationReport(), REVIEW_PACKAGE_VERIFICATION_REPORT_PATH);
   const patch = buildClinicalScaleStatusEvidencePatch({
     ...BASE_STATUS,
     clinicalScaleAgreementReports: ["docs/validation/older-clinical-agreement.md"],
     clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
-  }, clinicalAgreementReport, reviewerAgreementReport);
+  }, clinicalAgreementReport, reviewerAgreementReport, {
+    clinicalScaleReviewPackageVerificationReports: [reviewPackageVerificationReport],
+  });
 
   assert.deepEqual(patch.clinicalScaleAgreementReports, [
     "docs/validation/older-clinical-agreement.md",
     CLINICAL_AGREEMENT_REPORT_PATH,
   ]);
   assert.deepEqual(patch.clinicalScaleReviewerAgreementReports, [REVIEWER_AGREEMENT_REPORT_PATH]);
+  assert.deepEqual(patch.clinicalScaleReviewPackageVerificationReports, [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH]);
   assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
   assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalAgreementReport, CLINICAL_AGREEMENT_REPORT_PATH);
   assert.equal(patch.clinicalScaleAvailability.houseBrackmann.reviewerAgreementReport, REVIEWER_AGREEMENT_REPORT_PATH);
+  assert.equal(patch.clinicalScaleAvailability.houseBrackmann.clinicalReviewPackageVerificationReport, REVIEW_PACKAGE_VERIFICATION_REPORT_PATH);
+  assert.equal(patch.clinicalScaleAvailability.houseBrackmann.sourceDatasetSha256, SOURCE_DATASET_SHA256);
 });
 
 test("validation status artifacts reject per-scale evidence summaries that do not match their reports", async () => {
@@ -1380,6 +1400,8 @@ test("validation status artifacts reject per-scale evidence summaries that do no
     clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
   };
   const mismatchedEvidence = [
+    { override: { sourceDatasetSha256: "b".repeat(64) }, blocker: /houseBrackmann\.sourceDatasetSha256 must match the clinical agreement report/ },
+    { override: { clinicalReviewPackageVerificationReport: "docs/validation/other-review-package.json" }, blocker: /houseBrackmann\.clinicalReviewPackageVerificationReport/ },
     { override: { reviewedLabelCount: 31 }, blocker: /houseBrackmann\.reviewedLabelCount/ },
     { override: { distinctValidationCaseCount: 31 }, blocker: /houseBrackmann\.distinctValidationCaseCount/ },
     { override: { observedAgreementRate: 0.99 }, blocker: /houseBrackmann\.observedAgreementRate/ },
@@ -2151,7 +2173,7 @@ test("validation status rejects clinical-facing scores without review package ve
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
-    /clinical review package verification reports/,
+    /clinicalReviewPackageVerificationReport/,
   );
 });
 

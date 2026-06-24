@@ -20,6 +20,7 @@ import {
 import { buildSessionReportHtml, clinicalScaleEstimateRows } from "../src/reports/sessionReport.js";
 
 const REVIEW_PACKAGE_VERIFICATION_REPORT_PATH = "docs/validation/clinical-scale-review-package-verification-2026-06-24.json";
+const SOURCE_DATASET_SHA256 = "a".repeat(64);
 
 const RESTING_METRICS = {
   version: 1,
@@ -53,6 +54,8 @@ function enabledScaleEvidence(overrides = {}) {
     clinicalFacingScoresAllowed: true,
     clinicalAgreementReport: "docs/validation/clinical-scale-agreement-2026-06-24.md",
     reviewerAgreementReport: "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json",
+    clinicalReviewPackageVerificationReport: REVIEW_PACKAGE_VERIFICATION_REPORT_PATH,
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
     clinicalScaleEstimateVersion: validationStatus.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion,
     reviewedLabelCount: 30,
     distinctValidationCaseCount: 30,
@@ -166,6 +169,8 @@ test("clinical scale presentation policy fails closed for enabled scales without
   const weakScaleEvidence = [
     { clinicalAgreementReport: "docs/validation/other-report.md", blocker: /clinicalAgreementReport/ },
     { reviewerAgreementReport: "docs/validation/other-reviewer-report.json", blocker: /reviewerAgreementReport/ },
+    { clinicalReviewPackageVerificationReport: "docs/validation/other-review-package.json", blocker: /clinicalReviewPackageVerificationReport/ },
+    { sourceDatasetSha256: "not-a-sha256", blocker: /sourceDatasetSha256/ },
     { clinicalScaleEstimateVersion: validationStatus.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion - 1, blocker: /clinicalScaleEstimateVersion/ },
     { reviewedLabelCount: 29, blocker: /reviewedLabelCount/ },
     { distinctValidationCaseCount: 9, blocker: /distinctValidationCaseCount/ },

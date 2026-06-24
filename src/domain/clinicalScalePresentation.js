@@ -13,6 +13,7 @@ const REQUIRED_CONFIDENCE_INTERVAL = "wilson-95";
 const REQUIRED_REVIEW_PROTOCOL = "docs/clinical-scale-review-protocol.md";
 const CLINICAL_SCALE_RELEASE_STATUS = "clinical-scale-agreement-reviewed";
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
 
 function numberAtLeast(value, minimum) {
   return Number.isFinite(Number(value)) && Number(value) >= minimum;
@@ -157,6 +158,12 @@ function clinicalScaleAvailabilityEvidenceBlockers(status = DEFAULT_VALIDATION_S
   }
   if (!stringArrayIncludes(status?.clinicalScaleReviewerAgreementReports, scaleConfig.reviewerAgreementReport)) {
     blockers.push(`${scaleKey}.reviewerAgreementReport must reference a listed reviewer-agreement report`);
+  }
+  if (!SHA256_HEX_RE.test(String(scaleConfig.sourceDatasetSha256 ?? ""))) {
+    blockers.push(`${scaleKey}.sourceDatasetSha256 must be a SHA-256 hex string`);
+  }
+  if (!stringArrayIncludes(status?.clinicalScaleReviewPackageVerificationReports, scaleConfig.clinicalReviewPackageVerificationReport)) {
+    blockers.push(`${scaleKey}.clinicalReviewPackageVerificationReport must reference a listed clinical review package verification report`);
   }
   if (scaleConfig.clinicalScaleEstimateVersion !== CLINICAL_SCALE_ESTIMATE_VERSION) {
     blockers.push(`${scaleKey}.clinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`);

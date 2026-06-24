@@ -354,15 +354,17 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   the global `clinicalFacingScoresAllowed` release gate is also true. If the
   global gate is true, at least one primary scale must be explicitly enabled.
   Every enabled scale must also carry a status-file evidence summary that names
-  the clinical agreement report, names the reviewer-agreement report, records
-  the current estimator version, and repeats the report-backed label counts,
-  distinct-case counts, observed agreement rates, and Wilson lower bounds for
-  both clinician-label agreement and reviewer agreement.
+  the clinical agreement report, names the reviewer-agreement report, names the
+  matching clinical review package verification report, repeats
+  `sourceDatasetSha256`, records the current estimator version, and repeats the
+  report-backed label counts, distinct-case counts, observed agreement rates,
+  and Wilson lower bounds for both clinician-label agreement and reviewer
+  agreement.
   `npm run validation:status-evidence` can draft this block from the reviewed
-  clinical agreement and reviewer-agreement artifacts. Use `--status-patch` to
-  draft the matching report-path arrays with the scale evidence, but a reviewer
-  must still decide which eligible scales to enable before editing the status
-  file.
+  clinical agreement, reviewer-agreement, and review-package verification
+  artifacts. Use `--status-patch` to draft the matching report-path arrays with
+  the scale evidence, but a reviewer must still decide which eligible scales to
+  enable before editing the status file.
 
 Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.
