@@ -212,6 +212,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /missing.*invalid estimates are reported in that scale'?s denominator/i, artifactPath, "the scale-specific missing-estimate denominator control");
   assertTextMatches(text, /valid in-range target for that specific primary scale/i, artifactPath, "the scale-specific primary target validity control");
   assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
+  assertTextMatches(text, /Reviewer identity control:\s*counted labels require a pseudonymous `reviewerId`/i, artifactPath, "the pseudonymous reviewer identity control");
   assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role/i, artifactPath, "the explicit reviewer-role control");
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
   const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
@@ -337,6 +338,12 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
   assertNonNegativeInteger(report.summary.reviewerBMissingAssessmentIdRowCount, `${artifactPath}.summary.reviewerBMissingAssessmentIdRowCount`);
   assertNonNegativeInteger(report.summary.reviewerAInsufficientEstimateEvidenceCount, `${artifactPath}.summary.reviewerAInsufficientEstimateEvidenceCount`);
   assertNonNegativeInteger(report.summary.reviewerBInsufficientEstimateEvidenceCount, `${artifactPath}.summary.reviewerBInsufficientEstimateEvidenceCount`);
+  assertCondition(Array.isArray(report.summary.reviewerAReviewerIds), `${artifactPath}.summary.reviewerAReviewerIds must be an array`);
+  assertCondition(Array.isArray(report.summary.reviewerBReviewerIds), `${artifactPath}.summary.reviewerBReviewerIds must be an array`);
+  assertCondition(report.summary.reviewerAReviewerIds.length === 1, `${artifactPath}.summary.reviewerAReviewerIds must contain exactly one pseudonymous reviewer id`);
+  assertCondition(report.summary.reviewerBReviewerIds.length === 1, `${artifactPath}.summary.reviewerBReviewerIds must contain exactly one pseudonymous reviewer id`);
+  assertCondition(report.summary.reviewerAReviewerIds[0] !== report.summary.reviewerBReviewerIds[0], `${artifactPath} reviewer sheets must use distinct pseudonymous reviewer ids`);
+  assertNonNegativeInteger(report.summary.reviewerIdOverlapCount, `${artifactPath}.summary.reviewerIdOverlapCount`);
   assertNonNegativeInteger(report.summary.estimateVersionMismatchCount, `${artifactPath}.summary.estimateVersionMismatchCount`);
   assertNonNegativeInteger(report.summary.estimateEvidenceMismatchCount, `${artifactPath}.summary.estimateEvidenceMismatchCount`);
   assertNonNegativeInteger(report.summary.houseBrackmannRepresentedSeverityBandCount, `${artifactPath}.summary.houseBrackmannRepresentedSeverityBandCount`);
@@ -405,6 +412,9 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     reviewerBStaleOrMissingEstimateVersionCount: report.summary.reviewerBStaleOrMissingEstimateVersionCount,
     reviewerAInsufficientEstimateEvidenceCount: report.summary.reviewerAInsufficientEstimateEvidenceCount,
     reviewerBInsufficientEstimateEvidenceCount: report.summary.reviewerBInsufficientEstimateEvidenceCount,
+    reviewerAReviewerIds: report.summary.reviewerAReviewerIds,
+    reviewerBReviewerIds: report.summary.reviewerBReviewerIds,
+    reviewerIdOverlapCount: report.summary.reviewerIdOverlapCount,
     estimateVersionMismatchCount: report.summary.estimateVersionMismatchCount,
     estimateEvidenceMismatchCount: report.summary.estimateEvidenceMismatchCount,
     representedHouseBrackmannSeverityBandCount: caseMix.representedSeverityBandCount,
@@ -472,6 +482,10 @@ function reviewerAgreementReportHasCommonEvidence(report, status) {
     && (report.reviewerBMissingAssessmentIdRowCount ?? 0) === 0
     && (report.reviewerAInsufficientEstimateEvidenceCount ?? 0) === 0
     && (report.reviewerBInsufficientEstimateEvidenceCount ?? 0) === 0
+    && (report.reviewerAReviewerIds?.length ?? 0) === 1
+    && (report.reviewerBReviewerIds?.length ?? 0) === 1
+    && report.reviewerAReviewerIds?.[0] !== report.reviewerBReviewerIds?.[0]
+    && (report.reviewerIdOverlapCount ?? 0) === 0
     && (report.estimateVersionMismatchCount ?? 0) === 0
     && (report.estimateEvidenceMismatchCount ?? 0) === 0
     && (report.representedHouseBrackmannSeverityBandCount ?? 0) >= status.clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands
@@ -598,7 +612,7 @@ async function validateStatusArtifacts(status, options = {}) {
     const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => reviewerAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, distinct pseudonymous reviewer ids, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

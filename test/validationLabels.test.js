@@ -87,6 +87,7 @@ function sampleRecords() {
           efaceTotal: null,
           reviewBlinded: null,
           labelSource: null,
+          reviewerId: null,
           notes: "",
         },
       },
@@ -106,6 +107,7 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].rowType, "assessmentClinicalScale");
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].validationCaseId, "");
+  assert.equal(rows[1].reviewerId, "");
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "III");
   assert.equal(rows[1].estimatedSunnybrookComposite, 72);
   assert.equal(rows[1].estimateEvidenceTier, "minimum-standard-assessment");
@@ -149,6 +151,7 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].rowType, "assessmentClinicalScale");
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].validationCaseId, "");
+  assert.equal(rows[1].reviewerId, "");
   assert.equal(rows[1].estimateStatus, "estimated");
   assert.equal(rows[1].estimateEvidenceTier, "minimum-standard-assessment");
   assert.equal(rows[1].estimateUsableMovementCoverageRatio, 0.8);
@@ -180,6 +183,7 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].labelSource, "");
   assert.equal(clinicalRow[index.estimatedHouseBrackmannGrade], "");
   assert.equal(clinicalRow[index.validationCaseId], "");
+  assert.equal(clinicalRow[index.reviewerId], "");
   assert.equal(clinicalRow[index.clinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(clinicalRow[index.estimatedSunnybrookComposite], "");
   assert.equal(clinicalRow[index.estimateStatus], "estimated");
@@ -210,9 +214,9 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
 
 test("validation label merge updates reviewed fields from CSV", () => {
   const csv = [
-    "rowType,sampleId,assessmentId,validationCaseId,quality,visibleMovementLevel,coactivationNotes,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
-    'frameSample,sample-1,,,strong,moderate,"eye relaxed, mouth moved",,,,,,,,,,,clinician,2026-06-23T10:00:00.000Z,"usable label"',
-    "assessmentClinicalScale,,assessment-1:clinical-scale,case-001,,,,II,82,79,91,77,69,high,blinded,yes,clinician-assigned,clinician,2026-06-23T10:01:00.000Z,reviewed scale labels",
+    "rowType,sampleId,assessmentId,validationCaseId,quality,visibleMovementLevel,coactivationNotes,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerId,reviewerRole,reviewedAt,notes",
+    'frameSample,sample-1,,,strong,moderate,"eye relaxed, mouth moved",,,,,,,,,,,reviewer-frame-1,clinician,2026-06-23T10:00:00.000Z,"usable label"',
+    "assessmentClinicalScale,,assessment-1:clinical-scale,case-001,,,,II,82,79,91,77,69,high,blinded,yes,clinician-assigned,reviewer-clinical-1,clinician,2026-06-23T10:01:00.000Z,reviewed scale labels",
   ].join("\n");
 
   const merged = mergeValidationLabels(sampleRecords(), csv);
@@ -227,6 +231,7 @@ test("validation label merge updates reviewed fields from CSV", () => {
   assert.equal(label.quality, "strong");
   assert.equal(label.visibleMovementLevel, "moderate");
   assert.equal(label.coactivationNotes, "eye relaxed, mouth moved");
+  assert.equal(label.reviewerId, "reviewer-frame-1");
   assert.equal(label.reviewerRole, "clinician");
   assert.equal(label.notes, "usable label");
   assert.equal(clinicalLabel.houseBrackmannGrade, "II");
@@ -240,6 +245,7 @@ test("validation label merge updates reviewed fields from CSV", () => {
   assert.equal(clinicalLabel.sourceLabelSheetMode, "blinded");
   assert.equal(clinicalLabel.reviewBlinded, "yes");
   assert.equal(clinicalLabel.labelSource, "clinician-assigned");
+  assert.equal(clinicalLabel.reviewerId, "reviewer-clinical-1");
   assert.equal(clinicalLabel.reviewerRole, "clinician");
   assert.equal(clinicalLabel.notes, "reviewed scale labels");
 });

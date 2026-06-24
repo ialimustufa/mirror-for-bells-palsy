@@ -152,6 +152,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /missing, incomplete-input, or invalid estimates are reported in that scale's denominator/);
   assert.match(markdown, /valid in-range target for that specific primary scale/);
   assert.match(markdown, /Independence control: counted labels require clinician-assigned or adjudicated `labelSource`/);
+  assert.match(markdown, /Reviewer identity control: counted labels require a pseudonymous `reviewerId`/);
   assert.match(markdown, /Reviewer control: counted labels require a recognized clinical\/adjudication role/);
   assert.match(markdown, /Reference standard controls: `sourceLabelSheetMode`, `reviewBlinded`, estimator `version`, estimate evidence tier\/coverage\/input-provenance controls, `labelSource`, and clinical `reviewerRole`/);
   assert.match(markdown, /Primary target fields then count only for the scale where a valid target is present/);

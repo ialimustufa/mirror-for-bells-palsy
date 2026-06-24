@@ -248,6 +248,7 @@ function clinicalRecord(id, estimate, label) {
         sourceLabelSheetMode: label.sourceLabelSheetMode ?? "blinded",
         reviewBlinded: label.reviewBlinded ?? "yes",
         labelSource: label.labelSource ?? "clinician-assigned",
+        reviewerId: label.reviewerId ?? "reviewer-1",
         reviewerRole: label.reviewerRole ?? "clinician",
       },
     },

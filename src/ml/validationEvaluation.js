@@ -263,6 +263,10 @@ function clinicalValidationCaseId(record = {}) {
   return String(record.label?.validationCaseId ?? record.validationCaseId ?? record.sourceSummary?.validationCaseId ?? "").trim();
 }
 
+function clinicalReviewerId(record = {}) {
+  return String(record.label?.reviewerId ?? record.reviewerId ?? record.sourceSummary?.reviewerId ?? "").trim();
+}
+
 function duplicateClinicalAssessmentIds(records = []) {
   const counts = new Map();
   for (const record of records) {
@@ -678,6 +682,9 @@ function clinicalLabelEligibility(record = {}, labels = clinicalScaleLabels(reco
   }
   if (!clinicalValidationCaseId(record)) {
     reasons.push("missing validation case id");
+  }
+  if (!clinicalReviewerId(record)) {
+    reasons.push("missing clinical reviewer id");
   }
   for (const scale of requiredPrimaryScales) {
     if (estimate[scale] == null) reasons.push(`missing valid ${scale} estimate`);

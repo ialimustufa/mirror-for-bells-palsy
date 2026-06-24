@@ -11,9 +11,9 @@ const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`;
 const REQUIRED_RESTING_METRIC_KEYS = "palpebralFissure|nasolabialMidface|oralCommissure";
 
-function reviewerCsv(rows) {
+function reviewerCsv(rows, reviewerId = "reviewer-a") {
   return [
-    "rowType,sampleId,assessmentId,validationCaseId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateSunnybrookInputComplete,estimateSunnybrookUsedExerciseIds,estimateSunnybrookOmittedExerciseIds,estimateEfaceInputComplete,estimateEfaceUsedExerciseIds,estimateEfaceOmittedExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,validationCaseId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateSunnybrookInputComplete,estimateSunnybrookUsedExerciseIds,estimateSunnybrookOmittedExerciseIds,estimateEfaceInputComplete,estimateEfaceUsedExerciseIds,estimateEfaceOmittedExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerId,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -55,6 +55,7 @@ function reviewerCsv(rows) {
       row.sourceLabelSheetMode ?? "blinded",
       row.reviewBlinded ?? "yes",
       row.labelSource ?? "clinician-assigned",
+      row.reviewerId ?? reviewerId,
       row.reviewerRole ?? "clinician",
       "2026-06-24T10:00:00.000Z",
       row.notes ?? "",
@@ -62,9 +63,9 @@ function reviewerCsv(rows) {
   ].join("\n");
 }
 
-function legacyReviewerCsvWithoutMovementProvenance(rows) {
+function legacyReviewerCsvWithoutMovementProvenance(rows, reviewerId = "reviewer-a") {
   return [
-    "rowType,sampleId,assessmentId,validationCaseId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,validationCaseId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerId,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -89,6 +90,7 @@ function legacyReviewerCsvWithoutMovementProvenance(rows) {
       row.sourceLabelSheetMode ?? "blinded",
       row.reviewBlinded ?? "yes",
       row.labelSource ?? "clinician-assigned",
+      row.reviewerId ?? reviewerId,
       row.reviewerRole ?? "clinician",
       "2026-06-24T10:00:00.000Z",
       row.notes ?? "",
@@ -96,9 +98,9 @@ function legacyReviewerCsvWithoutMovementProvenance(rows) {
   ].join("\n");
 }
 
-function legacyReviewerCsvWithoutScaleInputProvenance(rows) {
+function legacyReviewerCsvWithoutScaleInputProvenance(rows, reviewerId = "reviewer-a") {
   return [
-    "rowType,sampleId,assessmentId,validationCaseId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,validationCaseId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,estimateHouseBrackmannInputComplete,estimateHouseBrackmannRequiredExerciseIds,estimateHouseBrackmannUsedExerciseIds,estimateHouseBrackmannMissingRequiredExerciseIds,estimateRequiredRestingMetricKeys,estimateAvailableRestingMetricKeys,estimateMissingRestingMetricKeys,estimateCalculationUsesCompleteRestingMetrics,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerId,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -134,6 +136,7 @@ function legacyReviewerCsvWithoutScaleInputProvenance(rows) {
       row.sourceLabelSheetMode ?? "blinded",
       row.reviewBlinded ?? "yes",
       row.labelSource ?? "clinician-assigned",
+      row.reviewerId ?? reviewerId,
       row.reviewerRole ?? "clinician",
       "2026-06-24T10:00:00.000Z",
       row.notes ?? "",
@@ -151,7 +154,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
     { assessmentId: "assessment-1:clinical-scale", houseBrackmannGrade: "III", sunnybrookComposite: 80, efaceTotal: 79, efaceStatic: 82 },
     { assessmentId: "assessment-2:clinical-scale", houseBrackmannGrade: "IV", sunnybrookComposite: 72, efaceTotal: 70 },
     { assessmentId: "assessment-4:clinical-scale", houseBrackmannGrade: "II", sunnybrookComposite: 91, efaceTotal: 87 },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",
@@ -187,6 +190,9 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.summary.reviewerBIneligibleAssessmentCount, 0);
   assert.equal(report.summary.reviewerAEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 3);
   assert.equal(report.summary.reviewerBEstimateVersionCounts[CURRENT_ESTIMATOR_VERSION_KEY], 3);
+  assert.deepEqual(report.summary.reviewerAReviewerIds, ["reviewer-a"]);
+  assert.deepEqual(report.summary.reviewerBReviewerIds, ["reviewer-b"]);
+  assert.equal(report.summary.reviewerIdOverlapCount, 0);
   assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.estimateVersionMismatchCount, 0);
@@ -216,7 +222,7 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
     efaceTotal: index % 3 === 0 ? 86 : index % 3 === 1 ? 70 : 51,
   }));
 
-  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows, "reviewer-b"), {
     generatedAt: "2026-06-24T12:00:00.000Z",
   });
 
@@ -228,6 +234,9 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
   assert.equal(report.summary.reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.equal(report.summary.estimateEvidenceMismatchCount, 0);
+  assert.deepEqual(report.summary.reviewerAReviewerIds, ["reviewer-a"]);
+  assert.deepEqual(report.summary.reviewerBReviewerIds, ["reviewer-b"]);
+  assert.equal(report.summary.reviewerIdOverlapCount, 0);
   assert.equal(report.houseBrackmannCaseMix.representedSeverityBandCount, 3);
   assert.equal(report.houseBrackmannCaseMix.minimumSameBandPairedLabelCount, 10);
   assert.equal(report.houseBrackmannCaseMix.severityBands.mild.sameBandPairedCount, 10);
@@ -240,6 +249,26 @@ test("clinical-scale reviewer agreement passes only with enough high-confidence 
   assert.deepEqual(report.blockingReasons, []);
 });
 
+test("clinical-scale reviewer agreement blocks same reviewer identity across sheets", () => {
+  const rows = Array.from({ length: 30 }, (_, index) => ({
+    assessmentId: `assessment-${index + 1}:clinical-scale`,
+    houseBrackmannGrade: index % 3 === 0 ? "II" : index % 3 === 1 ? "III" : "V",
+    sunnybrookComposite: index % 3 === 0 ? 88 : index % 3 === 1 ? 72 : 48,
+    efaceTotal: index % 3 === 0 ? 86 : index % 3 === 1 ? 70 : 51,
+  }));
+
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows, "reviewer-same"), reviewerCsv(rows, "reviewer-same"), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.deepEqual(report.summary.reviewerAReviewerIds, ["reviewer-same"]);
+  assert.deepEqual(report.summary.reviewerBReviewerIds, ["reviewer-same"]);
+  assert.equal(report.summary.reviewerIdOverlapCount, 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer sheets use the same reviewer id"], 30);
+  assert.match(report.blockingReasons.join("\n"), /reviewerIdentity: reviewer sheets must use distinct pseudonymous reviewer ids/);
+});
+
 test("clinical-scale reviewer agreement blocks repeated validation cases", () => {
   const rows = Array.from({ length: 30 }, (_, index) => ({
     assessmentId: `assessment-${index + 1}:clinical-scale`,
@@ -249,7 +278,7 @@ test("clinical-scale reviewer agreement blocks repeated validation cases", () =>
     efaceTotal: index % 3 === 0 ? 86 : index % 3 === 1 ? 70 : 51,
   }));
 
-  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows, "reviewer-b"), {
     generatedAt: "2026-06-24T12:00:00.000Z",
   });
 
@@ -267,7 +296,7 @@ test("clinical-scale reviewer agreement blocks narrow House-Brackmann case mix",
     efaceTotal: 86,
   }));
 
-  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows, "reviewer-b"), {
     generatedAt: "2026-06-24T12:00:00.000Z",
   });
 
@@ -287,7 +316,7 @@ test("clinical-scale reviewer agreement lets primary scales meet evidence indepe
     houseBrackmannGrade: index % 3 === 0 ? "II" : index % 3 === 1 ? "III" : "V",
   }));
 
-  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows), {
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(rows), reviewerCsv(rows, "reviewer-b"), {
     generatedAt: "2026-06-24T12:00:00.000Z",
   });
 
@@ -318,7 +347,7 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   ]);
   const reviewerB = reviewerCsv([
     { assessmentId: "assessment-1:clinical-scale", houseBrackmannGrade: "IV", sunnybrookComposite: 70, efaceTotal: 62, notes: "B note" },
-  ]);
+  ], "reviewer-b");
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB);
   const adjudicationCsv = createClinicalScaleAdjudicationCsv(report);
   const parsed = parseCsv(adjudicationCsv);
@@ -362,6 +391,8 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(row[index.reviewerBEstimateEfaceUsedExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
   assert.equal(row[index.reviewerAHouseBrackmannGrade], "III");
   assert.equal(row[index.reviewerBHouseBrackmannGrade], "IV");
+  assert.equal(row[index.reviewerAReviewerId], "reviewer-a");
+  assert.equal(row[index.reviewerBReviewerId], "reviewer-b");
   assert.equal(row[index.reviewerANotes], "A note");
   assert.equal(row[index.reviewerBNotes], "B note");
   assert.match(row[index.disagreementSummary], /House-Brackmann/);
@@ -373,6 +404,7 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   row[index.sourceLabelSheetMode] = "blinded";
   row[index.reviewBlinded] = "yes";
   row[index.labelSource] = "adjudicated-consensus";
+  row[index.reviewerId] = "adjudicator-1";
   row[index.reviewerRole] = "clinician";
   row[index.notes] = "adjudicated consensus";
   const filledCsv = [header, row].map((cells) => cells.join(",")).join("\n");
@@ -395,6 +427,7 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(merged.records[1].record.label.sourceLabelSheetMode, "blinded");
   assert.equal(merged.records[1].record.label.reviewBlinded, "yes");
   assert.equal(merged.records[1].record.label.labelSource, "adjudicated-consensus");
+  assert.equal(merged.records[1].record.label.reviewerId, "adjudicator-1");
   assert.equal(merged.records[1].record.label.notes, "adjudicated consensus");
 });
 
@@ -406,7 +439,7 @@ test("clinical-scale reviewer agreement blocks stale or mismatched estimator pro
   const reviewerB = reviewerCsv([
     { assessmentId: "assessment-1:clinical-scale", clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION - 1, houseBrackmannGrade: "III", sunnybrookComposite: 76, efaceTotal: 73 },
     { assessmentId: "assessment-2:clinical-scale", clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION, houseBrackmannGrade: "II", sunnybrookComposite: 88, efaceTotal: 86 },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",
@@ -453,7 +486,7 @@ test("clinical-scale reviewer agreement blocks insufficient estimate evidence pr
       sunnybrookComposite: 76,
       efaceTotal: 73,
     },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",
@@ -489,7 +522,7 @@ test("clinical-scale reviewer agreement blocks duplicate assessment ids in revie
   ];
   const report = compareClinicalScaleReviewerLabels(
     reviewerCsv(duplicateRows),
-    reviewerCsv([duplicateRows[0]]),
+    reviewerCsv([duplicateRows[0]], "reviewer-b"),
     { generatedAt: "2026-06-24T12:00:00.000Z" },
   );
 
@@ -516,7 +549,7 @@ test("clinical-scale reviewer agreement blocks reviewer sheets without movement 
 
   const report = compareClinicalScaleReviewerLabels(
     legacyReviewerCsvWithoutMovementProvenance(rows),
-    legacyReviewerCsvWithoutMovementProvenance(rows),
+    legacyReviewerCsvWithoutMovementProvenance(rows, "reviewer-b"),
     { generatedAt: "2026-06-24T12:00:00.000Z" },
   );
 
@@ -545,7 +578,7 @@ test("clinical-scale reviewer agreement blocks reviewer sheets without scale inp
 
   const report = compareClinicalScaleReviewerLabels(
     legacyReviewerCsvWithoutScaleInputProvenance(rows),
-    legacyReviewerCsvWithoutScaleInputProvenance(rows),
+    legacyReviewerCsvWithoutScaleInputProvenance(rows, "reviewer-b"),
     { generatedAt: "2026-06-24T12:00:00.000Z" },
   );
 
@@ -585,7 +618,7 @@ test("clinical-scale reviewer agreement blocks incomplete resting-metric provena
       sunnybrookComposite: 76,
       efaceTotal: 73,
     },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",
@@ -630,7 +663,7 @@ test("clinical-scale reviewer agreement blocks mismatched omitted movement prove
       sunnybrookComposite: 76,
       efaceTotal: 73,
     },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",
@@ -663,7 +696,7 @@ test("clinical-scale reviewer agreement skips incomplete Sunnybrook and eFACE es
   };
   const report = compareClinicalScaleReviewerLabels(
     reviewerCsv([partialEstimate]),
-    reviewerCsv([partialEstimate]),
+    reviewerCsv([partialEstimate], "reviewer-b"),
     {
       generatedAt: "2026-06-24T12:00:00.000Z",
       minPairedLabels: 1,
@@ -709,7 +742,7 @@ test("clinical-scale reviewer agreement blocks missing House-Brackmann input pro
       sunnybrookComposite: 76,
       efaceTotal: 73,
     },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",
@@ -748,7 +781,7 @@ test("clinical-scale reviewer agreement blocks unblinded or non-independent revi
       clinicianConfidence: "uncertain",
       labelSource: "",
     },
-  ]);
+  ], "reviewer-b");
 
   const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
     generatedAt: "2026-06-24T12:00:00.000Z",

@@ -111,13 +111,14 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
 - Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
+- Reviewer identity control: counted labels require a pseudonymous \`reviewerId\`; reviewer-agreement sheets must use distinct reviewer ids to support independent-review evidence.
 - Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
 - Validity control: counted scale labels require a valid in-range target for that specific primary scale; missing targets do not remove otherwise valid labels from other scale denominators.
 
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
-- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage/input-provenance controls, \`labelSource\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
+- Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage/input-provenance controls, \`labelSource\`, pseudonymous \`reviewerId\`, and clinical \`reviewerRole\` must pass before any row counts. Primary target fields then count only for the scale where a valid target is present.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -201,6 +202,9 @@ function passingClinicalReviewerAgreementReport({
       reviewerBIneligibleReasons: {},
       reviewerAEstimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: comparedCount },
       reviewerBEstimateVersionCounts: { [CURRENT_ESTIMATOR_VERSION_KEY]: comparedCount },
+      reviewerAReviewerIds: ["reviewer-a"],
+      reviewerBReviewerIds: ["reviewer-b"],
+      reviewerIdOverlapCount: 0,
       reviewerADuplicateAssessmentIdCount: 0,
       reviewerBDuplicateAssessmentIdCount: 0,
       reviewerADuplicateAssessmentRowCount: 0,
@@ -408,6 +412,9 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementWilsonLowerBound, 0.887);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerBInsufficientEstimateEvidenceCount, 0);
+  assert.deepEqual(result.artifacts.clinicalReviewerAgreementReports[0].reviewerAReviewerIds, ["reviewer-a"]);
+  assert.deepEqual(result.artifacts.clinicalReviewerAgreementReports[0].reviewerBReviewerIds, ["reviewer-b"]);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerIdOverlapCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].estimateEvidenceMismatchCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumHouseBrackmannSeverityBandLabelCount, 10);
@@ -595,6 +602,39 @@ test("validation status artifacts reject reviewer agreement reports with too few
       }),
     }),
     /clinical scale reviewer agreement report artifacts/,
+  );
+});
+
+test("validation status artifacts reject reviewer agreement reports with overlapping reviewer ids", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.summary.reviewerBReviewerIds = ["reviewer-a"];
+  reviewerReport.summary.reviewerIdOverlapCount = 1;
+  reviewerReport.blockingReasons = ["reviewerIdentity: reviewer sheets must use distinct pseudonymous reviewer ids"];
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /reviewer sheets must use distinct pseudonymous reviewer ids|clinical scale reviewer agreement report artifacts/,
   );
 });
 

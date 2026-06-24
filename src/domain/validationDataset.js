@@ -2,7 +2,7 @@ import { summarizeAssessmentSession } from "./assessment";
 
 const VALIDATION_DATASET_KIND = "mirror-validation-dataset-jsonl";
 const VALIDATION_DATASET_VERSION = 1;
-const VALIDATION_LABEL_SCHEMA_VERSION = 6;
+const VALIDATION_LABEL_SCHEMA_VERSION = 7;
 const VALIDATION_DATASET_APP_ID = "mirror-bells-palsy";
 
 const QUALITY_LABELS = ["strong", "usable", "weak", "unusable", "uncertain"];
@@ -84,6 +84,7 @@ function buildFrameLabelFields() {
     quality: { type: "enum|null", values: QUALITY_LABELS },
     visibleMovementLevel: { type: "enum|null", values: VISIBLE_MOVEMENT_LEVELS },
     coactivationNotes: { type: "string", default: "" },
+    reviewerId: { type: "pseudonymous-string|null", default: null },
     reviewerRole: { type: "clinician|user|developer|null", values: STANDARD_REVIEWER_ROLES, default: null },
     reviewedAt: { type: "iso-date-time|null", default: null },
     notes: { type: "string", default: "" },
@@ -123,6 +124,7 @@ function buildAssessmentClinicalLabelFields() {
     efaceDynamic: { type: "number|null", range: [0, 100], default: null },
     efaceSynkinesis: { type: "number|null", range: [0, 100], default: null },
     clinicianConfidence: { type: "enum|null", values: CLINICIAN_CONFIDENCE_LABELS, default: null },
+    reviewerId: { type: "pseudonymous-string|null", default: null },
     reviewerRole: { type: "clinician|user|developer|null", values: STANDARD_REVIEWER_ROLES, default: null },
     reviewedAt: { type: "iso-date-time|null", default: null },
     notes: { type: "string", default: "" },
@@ -157,6 +159,7 @@ function buildLabelTemplate(sample = {}, appState = {}) {
     quality: null,
     visibleMovementLevel: null,
     coactivationNotes: "",
+    reviewerId: null,
     reviewerRole: null,
     reviewedAt: null,
     notes: "",
@@ -190,6 +193,7 @@ function buildAssessmentClinicalLabelTemplate() {
     efaceDynamic: null,
     efaceSynkinesis: null,
     clinicianConfidence: null,
+    reviewerId: null,
     reviewerRole: null,
     reviewedAt: null,
     notes: "",

@@ -132,6 +132,8 @@ const ADJUDICATION_EXTRA_COLUMNS = Object.freeze([
   "reviewerBEfaceDynamic",
   "reviewerAEfaceSynkinesis",
   "reviewerBEfaceSynkinesis",
+  "reviewerAReviewerId",
+  "reviewerBReviewerId",
   "reviewerAClinicianConfidence",
   "reviewerBClinicianConfidence",
   "reviewerANotes",
@@ -254,6 +256,10 @@ function estimateUsableMovementCoverageRatio(row = {}) {
 
 function validationCaseId(row = {}) {
   return String(row?.validationCaseId ?? "").trim();
+}
+
+function reviewerId(row = {}) {
+  return String(row?.reviewerId ?? "").trim();
 }
 
 function estimateMovementCount(row = {}, key) {
@@ -506,6 +512,10 @@ function estimateVersionCounts(rowsById) {
   return counts;
 }
 
+function reviewerIds(rowsById) {
+  return [...new Set([...rowsById.values()].map(reviewerId).filter(Boolean))].sort();
+}
+
 function incrementReasonCount(counts, reason) {
   counts[reason] = (counts[reason] ?? 0) + 1;
 }
@@ -565,6 +575,9 @@ function reviewerRowEligibility(row = {}, options = {}) {
   }
   if (!validationCaseId(row)) {
     reasons.push("missing validation case id");
+  }
+  if (!reviewerId(row)) {
+    reasons.push("missing reviewer id");
   }
   for (const scaleKey of requiredPrimaryScaleKeys) {
     if (scaleValue(scaleKey, row[scaleKey]) == null) reasons.push(`missing valid ${scaleKey} label`);
@@ -640,6 +653,11 @@ function reviewerPairEligibility(assessmentId, reviewerA, reviewerB, options = {
   const reviewerBCaseId = validationCaseId(reviewerB);
   if (reviewerACaseId && reviewerBCaseId && reviewerACaseId !== reviewerBCaseId) {
     reasons.push("reviewer sheets have mismatched validation case ids");
+  }
+  const reviewerAId = reviewerId(reviewerA);
+  const reviewerBId = reviewerId(reviewerB);
+  if (reviewerAId && reviewerBId && reviewerAId === reviewerBId) {
+    reasons.push("reviewer sheets use the same reviewer id");
   }
   if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) {
     reasons.push("reviewer sheets have mismatched estimate evidence");
@@ -888,6 +906,11 @@ function disagreementSummaryForAssessment(assessmentId, reviewerA, reviewerB) {
   if (reviewerACaseId && reviewerBCaseId && reviewerACaseId !== reviewerBCaseId) {
     parts.push(`Validation case id: reviewer A ${reviewerACaseId} vs reviewer B ${reviewerBCaseId}`);
   }
+  const reviewerAId = reviewerId(reviewerA);
+  const reviewerBId = reviewerId(reviewerB);
+  if (reviewerAId && reviewerBId && reviewerAId === reviewerBId) {
+    parts.push(`Reviewer id: both sheets use ${reviewerAId}`);
+  }
   const versionPart = estimateVersionSummaryPart(reviewerA, reviewerB);
   if (versionPart) parts.push(versionPart);
   const evidencePart = estimateEvidenceSummaryPart(reviewerA, reviewerB);
@@ -985,6 +1008,8 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.reviewerBEfaceDynamic = reviewerB?.efaceDynamic ?? "";
   row.reviewerAEfaceSynkinesis = reviewerA?.efaceSynkinesis ?? "";
   row.reviewerBEfaceSynkinesis = reviewerB?.efaceSynkinesis ?? "";
+  row.reviewerAReviewerId = reviewerA?.reviewerId ?? "";
+  row.reviewerBReviewerId = reviewerB?.reviewerId ?? "";
   row.reviewerAClinicianConfidence = reviewerA?.clinicianConfidence ?? "";
   row.reviewerBClinicianConfidence = reviewerB?.clinicianConfidence ?? "";
   row.reviewerANotes = reviewerA?.notes ?? "";
@@ -998,6 +1023,7 @@ function needsAdjudication(reviewerA, reviewerB) {
   if (!reviewerA || !reviewerB) return true;
   if (clinicalScaleEstimateVersion(reviewerA) !== clinicalScaleEstimateVersion(reviewerB)) return true;
   if (validationCaseId(reviewerA) && validationCaseId(reviewerB) && validationCaseId(reviewerA) !== validationCaseId(reviewerB)) return true;
+  if (reviewerId(reviewerA) && reviewerId(reviewerB) && reviewerId(reviewerA) === reviewerId(reviewerB)) return true;
   if (estimateEvidenceSummaryPart(reviewerA, reviewerB)) return true;
   return REVIEW_SCALE_KEYS.some((scaleKey) => {
     const a = scaleValue(scaleKey, reviewerValue(reviewerA, scaleKey));
@@ -1181,6 +1207,9 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   const primaryScaleSummaries = PRIMARY_REVIEW_SCALE_KEYS.map((scaleKey) => byScale[scaleKey]);
   const reviewerAEstimateVersionCounts = estimateVersionCounts(reviewerAById);
   const reviewerBEstimateVersionCounts = estimateVersionCounts(reviewerBById);
+  const reviewerAReviewerIds = reviewerIds(reviewerAById);
+  const reviewerBReviewerIds = reviewerIds(reviewerBById);
+  const reviewerIdOverlap = reviewerAReviewerIds.filter((id) => reviewerBReviewerIds.includes(id));
   const reviewerAEligibility = reviewerSheetEligibility(reviewerAById, "reviewerA", estimateEvidenceOptions);
   const reviewerBEligibility = reviewerSheetEligibility(reviewerBById, "reviewerB", estimateEvidenceOptions);
   const reviewerAStaleOrMissingEstimateVersionCount = [...reviewerAById.values()].filter((row) => clinicalScaleEstimateVersion(row) !== requiredClinicalScaleEstimateVersion).length;
@@ -1224,6 +1253,15 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
   }
   if (estimateEvidenceMismatches.length) {
     blockingReasons.push(`estimateEvidence: reviewer sheets disagree for ${estimateEvidenceMismatches.length} assessment labels`);
+  }
+  if (reviewerAReviewerIds.length !== 1) {
+    blockingReasons.push(`reviewerA: expected exactly one pseudonymous reviewer id, found ${reviewerAReviewerIds.length}`);
+  }
+  if (reviewerBReviewerIds.length !== 1) {
+    blockingReasons.push(`reviewerB: expected exactly one pseudonymous reviewer id, found ${reviewerBReviewerIds.length}`);
+  }
+  if (reviewerIdOverlap.length) {
+    blockingReasons.push("reviewerIdentity: reviewer sheets must use distinct pseudonymous reviewer ids");
   }
   if (distinctValidationCaseIds.size < minDistinctClinicalCases) {
     blockingReasons.push(`validationCases: needs at least ${minDistinctClinicalCases} distinct validation cases`);
@@ -1278,6 +1316,9 @@ function compareClinicalScaleReviewerLabels(reviewerACsv = "", reviewerBCsv = ""
       reviewerBPrimaryScaleLabelIssueReasons: reviewerBEligibility.primaryScaleLabelIssueReasons,
       reviewerAEstimateVersionCounts,
       reviewerBEstimateVersionCounts,
+      reviewerAReviewerIds,
+      reviewerBReviewerIds,
+      reviewerIdOverlapCount: reviewerIdOverlap.length,
       reviewerADuplicateAssessmentIdCount: reviewerADuplicateAssessmentIds.length,
       reviewerBDuplicateAssessmentIdCount: reviewerBDuplicateAssessmentIds.length,
       reviewerADuplicateAssessmentRowCount,

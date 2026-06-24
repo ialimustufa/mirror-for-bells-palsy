@@ -1008,9 +1008,10 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
   flag plus used and omitted movement exercise IDs. It lists
   `houseBrackmannGrade`, `sunnybrookComposite`, and `efaceTotal` as primary
   target fields rather than required fields because valid targets count
-  scale-by-scale. Label schema v6 adds `validationCaseId`, a pseudonymous case
+  scale-by-scale. Label schema v7 adds `validationCaseId`, a pseudonymous case
   identifier used to distinguish distinct validation cases from repeated
-  assessments of the same case.
+  assessments of the same case, and `reviewerId`, a pseudonymous reviewer or
+  adjudication-panel identifier.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
@@ -1019,8 +1020,9 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - A `label` template on each assessment clinical-scale row with
   `validationCaseId`, `houseBrackmannGrade`, `sunnybrookComposite`,
   `efaceTotal`, optional eFACE domain scores, reviewer confidence, reviewer
-  role, review time, and notes. At least one valid primary target is needed for
-  a row to count, and each valid primary target counts only for its own scale.
+  id, reviewer role, review time, and notes. At least one valid primary target
+  is needed for a row to count, and each valid primary target counts only for
+  its own scale.
 
 Label fields start empty except for values Mirror can infer locally, such as the
 sample's intended exercise and the profile affected side. A reviewed validation set
@@ -1090,7 +1092,9 @@ excludes the reviewed row. Duplicate or missing clinical-scale assessment ids
 also block readiness so one reviewed assessment cannot inflate agreement
 denominators. Missing `validationCaseId` values are excluded, and repeated
 assessments from one validation case cannot satisfy the distinct-case release
-floor by themselves. House-Brackmann agreement treats the paired estimate
+floor by themselves. Missing `reviewerId` values are also excluded because the
+reference-standard package cannot prove reviewer identity. House-Brackmann
+agreement treats the paired estimate
 as missing unless the estimate provenance shows the required gentle eye-closure
 input was used. Sunnybrook and eFACE primary agreement comparisons require
 complete scale-specific movement input; normalized 4/5 Sunnybrook/eFACE
@@ -1165,7 +1169,9 @@ Each scale enabled in `clinicalScaleAvailability` must have at least 30 eligible
 paired labels, at least 10 distinct pseudonymous validation cases, at least 80%
 observed reviewer agreement, and a Wilson lower confidence bound of at least 80%
 before the reviewer agreement artifact can support clinical-facing release for
-that scale. The artifact must also show HB I-II, HB III-IV, and HB V-VI
+that scale. The artifact must also show exactly one pseudonymous reviewer id in
+each raw reviewer sheet, no reviewer-id overlap between the two sheets, and HB
+I-II, HB III-IV, and HB V-VI
 represented by at least three same-band eligible paired reviewer labels, so a
 reviewer-agreement report cannot pass on one severity range alone. Disabled
 primary scales may stay
@@ -1182,7 +1188,9 @@ provided, it writes a CSV with raw reviewer values, raw estimator versions, and
 raw estimate-evidence provenance preserved in audit columns and blank target
 columns for the final consensus label. The adjudication CSV preserves a
 mergeable `validationCaseId` only when both reviewer sheets agree on the same
-pseudonymous case id.
+pseudonymous case id. It leaves the mergeable `reviewerId` blank for the final
+adjudicator or adjudication panel to fill, while preserving raw reviewer ids in
+audit columns.
 
 `docs/validation-status.json` is the machine-readable release status for validation.
 It currently records that validation tooling exists but no clinician-reviewed dataset
@@ -1224,9 +1232,10 @@ resting-metric provenance, no excluded reviewer-pair, metadata, or
 estimate-evidence blockers, zero incomplete scale-specific estimate-input skips
 for every enabled primary scale, at least 30 eligible paired labels on every
 enabled primary scale, at least 10 distinct pseudonymous validation cases, at
-least 80% observed reviewer agreement, and Wilson lower-bound reviewer agreement
-meeting the configured 80% standard, plus House-Brackmann same-band reviewer
-severity coverage, before clinical-facing support can be enabled for that scale.
+least 80% observed reviewer agreement, distinct pseudonymous reviewer ids for
+the raw reviewer sheets, and Wilson lower-bound reviewer agreement meeting the
+configured 80% standard, plus House-Brackmann same-band reviewer severity
+coverage, before clinical-facing support can be enabled for that scale.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.

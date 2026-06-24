@@ -51,6 +51,9 @@ fill the review metadata fields:
   target assignment.
 - `labelSource`: `clinician-assigned` for an independent clinician label, or
   `adjudicated-consensus` after a documented adjudication step.
+- `reviewerId`: a pseudonymous reviewer or adjudication-panel identifier. It
+  must not contain the reviewer's name or contact information, but it must be
+  stable within the review package.
 - `reviewerRole`: the clinical role or adjudication role.
 - `clinicianConfidence`: leave blank or use a confident/high-confidence value;
   rows marked `uncertain` are excluded.
@@ -64,6 +67,8 @@ An assessment can be used for clinical-scale agreement only when:
   reviewed clinical-scale dataset and reviewer sheet.
 - It has a pseudonymous `validationCaseId` that lets release tooling distinguish
   distinct validation cases from repeated assessments of the same case.
+- It has a pseudonymous `reviewerId` so the review package can prove which
+  reviewer or adjudication panel assigned the label without storing names.
 - The source session has enough visual evidence for a reviewer to assign the
   requested target labels.
 - The reviewer can identify the intended movement set and affected side from the
@@ -94,7 +99,7 @@ Exclude an assessment row from clinical readiness counts when:
   `houseBrackmannGrade` I-VI/1-6, `sunnybrookComposite` 0-100, and
   `efaceTotal` 0-100. A missing or out-of-range target removes that specific
   scale from its denominator, but it does not remove other valid primary targets
-  on the same assessment. Validation label schema v6 records these columns as
+  on the same assessment. Validation label schema v7 records these columns as
   `primaryTargetFields` rather than all-or-nothing required fields.
 - The row is missing a stable assessment id, or the same assessment id appears
   more than once in the reviewed dataset or reviewer sheet. Duplicate ids can
@@ -102,6 +107,8 @@ Exclude an assessment row from clinical readiness counts when:
 - The row is missing `validationCaseId`. Repeated assessments can still be
   reviewed, but they cannot satisfy the distinct-case release floor by
   themselves.
+- The row is missing `reviewerId`. Rows without a pseudonymous reviewer or
+  adjudication-panel identity cannot prove reviewer independence.
 
 The evaluator enforces row-level provenance exclusions before counting reviewed
 clinical-scale assessments. Valid primary targets then count scale by scale.
@@ -157,9 +164,9 @@ Clinical-scale readiness uses the machine-readable standard in
 - At least three eligible labels in each represented House-Brackmann severity
   band.
 - Only eligible blinded, independently clinician-assigned or adjudicated rows
-  with the current clinical-scale estimator version count toward the
-  reviewed-assessment floor. A valid primary target then counts only for that
-  scale's agreement denominator.
+  with a pseudonymous `reviewerId` and the current clinical-scale estimator
+  version count toward the reviewed-assessment floor. A valid primary target
+  then counts only for that scale's agreement denominator.
 - The paired Mirror estimate must also be a current-version `status: estimated`
   row with a complete or minimum evidence tier, at least 80% usable movement
   coverage, used/omitted movement exercise IDs, and the usable-movements-only
@@ -226,6 +233,10 @@ If multiple reviewers label the same assessment:
   sheet integrity blockers. The adjudication row can carry a mergeable
   `validationCaseId` only when the reviewer sheets agree on the same
   pseudonymous case id.
+- Treat missing `reviewerId`, multiple reviewer ids in one raw reviewer sheet,
+  or the same reviewer id appearing in both raw reviewer sheets as sheet
+  integrity blockers. Reviewer-agreement evidence only supports release when the
+  two sheets use distinct pseudonymous reviewer ids.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
   incomplete, or out-of-range reviewer rows as adjudication blockers. They should
   be recollected from a blinded current-version sheet rather than resolved by
@@ -249,9 +260,10 @@ at least three eligible paired reviewer labels where both reviewers place the
 case in the same local severity band; cross-band HB disagreements are listed but
 do not satisfy that severity-band floor. The reviewer-agreement report must also
 show at least 10 distinct pseudonymous validation cases across eligible paired
-labels, so one repeated case cannot satisfy the paired-label floor.
-The
-adjudication sheet keeps raw reviewer values, raw estimator versions, and raw
+labels, so one repeated case cannot satisfy the paired-label floor. The two raw
+reviewer sheets must also each contain exactly one pseudonymous `reviewerId`,
+and those reviewer ids must be distinct. The adjudication sheet keeps raw
+reviewer values, raw estimator versions, and raw
 estimate-evidence provenance in audit columns and leaves the mergeable target
 columns blank until a consensus label is entered.
 
@@ -268,10 +280,11 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - A clinical-scale reviewer-agreement report from
   `npm run validation:reviewer-agreement` showing current-version, blinded,
   independent clinician sheets with at least 30 paired labels on every enabled
-  primary scale, at least 10 distinct pseudonymous validation cases, and at
-  least 80% observed and Wilson lower-bound reviewer agreement on every enabled
-  primary scale, House-Brackmann reviewer case mix across all three severity
-  bands, with no reviewer-sheet metadata blockers.
+  primary scale, at least 10 distinct pseudonymous validation cases, distinct
+  pseudonymous reviewer ids for the two reviewer sheets, and at least 80%
+  observed and Wilson lower-bound reviewer agreement on every enabled primary
+  scale, House-Brackmann reviewer case mix across all three severity bands, with
+  no reviewer-sheet metadata blockers.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
@@ -299,9 +312,10 @@ meeting the `validationCaseId` floor, a House-Brackmann case-mix section meeting
 the severity-band minimum, current estimator-version evidence, the 80% usable
 movement coverage floor, complete/minimum estimate evidence-tier controls,
 scale-specific input provenance, a reviewer-agreement artifact meeting the
-paired-label and distinct validation-case floors plus the observed-agreement and
-Wilson lower-bound reviewer-agreement gates for every enabled scale plus the
-same House-Brackmann severity-band spread, and release-control text. A
+paired-label and distinct validation-case floors, distinct pseudonymous reviewer
+ids, plus the observed-agreement and Wilson lower-bound reviewer-agreement gates
+for every enabled scale plus the same House-Brackmann severity-band spread, and
+release-control text. A
 status update that only changes counts or report paths without matching
 artifacts must fail the release check.
 

@@ -60,11 +60,12 @@ checks for:
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
   from the current clinical-scale estimator version and a pseudonymous
-  `validationCaseId`. Valid primary HB,
+  `validationCaseId` plus `reviewerId`. Valid primary HB,
   Sunnybrook, and eFACE total targets count scale by scale; stale-version,
   missing-version, unblinded, copied, rehearsal, non-clinician, uncertain,
   incomplete, duplicate-assessment-id, missing-assessment-id, missing-case-id,
-  or no-valid-primary-target rows are excluded and reported separately.
+  missing-reviewer-id, or no-valid-primary-target rows are excluded and reported
+  separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
   estimate evidence-tier controls, the 80% usable-movement coverage floor, and
@@ -80,12 +81,13 @@ checks for:
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
-  version, pseudonymous `validationCaseId`, and estimate-evidence provenance for
-  each reviewer sheet; stale, missing, mismatched, below-80%-coverage, missing
-  movement provenance, missing/mismatched case ids, or missing/incomplete
-  scale-input or resting-metric provenance, plus duplicate or missing assessment
-  ids, are release blockers until recollected from qualifying current-version
-  evidence.
+  version, pseudonymous `validationCaseId`, pseudonymous `reviewerId`, and
+  estimate-evidence provenance for each reviewer sheet; stale, missing,
+  mismatched, below-80%-coverage, missing movement provenance,
+  missing/mismatched case ids, missing reviewer ids, overlapping reviewer ids,
+  or missing/incomplete scale-input or resting-metric provenance, plus duplicate
+  or missing assessment ids, are release blockers until recollected from
+  qualifying current-version evidence.
 - Reviewer-agreement reports must also block unblinded, non-independent,
   non-clinician, uncertain, copied, rehearsal, incomplete, or out-of-range
   reviewer rows, plus rows paired with insufficient estimate status, evidence
@@ -101,7 +103,8 @@ checks for:
   reviewer case-mix summary where HB I-II, HB III-IV, and HB V-VI are each
   represented by at least three same-band eligible paired reviewer labels, plus
   at least 10 distinct pseudonymous validation cases across eligible paired
-  labels.
+  labels, exactly one pseudonymous reviewer id in each raw reviewer sheet, and
+  no reviewer-id overlap between the sheets.
 - The primary House-Brackmann, Sunnybrook, and eFACE rows in referenced
   clinical-scale agreement reports must have 95% Wilson lower bounds meeting the
   configured 80% agreement floor.

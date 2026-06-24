@@ -117,16 +117,18 @@ Mirror's current estimates in read-only reference columns for audit, but the
 - `efaceTotal`
 - Optional `efaceStatic`, `efaceDynamic`, and `efaceSynkinesis` domain scores
 - `validationCaseId`, `sourceLabelSheetMode`, `reviewBlinded`, `labelSource`,
-  `reviewerRole`, `clinicianConfidence`, and `reviewedAt` metadata used to prove
-  that a target label came from a blinded sheet, belongs to a pseudonymous
-  validation case, and was independently clinician-assigned or adjudicated
-  before it is counted by readiness tooling
+  `reviewerId`, `reviewerRole`, `clinicianConfidence`, and `reviewedAt`
+  metadata used to prove that a target label came from a blinded sheet, belongs
+  to a pseudonymous validation case, has a pseudonymous reviewer/adjudicator
+  identity, and was independently clinician-assigned or adjudicated before it is
+  counted by readiness tooling
 
-Validation label schema v6 lists the three primary scale fields as
+Validation label schema v7 lists the three primary scale fields as
 `primaryTargetFields`, not all-or-nothing required fields. A row needs at least
 one valid primary target to count, and each valid target counts only for its own
-scale's denominator. The schema also carries `validationCaseId`, a
-pseudonymous case identifier used only for validation identity accounting.
+scale's denominator. The schema also carries `validationCaseId` and
+`reviewerId`, pseudonymous identifiers used only for validation identity
+accounting.
 
 Normal, non-blinded label sheets also include read-only estimate value columns.
 Blinded label sheets hide the estimate values, but preserve non-revealing
@@ -186,7 +188,9 @@ default minimum standard is:
   ids are excluded and block release readiness so a single reviewed assessment
   cannot inflate denominators. It must also have a pseudonymous
   `validationCaseId`; missing case ids are excluded, and repeated assessments
-  from the same case cannot satisfy the distinct-case floor by themselves.
+  from the same case cannot satisfy the distinct-case floor by themselves. It
+  must have a pseudonymous `reviewerId`; missing reviewer ids are excluded
+  because the reference-standard package cannot prove reviewer identity.
   The paired Mirror estimate must also have `status: estimated`, a v5
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
   at least 80% usable movement coverage, used/omitted movement exercise IDs that
@@ -242,18 +246,19 @@ House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
 current clinical-scale estimator version, the 80% usable-movement coverage
 floor, the complete/minimum estimate evidence-tier gate, complete resting-metric
 provenance, and the `sourceLabelSheetMode`/`reviewBlinded`/estimator
-`version`/`labelSource`/`validationCaseId` controls before a clinical agreement
-artifact can support clinical-facing score availability.
+`version`/`labelSource`/`validationCaseId`/`reviewerId` controls before a
+clinical agreement artifact can support clinical-facing score availability.
 Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,
 independent clinician sheets with qualifying complete/minimum estimate evidence,
 at least 80% usable movement coverage, paired labels for every enabled primary
 scale meeting the same reviewed-assessment floor, at least 10 distinct
-pseudonymous validation cases, at least 80% observed reviewer agreement, Wilson
-lower-bound reviewer agreement meeting the configured 80% standard,
-House-Brackmann reviewer case mix with HB I-II, HB III-IV, and HB V-VI each
-represented by enough same-band eligible reviewer pairs, and no excluded
-reviewer-pair, reviewer-sheet metadata, or
+pseudonymous validation cases, exactly one pseudonymous reviewer id in each raw
+reviewer sheet with no reviewer-id overlap between sheets, at least 80%
+observed reviewer agreement, Wilson lower-bound reviewer agreement meeting the
+configured 80% standard, House-Brackmann reviewer case mix with HB I-II, HB
+III-IV, and HB V-VI each represented by enough same-band eligible reviewer
+pairs, and no excluded reviewer-pair, reviewer-sheet metadata, or
 estimate-evidence blockers. The estimate-evidence blockers include missing or
 inconsistent movement provenance and missing or incomplete resting-metric
 provenance. A disabled primary scale can remain an estimate
