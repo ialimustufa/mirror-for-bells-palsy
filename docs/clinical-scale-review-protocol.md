@@ -161,9 +161,11 @@ Mirror estimates only.
 
 The release gate runs `npm run validation:status`, which verifies that referenced
 clinical-scale agreement reports exist and contain a passing observed-standard
-status, all three primary scale rows, Wilson interval reporting, and release
-control text. A status update that only changes counts or report paths without
-matching artifacts must fail the release check.
+status, all three primary scale rows, Wilson interval reporting, explicit
+reference-standard controls, an eligible blinded independent label count meeting
+the minimum reviewed-assessment floor, and release-control text. A status update
+that only changes counts or report paths without matching artifacts must fail the
+release check.
 
 ## References
 

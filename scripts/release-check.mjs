@@ -28,7 +28,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/clinical-scale-review-protocol.md",
-    patterns: [/blinded label sheet/i, /reviewer-agreement/i, /30 reviewed clinical-scale assessment/i, /clinician-assigned grade/i],
+    patterns: [/blinded label sheet/i, /reviewer-agreement/i, /30 reviewed clinical-scale assessment/i, /clinician-assigned grade/i, /reference-standard controls/i],
   },
 ];
 

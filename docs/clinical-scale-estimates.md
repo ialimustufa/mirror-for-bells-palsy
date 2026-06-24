@@ -101,8 +101,12 @@ After `npm run validation:clinical-readiness`, use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
 to create the human-readable clinical-scale agreement report. That Markdown
 report packages the dataset summary, excluded-label reason counts, agreement
-table, Wilson intervals, missing estimate counts, blocking reasons, and mismatch
-samples that a release reviewer needs before any validation-status update.
+table, Wilson intervals, missing estimate counts, reference-standard control
+statements, blocking reasons, and mismatch samples that a release reviewer needs
+before any validation-status update. The release status artifact checker requires
+the report to document the eligible blinded independent label count and the
+`reviewBlinded`/`labelSource` controls before a clinical agreement artifact can
+support clinical-facing score availability.
 
 The 30-assessment floor is still a local release gate, not a universal clinical
 sample-size claim. Current clinical prediction-model validation guidance warns

@@ -52,12 +52,19 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /eFACE total\s*\|/i, artifactPath, "eFACE total agreement row");
   assertTextMatches(text, /Wilson/i, artifactPath, "Wilson confidence interval reporting");
   assertTextMatches(text, /Reference standard:\s*blinded clinician-assigned/i, artifactPath, "the blinded clinician reference-standard statement");
+  assertTextMatches(text, /## Reference Standard Controls/i, artifactPath, "the reference-standard controls section");
+  assertTextMatches(text, /Eligible blinded independent clinical labels:\s*\d+/i, artifactPath, "eligible blinded independent clinical label count");
+  assertTextMatches(text, /Blinding control:\s*counted labels require `reviewBlinded`/i, artifactPath, "the explicit blinded-review control");
+  assertTextMatches(text, /Independence control:\s*counted labels require clinician-assigned or adjudicated `labelSource`/i, artifactPath, "the explicit independent-label-source control");
+  assertTextMatches(text, /Reviewer control:\s*counted labels require a recognized clinical\/adjudication role/i, artifactPath, "the explicit reviewer-role control");
   assertTextMatches(text, /Release control:/i, artifactPath, "the release-control statement");
   const reviewedClinicalScaleAssessmentCount = integerFromMatch(text, /Reviewed clinical-scale assessments:\s*(\d+)/i);
+  const eligibleBlindedIndependentLabelCount = integerFromMatch(text, /Eligible blinded independent clinical labels:\s*(\d+)/i);
   const readyPrimaryScaleCount = integerFromMatch(text, /Ready primary scales:\s*(\d+)\/\d+/i);
   return {
     path: artifactPath,
     reviewedClinicalScaleAssessmentCount,
+    eligibleBlindedIndependentLabelCount,
     readyPrimaryScaleCount,
   };
 }
@@ -144,10 +151,15 @@ async function validateStatusArtifacts(status, options = {}) {
   }
   if (status.clinicalScaleAgreementReports.length > 0) {
     const maxReviewedAssessments = Math.max(0, ...clinicalAgreementReports.map((report) => report.reviewedClinicalScaleAssessmentCount ?? 0));
+    const maxEligibleBlindedIndependentLabels = Math.max(0, ...clinicalAgreementReports.map((report) => report.eligibleBlindedIndependentLabelCount ?? 0));
     const maxReadyPrimaryScales = Math.max(0, ...clinicalAgreementReports.map((report) => report.readyPrimaryScaleCount ?? 0));
     assertCondition(
       maxReviewedAssessments >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
       "clinical scale agreement report artifacts must document reviewed assessment coverage meeting the minimum standard",
+    );
+    assertCondition(
+      maxEligibleBlindedIndependentLabels >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
+      "clinical scale agreement report artifacts must document eligible blinded independent clinical labels meeting the minimum standard",
     );
     assertCondition(
       maxReadyPrimaryScales >= PRIMARY_CLINICAL_SCALE_COUNT,

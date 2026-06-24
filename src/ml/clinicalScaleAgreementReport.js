@@ -121,6 +121,18 @@ function excludedLabelReasonLines(validation = {}, readiness = {}) {
   ];
 }
 
+function referenceStandardControlLines(validation = {}, readiness = {}) {
+  return [
+    "## Reference Standard Controls",
+    "",
+    `- Eligible blinded independent clinical labels: ${validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0}`,
+    "- Blinding control: counted labels require `reviewBlinded` to show Mirror estimates were hidden before target assignment.",
+    "- Independence control: counted labels require clinician-assigned or adjudicated `labelSource` metadata, not Mirror/copied/algorithmic labels.",
+    "- Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.",
+    "- Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.",
+  ];
+}
+
 function readinessFrom(input, options) {
   if (input?.kind === "mirror-clinical-scale-readiness-report") return input;
   return assessClinicalScaleReadiness(input, options);
@@ -164,6 +176,8 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "## Primary Scale Agreement",
     "",
     scaleTable(PRIMARY_SCALE_LABELS, readiness, validation),
+    "",
+    ...referenceStandardControlLines(validation, readiness),
     ...excludedLabelReasonLines(validation, readiness),
   ];
 
@@ -186,6 +200,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "",
     "- Index estimate: Mirror standard-assessment clinical-scale estimates generated from local practice data.",
     "- Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from `docs/clinical-scale-review-protocol.md`.",
+    "- Reference standard controls: `reviewBlinded`, `labelSource`, clinical `reviewerRole`, and valid primary target fields must be present before rows count toward readiness.",
     "- Primary performance measures: tolerance-based agreement rate, missing-estimate count, mean absolute delta, and Wilson confidence interval.",
     "- Error review: out-of-tolerance assessment rows listed above for adjudication and scorer review.",
     "- Release control: this report alone cannot enable clinical-facing scores; `docs/validation-status.json` must be reviewed and updated separately.",

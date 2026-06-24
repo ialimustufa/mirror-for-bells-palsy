@@ -42,9 +42,18 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 | Sunnybrook composite | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
 | eFACE total | within 10 points | 30 | 0 | 24 | 80.0% | 63.1%-90.0% 95% Wilson CI | 4.0 | meets-observed-standard |
 
+## Reference Standard Controls
+
+- Eligible blinded independent clinical labels: ${reviewedCount}
+- Blinding control: counted labels require \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
+- Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
+- Reviewer control: counted labels require a recognized clinical/adjudication role and are excluded when confidence is uncertain.
+- Validity control: counted labels require valid primary House-Brackmann, Sunnybrook composite, and eFACE total targets.
+
 ## Reporting Checklist
 
 - Reference standard: blinded clinician-assigned House-Brackmann, Sunnybrook, and eFACE labels from \`docs/clinical-scale-review-protocol.md\`.
+- Reference standard controls: \`reviewBlinded\`, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
 }
@@ -127,6 +136,7 @@ test("validation status artifacts accept documented clinical and calibration rep
 
   assert.equal(result.status.clinicalFacingScoresAllowed, true);
   assert.equal(result.artifacts.clinicalAgreementReports[0].reviewedClinicalScaleAssessmentCount, 30);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
 
@@ -242,6 +252,56 @@ test("validation status artifacts reject clinical agreement reports that do not 
       }),
     }),
     /passing clinical-scale readiness status/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports without blinded independent label controls", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace(/## Reference Standard Controls[\s\S]*?## Reporting Checklist/, "## Reporting Checklist"),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /reference-standard controls section/,
+  );
+});
+
+test("validation status artifacts reject clinical agreement reports with too few eligible blinded labels", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+  };
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport().replace("Eligible blinded independent clinical labels: 30", "Eligible blinded independent clinical labels: 12"),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /eligible blinded independent clinical labels/,
   );
 });
 

@@ -61,6 +61,9 @@ checks for:
   clinician-assigned or adjudicated labels with valid primary HB, Sunnybrook, and
   eFACE total targets; unblinded, copied, rehearsal, non-clinician, uncertain,
   incomplete, or out-of-range rows are excluded and reported separately.
+- Referenced clinical-scale agreement reports must include a reference-standard
+  controls section and an eligible blinded independent label count meeting the
+  minimum reviewed-assessment floor.
 
 Backup compatibility must remain rollback-safe:
 
