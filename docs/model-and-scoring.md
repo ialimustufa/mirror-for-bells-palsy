@@ -1148,13 +1148,16 @@ rather than clinician-assigned grades. The full review protocol is documented in
 
 The clinical-report command converts a reviewed dataset, clinical validation
 report, or clinical-readiness report into a Markdown clinical-scale agreement
-report. It records the dataset summary, primary-scale agreement table, Wilson
+report or, when the output path ends in `.json`, a structured agreement artifact.
+It records the dataset summary, primary-scale agreement table or rows, Wilson
 confidence intervals, House-Brackmann case-mix table, missing estimate counts,
 estimator-version counts, a scale-specific availability recommendation table,
 distinct validation-case counts, blocking reasons, reference-standard controls,
-and a sample of out-of-tolerance assessment rows for adjudication. The report is
-designed for the release reviewer to attach under `docs/validation/` before any
-status update.
+and a sample of out-of-tolerance assessment rows for adjudication. The JSON
+artifact is preferred for machine release checks because `npm run
+validation:status` can validate the counts and controls without parsing
+Markdown tables. The report is designed for the release reviewer to attach under
+`docs/validation/` before any status update.
 
 When two clinicians review the same blinded clinical-scale labels, the
 reviewer-agreement command compares the two CSVs before merge. It reports

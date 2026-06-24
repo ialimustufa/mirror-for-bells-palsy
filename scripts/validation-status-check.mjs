@@ -211,6 +211,129 @@ function primaryScaleAgreementRow(text, scaleKey, scaleLabel) {
   };
 }
 
+function primaryScaleAgreementRowFromJson(report, artifactPath, scaleKey, scaleLabel) {
+  const agreementKey = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.agreementKey;
+  const row = report.primaryScaleAgreementRows?.[scaleKey] ?? report.primaryScaleAgreementRows?.[agreementKey];
+  assertCondition(row && typeof row === "object", `${artifactPath}.primaryScaleAgreementRows.${scaleKey} must be present`);
+  assertNonNegativeInteger(row.labeledCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.labeledCount`);
+  assertNonNegativeInteger(row.missingEstimateCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.missingEstimateCount`);
+  assertNonNegativeInteger(row.withinToleranceCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.withinToleranceCount`);
+  assertFiniteNumber(row.agreementRate, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.agreementRate`);
+  assertFiniteNumber(row.agreementWilsonLowerBound ?? row.agreementConfidenceInterval?.lower, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.agreementWilsonLowerBound`);
+  assertCondition(typeof row.status === "string" && row.status.length > 0, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.status must be present`);
+  return {
+    scaleKey,
+    label: row.label ?? scaleLabel,
+    labeledCount: row.labeledCount,
+    missingEstimateCount: row.missingEstimateCount,
+    withinToleranceCount: row.withinToleranceCount,
+    agreementRate: row.agreementRate,
+    agreementWilsonLowerBound: row.agreementWilsonLowerBound ?? row.agreementConfidenceInterval?.lower,
+    status: row.status,
+  };
+}
+
+function validateClinicalScaleAgreementReportJson(report, artifactPath) {
+  assertCondition(report?.kind === "mirror-clinical-scale-agreement-report", `${artifactPath} must be a mirror-clinical-scale-agreement-report`);
+  assertCondition(typeof report.status === "string" && report.status.length > 0, `${artifactPath}.status must be present`);
+  const standard = report.evidenceStandard ?? report.standard;
+  assertCondition(standard && typeof standard === "object", `${artifactPath} must include an evidenceStandard object`);
+  assertCondition(standard.minAgreementRate === 0.8, `${artifactPath}.evidenceStandard.minAgreementRate must be 0.8`);
+  assertCondition(
+    standard.minAgreementWilsonLowerBound === DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND,
+    `${artifactPath}.evidenceStandard.minAgreementWilsonLowerBound must be ${DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND}`,
+  );
+  assertCondition(
+    Number.isInteger(standard.minReviewedAssessments) && standard.minReviewedAssessments >= DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS,
+    `${artifactPath}.evidenceStandard.minReviewedAssessments must be at least ${DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS}`,
+  );
+  assertCondition(
+    Number.isInteger(standard.minDistinctClinicalCases) && standard.minDistinctClinicalCases >= DEFAULT_MIN_DISTINCT_CLINICAL_CASES,
+    `${artifactPath}.evidenceStandard.minDistinctClinicalCases must be at least ${DEFAULT_MIN_DISTINCT_CLINICAL_CASES}`,
+  );
+  assertCondition(
+    standard.minUsableMovementCoverageRatio === DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO,
+    `${artifactPath}.evidenceStandard.minUsableMovementCoverageRatio must be ${DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO}`,
+  );
+  assertCondition(standard.confidenceInterval?.method === "wilson-score", `${artifactPath}.evidenceStandard.confidenceInterval.method must be wilson-score`);
+  assertCondition(standard.confidenceInterval?.confidenceLevel === 0.95, `${artifactPath}.evidenceStandard.confidenceInterval.confidenceLevel must be 0.95`);
+  assertCondition(
+    standard.clinicalScaleEstimateVersion === CLINICAL_SCALE_ESTIMATE_VERSION,
+    `${artifactPath}.evidenceStandard.clinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
+  );
+  const summary = report.summary;
+  assertCondition(summary && typeof summary === "object", `${artifactPath} must include a summary object`);
+  assertNonNegativeInteger(summary.reviewedClinicalScaleAssessmentCount, `${artifactPath}.summary.reviewedClinicalScaleAssessmentCount`);
+  assertNonNegativeInteger(summary.distinctClinicalCaseCount, `${artifactPath}.summary.distinctClinicalCaseCount`);
+  assertNonNegativeInteger(summary.eligibleBlindedIndependentLabelCount, `${artifactPath}.summary.eligibleBlindedIndependentLabelCount`);
+  assertNonNegativeInteger(summary.duplicateClinicalScaleAssessmentIdCount, `${artifactPath}.summary.duplicateClinicalScaleAssessmentIdCount`);
+  assertNonNegativeInteger(summary.missingClinicalScaleAssessmentIdCount, `${artifactPath}.summary.missingClinicalScaleAssessmentIdCount`);
+  const caseMix = report.houseBrackmannCaseMix;
+  assertCondition(caseMix && typeof caseMix === "object", `${artifactPath} must include houseBrackmannCaseMix`);
+  assertNonNegativeInteger(caseMix.representedSeverityBandCount, `${artifactPath}.houseBrackmannCaseMix.representedSeverityBandCount`);
+  assertNonNegativeInteger(caseMix.minAssessmentsPerSeverityBand, `${artifactPath}.houseBrackmannCaseMix.minAssessmentsPerSeverityBand`);
+  assertNonNegativeInteger(caseMix.minimumLabelsPerRepresentedSeverityBand, `${artifactPath}.houseBrackmannCaseMix.minimumLabelsPerRepresentedSeverityBand`);
+  assertCondition(caseMix.severityBands && typeof caseMix.severityBands === "object", `${artifactPath}.houseBrackmannCaseMix.severityBands must be present`);
+  for (const bandKey of ["mild", "moderate", "severe"]) {
+    assertNonNegativeInteger(caseMix.severityBands?.[bandKey]?.count, `${artifactPath}.houseBrackmannCaseMix.severityBands.${bandKey}.count`);
+  }
+  const controls = report.referenceStandardControls;
+  assertCondition(controls && typeof controls === "object", `${artifactPath} must include referenceStandardControls`);
+  for (const controlKey of [
+    "pseudonymousValidationCaseId",
+    "sourceLabelSheetModeBlinded",
+    "reviewBlinded",
+    "uniqueAssessmentId",
+    "currentEstimatorVersion",
+    "mirrorEstimateStatusEstimated",
+    "completeOrMinimumEvidenceTier",
+    "movementInputProvenance",
+    "usableMovementsOnlyCalculation",
+    "houseBrackmannRequiredInput",
+    "sunnybrookEfaceInputCompleteness",
+    "completeRestingMetricKeys",
+    "completeRestingMetricsCalculation",
+    "missingInvalidEstimatesInDenominator",
+    "independentClinicianOrAdjudicatedLabelSource",
+    "pseudonymousReviewerId",
+    "recognizedClinicalReviewerRole",
+  ]) {
+    assertCondition(controls[controlKey] === true, `${artifactPath}.referenceStandardControls.${controlKey} must be true`);
+  }
+  assertCondition(
+    controls.minUsableMovementCoverageRatio === DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO,
+    `${artifactPath}.referenceStandardControls.minUsableMovementCoverageRatio must be ${DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO}`,
+  );
+  assertTextMatches(report.note ?? "", /does not convert estimates into clinician-assigned grades/i, artifactPath, "the non-clinician-assignment note");
+  const primaryScaleAgreementRows = Object.fromEntries(
+    Object.entries(CLINICAL_SCALE_AVAILABILITY).map(([scaleKey, config]) => [
+      scaleKey,
+      primaryScaleAgreementRowFromJson(report, artifactPath, scaleKey, config.agreementLabel),
+    ]),
+  );
+  const primaryScaleWilsonLowerBounds = Object.fromEntries(
+    Object.entries(primaryScaleAgreementRows).map(([scaleKey, row]) => [scaleKey, row?.agreementWilsonLowerBound ?? null]),
+  );
+  return {
+    path: artifactPath,
+    status: report.status,
+    reviewedClinicalScaleAssessmentCount: summary.reviewedClinicalScaleAssessmentCount,
+    distinctClinicalCaseCount: summary.distinctClinicalCaseCount,
+    eligibleBlindedIndependentLabelCount: summary.eligibleBlindedIndependentLabelCount,
+    duplicateClinicalScaleAssessmentIdCount: summary.duplicateClinicalScaleAssessmentIdCount,
+    missingClinicalScaleAssessmentIdCount: summary.missingClinicalScaleAssessmentIdCount,
+    clinicalScaleEstimateVersion: standard.clinicalScaleEstimateVersion,
+    minimumUsableMovementCoverageRatio: standard.minUsableMovementCoverageRatio,
+    minimumLabelsPerRepresentedSeverityBand: caseMix.minAssessmentsPerSeverityBand,
+    representedHouseBrackmannSeverityBandCount: caseMix.representedSeverityBandCount,
+    minimumHouseBrackmannSeverityBandLabelCount: caseMix.minimumLabelsPerRepresentedSeverityBand,
+    primaryScaleAgreementRows,
+    primaryScaleWilsonLowerBounds,
+    minimumPrimaryScaleWilsonLowerBound: Math.min(...Object.values(primaryScaleWilsonLowerBounds).map((value) => value ?? 0)),
+    readyPrimaryScaleCount: summary.readyPrimaryScaleCount ?? 0,
+  };
+}
+
 function enabledClinicalScaleKeys(status = {}) {
   return CLINICAL_SCALE_AVAILABILITY_KEYS.filter((scaleKey) => (
     status.clinicalScaleAvailability?.[scaleKey]?.clinicalFacingScoresAllowed === true
@@ -222,6 +345,15 @@ function allPrimaryClinicalScalesEnabled(status = {}) {
 }
 
 function validateClinicalScaleAgreementReportText(text, artifactPath) {
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{")) {
+    try {
+      return validateClinicalScaleAgreementReportJson(JSON.parse(trimmed), artifactPath);
+    } catch (error) {
+      if (error instanceof SyntaxError) throw new Error(`${artifactPath} must be valid JSON when using structured clinical-scale agreement format: ${error.message}`);
+      throw error;
+    }
+  }
   assertTextMatches(text, /# Mirror Clinical Scale Agreement Report/i, artifactPath, "the Mirror clinical-scale agreement report heading");
   assertTextMatches(text, /Status:\s*\S+/i, artifactPath, "a clinical-scale readiness status");
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");

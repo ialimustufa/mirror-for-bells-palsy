@@ -11,6 +11,7 @@ import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
 const CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement-2026-06-24.md";
+const STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement-2026-06-24.json";
 const REVIEWER_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json";
 const THRESHOLD_CALIBRATION_REPORT_PATH = "docs/validation/threshold-calibration-2026-06-23.json";
 
@@ -162,6 +163,100 @@ function houseBrackmannOnlyClinicalAgreementReport() {
       "| eFACE total | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |",
       "| eFACE total | within 10 points | 30 | 0 | 20 | 66.7% | 48.8%-80.8% 95% Wilson CI | 14.0 | not-ready |",
     );
+}
+
+function passingStructuredClinicalAgreementReport(overrides = {}) {
+  const report = {
+    kind: "mirror-clinical-scale-agreement-report",
+    generatedAt: "2026-06-24T00:00:00.000Z",
+    status: "meets-clinical-scale-confidence-standard",
+    recommendation: "allow-controlled-estimate-availability-after-human-review",
+    evidenceStandard: {
+      minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
+      minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
+      minUsableMovementCoverageRatio: 0.8,
+      confidenceInterval: {
+        method: "wilson-score",
+        confidenceLevel: 0.95,
+      },
+      clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+    },
+    summary: {
+      reviewedClinicalScaleAssessmentCount: 30,
+      distinctClinicalCaseCount: 30,
+      eligibleBlindedIndependentLabelCount: 30,
+      duplicateClinicalScaleAssessmentIdCount: 0,
+      missingClinicalScaleAssessmentIdCount: 0,
+      readyPrimaryScaleCount: 3,
+    },
+    primaryScaleAgreementRows: {
+      houseBrackmann: {
+        label: "House-Brackmann",
+        labeledCount: 30,
+        missingEstimateCount: 0,
+        withinToleranceCount: 30,
+        agreementRate: 1,
+        agreementWilsonLowerBound: 0.887,
+        status: "meets-confidence-standard",
+      },
+      sunnybrook: {
+        label: "Sunnybrook composite",
+        labeledCount: 30,
+        missingEstimateCount: 0,
+        withinToleranceCount: 30,
+        agreementRate: 1,
+        agreementWilsonLowerBound: 0.887,
+        status: "meets-confidence-standard",
+      },
+      eface: {
+        label: "eFACE total",
+        labeledCount: 30,
+        missingEstimateCount: 0,
+        withinToleranceCount: 30,
+        agreementRate: 1,
+        agreementWilsonLowerBound: 0.887,
+        status: "meets-confidence-standard",
+      },
+    },
+    houseBrackmannCaseMix: {
+      minHouseBrackmannSeverityBands: 3,
+      minAssessmentsPerSeverityBand: 3,
+      representedSeverityBandCount: 3,
+      minimumLabelsPerRepresentedSeverityBand: 10,
+      severityBands: {
+        mild: { label: "HB I-II mild/normal", count: 10, meetsMinimum: true },
+        moderate: { label: "HB III-IV moderate", count: 10, meetsMinimum: true },
+        severe: { label: "HB V-VI severe/complete", count: 10, meetsMinimum: true },
+      },
+    },
+    referenceStandardControls: {
+      pseudonymousValidationCaseId: true,
+      sourceLabelSheetModeBlinded: true,
+      reviewBlinded: true,
+      uniqueAssessmentId: true,
+      currentEstimatorVersion: true,
+      mirrorEstimateStatusEstimated: true,
+      completeOrMinimumEvidenceTier: true,
+      minUsableMovementCoverageRatio: 0.8,
+      movementInputProvenance: true,
+      usableMovementsOnlyCalculation: true,
+      houseBrackmannRequiredInput: true,
+      sunnybrookEfaceInputCompleteness: true,
+      completeRestingMetricKeys: true,
+      completeRestingMetricsCalculation: true,
+      missingInvalidEstimatesInDenominator: true,
+      independentClinicianOrAdjudicatedLabelSource: true,
+      pseudonymousReviewerId: true,
+      recognizedClinicalReviewerRole: true,
+    },
+    note: "This report packages reviewed agreement evidence for Mirror clinical-scale estimates. It does not convert estimates into clinician-assigned grades and does not provide diagnosis, prognosis, or treatment advice.",
+  };
+  return JSON.stringify({
+    ...report,
+    ...overrides,
+  });
 }
 
 function passingThresholdReport({ readyExercises = 5 } = {}) {
@@ -594,6 +689,73 @@ test("validation status artifacts accept scale-specific clinical availability fo
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.agreementWilsonLowerBound, 0.488);
   assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.status, "not-ready");
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].byScale.sunnybrookComposite.meetsMinimumStandard, false);
+});
+
+test("validation status artifacts accept structured clinical agreement reports", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      sunnybrook: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      eface: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+    },
+  };
+
+  const result = await validateStatusArtifacts(status, {
+    readArtifactText: artifactReader({
+      [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: passingStructuredClinicalAgreementReport(),
+      [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+      [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+    }),
+  });
+
+  assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound, 0.887);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.agreementWilsonLowerBound, 0.887);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
+});
+
+test("validation status artifacts reject structured clinical agreement reports without required controls", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH],
+    clinicalScaleReviewerAgreementReports: [REVIEWER_AGREEMENT_REPORT_PATH],
+    thresholdCalibrationReports: [THRESHOLD_CALIBRATION_REPORT_PATH],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: {
+      houseBrackmann: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      sunnybrook: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+      eface: enabledScaleEvidence({ clinicalAgreementReport: STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH }),
+    },
+  };
+  const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport());
+  structuredReport.referenceStandardControls.reviewBlinded = false;
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        [STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH]: JSON.stringify(structuredReport),
+        [REVIEWER_AGREEMENT_REPORT_PATH]: passingClinicalReviewerAgreementReport(),
+        [THRESHOLD_CALIBRATION_REPORT_PATH]: passingThresholdReport(),
+      }),
+    }),
+    /referenceStandardControls\.reviewBlinded/,
+  );
 });
 
 test("validation status evidence helper derives per-scale status summaries from reports", () => {

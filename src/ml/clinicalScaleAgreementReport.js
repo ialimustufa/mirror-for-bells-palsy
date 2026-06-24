@@ -95,6 +95,34 @@ function scaleTable(scaleEntries, readiness, validation) {
   return rows.join("\n");
 }
 
+function scaleAgreementRow(scaleKey, label, readiness, validation) {
+  const readinessScale = readiness.byScale?.[scaleKey] ?? {};
+  const validationScale = validation.byScale?.[scaleKey] ?? {};
+  const source = Object.keys(readinessScale).length ? readinessScale : validationScale;
+  const agreementConfidenceInterval = source.agreementConfidenceInterval ?? validationScale.agreementConfidenceInterval ?? null;
+  return {
+    scaleKey,
+    label,
+    tolerance: scaleTolerance(scaleKey, validationScale, readiness),
+    labeledCount: source.labeledCount ?? validationScale.labeledCount ?? 0,
+    missingEstimateCount: source.missingEstimateCount ?? validationScale.missingEstimateCount ?? 0,
+    withinToleranceCount: source.withinToleranceCount ?? validationScale.withinToleranceCount ?? 0,
+    agreementRate: source.agreementRate ?? validationScale.agreementRate ?? null,
+    agreementConfidenceInterval,
+    agreementWilsonLowerBound: agreementConfidenceInterval?.lower ?? null,
+    meanAbsDelta: source.meanAbsDelta ?? validationScale.meanAbsDelta ?? null,
+    status: scaleStatus(source),
+    agreementSamplePlan: validationScale.agreementSamplePlan ?? null,
+  };
+}
+
+function scaleAgreementRows(scaleEntries, readiness, validation) {
+  return Object.fromEntries(Object.entries(scaleEntries).map(([scaleKey, label]) => [
+    scaleKey,
+    scaleAgreementRow(scaleKey, label, readiness, validation),
+  ]));
+}
+
 function formatPlanCount(value) {
   return Number.isFinite(value) ? String(value) : "n/a";
 }
@@ -232,6 +260,100 @@ function readinessFrom(input, options) {
   return assessClinicalScaleReadiness(input, options);
 }
 
+function reportCaseMix(validation = {}, readiness = {}) {
+  const caseMix = validation.caseMix ?? readiness.validationSummary?.caseMix ?? {};
+  const severityBands = caseMix.severityBands ?? {};
+  const severityBandCounts = Object.values(severityBands).map((band) => band?.count ?? 0);
+  return {
+    scale: caseMix.scale ?? "houseBrackmann",
+    minHouseBrackmannSeverityBands: caseMix.minHouseBrackmannSeverityBands ?? readiness.thresholds?.minHouseBrackmannSeverityBands ?? 3,
+    minAssessmentsPerSeverityBand: caseMix.minAssessmentsPerSeverityBand ?? readiness.thresholds?.minAssessmentsPerSeverityBand ?? 3,
+    representedSeverityBandCount: caseMix.representedSeverityBandCount ?? 0,
+    minimumLabelsPerRepresentedSeverityBand: severityBandCounts.length ? Math.min(...severityBandCounts) : 0,
+    severityBands,
+    meetsMinimumStandard: caseMix.meetsMinimumStandard === true,
+    blockingReasons: caseMix.blockingReasons ?? [],
+  };
+}
+
+function buildClinicalScaleAgreementReport(input = {}, options = {}) {
+  const validation = sourceValidationFrom(input, options);
+  const readiness = readinessFrom(input, options);
+  const generatedAt = options.generatedAt ?? readiness.generatedAt ?? validation.generatedAt ?? new Date().toISOString();
+  const supplementaryScaleKeys = Object.keys(SUPPLEMENTARY_SCALE_LABELS)
+    .filter((scaleKey) => (validation.byScale?.[scaleKey]?.labeledCount ?? 0) > 0);
+  const supplementaryEntries = Object.fromEntries(supplementaryScaleKeys.map((scaleKey) => [scaleKey, SUPPLEMENTARY_SCALE_LABELS[scaleKey]]));
+  const minUsableMovementCoverageRatio = readiness.thresholds?.minUsableMovementCoverageRatio
+    ?? validation.standard?.minUsableMovementCoverageRatio
+    ?? 0.8;
+  const blockingReasons = readiness.blockingReasons?.length
+    ? readiness.blockingReasons
+    : validation.blockingReasons ?? [];
+
+  return {
+    kind: "mirror-clinical-scale-agreement-report",
+    generatedAt,
+    status: readiness.status ?? "unknown",
+    recommendation: readiness.recommendation ?? "unknown",
+    evidenceStandard: {
+      minReviewedAssessments: readiness.thresholds?.minReviewedAssessments ?? validation.standard?.minReviewedAssessments ?? 30,
+      minDistinctClinicalCases: readiness.thresholds?.minDistinctClinicalCases ?? validation.standard?.minDistinctClinicalCases ?? 10,
+      minAgreementRate: readiness.thresholds?.minAgreementRate ?? validation.standard?.minAgreementRate ?? 0.8,
+      minAgreementWilsonLowerBound: readiness.thresholds?.minAgreementWilsonLowerBound ?? validation.standard?.minAgreementWilsonLowerBound ?? 0.8,
+      minUsableMovementCoverageRatio,
+      houseBrackmannAgreement: readiness.thresholds?.houseBrackmannAgreement ?? validation.standard?.houseBrackmannAgreement ?? "within one grade",
+      sunnybrookTolerance: readiness.thresholds?.sunnybrookTolerance ?? validation.standard?.sunnybrookTolerance ?? 10,
+      efaceTolerance: readiness.thresholds?.efaceTolerance ?? validation.standard?.efaceTolerance ?? 10,
+      confidenceInterval: {
+        method: readiness.thresholds?.confidenceInterval?.method ?? validation.standard?.confidenceInterval?.method ?? "wilson-score",
+        confidenceLevel: readiness.thresholds?.confidenceInterval?.confidenceLevel ?? validation.standard?.confidenceInterval?.confidenceLevel ?? 0.95,
+      },
+      clinicalScaleEstimateVersion: readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? null,
+    },
+    summary: {
+      assessmentClinicalScaleRecords: validation.summary?.assessmentClinicalScaleRecords ?? readiness.validationSummary?.assessmentClinicalScaleRecords ?? 0,
+      uniqueAssessmentClinicalScaleRecords: validation.summary?.uniqueAssessmentClinicalScaleRecords ?? readiness.validationSummary?.uniqueAssessmentClinicalScaleRecords ?? 0,
+      duplicateClinicalScaleAssessmentIdCount: validation.summary?.duplicateClinicalScaleAssessmentIdCount ?? readiness.validationSummary?.duplicateClinicalScaleAssessmentIdCount ?? 0,
+      missingClinicalScaleAssessmentIdCount: validation.summary?.missingClinicalScaleAssessmentIdCount ?? readiness.validationSummary?.missingClinicalScaleAssessmentIdCount ?? 0,
+      reviewedClinicalScaleAssessmentCount: validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0,
+      distinctClinicalCaseCount: validation.summary?.distinctClinicalCaseCount ?? readiness.validationSummary?.distinctClinicalCaseCount ?? 0,
+      eligibleBlindedIndependentLabelCount: validation.summary?.reviewedAssessmentCount ?? readiness.validationSummary?.reviewedAssessmentCount ?? 0,
+      excludedClinicalLabelCount: validation.summary?.excludedClinicalLabelCount ?? readiness.validationSummary?.excludedClinicalLabelCount ?? 0,
+      excludedClinicalLabelReasons: validation.summary?.excludedClinicalLabelReasons ?? readiness.validationSummary?.excludedClinicalLabelReasons ?? {},
+      estimatedAssessmentCount: validation.summary?.estimatedAssessmentCount ?? 0,
+      estimateVersionCounts: validation.summary?.estimateVersionCounts ?? readiness.validationSummary?.estimateVersionCounts ?? {},
+      readyPrimaryScaleCount: readiness.validationSummary?.readyPrimaryScaleCount ?? 0,
+      primaryScaleCount: readiness.validationSummary?.primaryScaleCount ?? Object.keys(PRIMARY_SCALE_LABELS).length,
+    },
+    primaryScaleAgreementRows: scaleAgreementRows(PRIMARY_SCALE_LABELS, readiness, validation),
+    supplementaryScaleAgreementRows: scaleAgreementRows(supplementaryEntries, readiness, validation),
+    houseBrackmannCaseMix: reportCaseMix(validation, readiness),
+    clinicalScaleAvailabilityRecommendation: readiness.validationSummary?.clinicalScaleAvailabilityRecommendation ?? {},
+    referenceStandardControls: {
+      pseudonymousValidationCaseId: true,
+      sourceLabelSheetModeBlinded: true,
+      reviewBlinded: true,
+      uniqueAssessmentId: true,
+      currentEstimatorVersion: true,
+      mirrorEstimateStatusEstimated: true,
+      completeOrMinimumEvidenceTier: true,
+      minUsableMovementCoverageRatio,
+      movementInputProvenance: true,
+      usableMovementsOnlyCalculation: true,
+      houseBrackmannRequiredInput: true,
+      sunnybrookEfaceInputCompleteness: true,
+      completeRestingMetricKeys: true,
+      completeRestingMetricsCalculation: true,
+      missingInvalidEstimatesInDenominator: true,
+      independentClinicianOrAdjudicatedLabelSource: true,
+      pseudonymousReviewerId: true,
+      recognizedClinicalReviewerRole: true,
+    },
+    blockingReasons,
+    note: "This report packages reviewed agreement evidence for Mirror clinical-scale estimates. It does not convert estimates into clinician-assigned grades and does not provide diagnosis, prognosis, or treatment advice.",
+  };
+}
+
 function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
   const validation = sourceValidationFrom(input, options);
   const readiness = readinessFrom(input, options);
@@ -326,5 +448,6 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
 
 export {
   REPORTING_REFERENCES,
+  buildClinicalScaleAgreementReport,
   buildClinicalScaleAgreementMarkdown,
 };

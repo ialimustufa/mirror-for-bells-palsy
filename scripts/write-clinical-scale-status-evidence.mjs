@@ -8,7 +8,7 @@ import {
 } from "./validation-status-check.mjs";
 
 const USAGE = [
-  "Usage: npm run validation:status-evidence -- <validation-status.json> <clinical-scale-agreement.md> <clinical-scale-reviewer-agreement.json> [--enable houseBrackmann,sunnybrook,eface]",
+  "Usage: npm run validation:status-evidence -- <validation-status.json> <clinical-scale-agreement.md|json> <clinical-scale-reviewer-agreement.json> [--enable houseBrackmann,sunnybrook,eface]",
   "",
   "Without --enable, the command enables only primary scales that meet both report-backed evidence gates.",
   "The generated JSON is a draft for human review; it does not edit docs/validation-status.json.",

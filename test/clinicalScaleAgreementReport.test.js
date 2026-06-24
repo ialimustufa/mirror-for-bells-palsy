@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildClinicalScaleAgreementMarkdown } from "../src/ml/clinicalScaleAgreementReport.js";
+import {
+  buildClinicalScaleAgreementMarkdown,
+  buildClinicalScaleAgreementReport,
+} from "../src/ml/clinicalScaleAgreementReport.js";
 import { CLINICAL_SCALE_ESTIMATE_VERSION } from "../src/domain/clinicalScales.js";
 
 const CURRENT_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION}`;
@@ -160,6 +163,34 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /TRIPOD\+AI/);
   assert.match(markdown, /STARD 2015/);
   assert.match(markdown, /Good Machine Learning Practice/);
+});
+
+test("clinical scale agreement JSON packages machine-readable release evidence", () => {
+  const report = buildClinicalScaleAgreementReport(validationReport(), { generatedAt: "2026-06-24T12:00:00.000Z" });
+
+  assert.equal(report.kind, "mirror-clinical-scale-agreement-report");
+  assert.equal(report.generatedAt, "2026-06-24T12:00:00.000Z");
+  assert.equal(report.status, "meets-clinical-scale-confidence-standard");
+  assert.equal(report.evidenceStandard.minAgreementRate, 0.8);
+  assert.equal(report.evidenceStandard.minAgreementWilsonLowerBound, 0.8);
+  assert.equal(report.evidenceStandard.minReviewedAssessments, 30);
+  assert.equal(report.evidenceStandard.minDistinctClinicalCases, 10);
+  assert.equal(report.evidenceStandard.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.evidenceStandard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
+  assert.equal(report.summary.reviewedClinicalScaleAssessmentCount, 30);
+  assert.equal(report.summary.distinctClinicalCaseCount, 30);
+  assert.equal(report.summary.eligibleBlindedIndependentLabelCount, 30);
+  assert.equal(report.primaryScaleAgreementRows.houseBrackmann.labeledCount, 30);
+  assert.equal(report.primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound, 0.887);
+  assert.equal(report.primaryScaleAgreementRows.sunnybrookComposite.status, "meets-confidence-standard");
+  assert.equal(report.houseBrackmannCaseMix.representedSeverityBandCount, 3);
+  assert.equal(report.houseBrackmannCaseMix.minimumLabelsPerRepresentedSeverityBand, 10);
+  assert.equal(report.referenceStandardControls.pseudonymousValidationCaseId, true);
+  assert.equal(report.referenceStandardControls.sourceLabelSheetModeBlinded, true);
+  assert.equal(report.referenceStandardControls.houseBrackmannRequiredInput, true);
+  assert.equal(report.referenceStandardControls.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.clinicalScaleAvailabilityRecommendation.houseBrackmann.evidenceMeetsMinimum, true);
+  assert.match(report.note, /does not convert estimates into clinician-assigned grades/);
 });
 
 test("clinical scale agreement markdown marks non-ready scales as estimate-only recommendations", () => {

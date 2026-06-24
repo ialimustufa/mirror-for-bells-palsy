@@ -18,7 +18,8 @@ npm run validation:calibrate-thresholds -- reviewed-dataset.jsonl threshold-repo
 npm run validation:model-readiness -- reviewed-dataset.jsonl model-readiness-report.json
 npm run validation:clinical-readiness -- reviewed-dataset.jsonl clinical-readiness-report.json
 npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md
-npm run validation:status-evidence -- docs/validation-status.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md docs/validation/clinical-scale-reviewer-agreement-YYYY-MM-DD.json
+npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.json
+npm run validation:status-evidence -- docs/validation-status.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.json docs/validation/clinical-scale-reviewer-agreement-YYYY-MM-DD.json
 npm run validation:status
 npm run release:check # lint + tests + build + release doc checks
 ```
@@ -88,6 +89,11 @@ checks for:
   eligible distinct validation-case count meeting the `validationCaseId` floor,
   an agreement sample plan for the primary scale Wilson gates, and unique
   assessment-id controls.
+- Clinical-scale agreement reports can be committed as Markdown for human
+  review or as structured JSON for machine release evidence. The JSON format is
+  preferred for status updates because `npm run validation:status` can validate
+  the counts, Wilson intervals, House-Brackmann case mix, and reference-standard
+  controls without parsing tables.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
