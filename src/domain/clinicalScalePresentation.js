@@ -51,6 +51,19 @@ function scaleNounForClinicalScale(presentation, scaleKey) {
   return presentation?.scaleAvailability?.[scaleKey]?.clinicalFacingScoresAllowed ? "support value" : "estimate";
 }
 
+function compactNounForClinicalScale(presentation, scaleKey) {
+  return scaleNounForClinicalScale(presentation, scaleKey) === "support value" ? "support" : "estimate";
+}
+
+function compactClinicalScaleValueLabel(scales, presentation = clinicalScalePresentationPolicy()) {
+  if (!scales) return null;
+  return [
+    scales.houseBrackmann ? `HB ${scales.houseBrackmann.grade} ${compactNounForClinicalScale(presentation, "houseBrackmann")}` : null,
+    scales.sunnybrook ? `SB ${Math.round(scales.sunnybrook.compositeScore)} ${compactNounForClinicalScale(presentation, "sunnybrook")}` : null,
+    scales.eface ? `eFACE ${Math.round(scales.eface.totalScore)} ${compactNounForClinicalScale(presentation, "eface")}` : null,
+  ].filter(Boolean).join(" · ") || null;
+}
+
 function clinicalScalePresentationPolicy(status = DEFAULT_VALIDATION_STATUS) {
   const scaleAvailability = clinicalScaleAvailabilityPolicy(status);
   const primaryClinicalScaleSupportCount = Object.values(scaleAvailability).filter((item) => item.clinicalFacingScoresAllowed).length;
@@ -105,6 +118,7 @@ export {
   DEFAULT_VALIDATION_STATUS,
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  compactClinicalScaleValueLabel,
   clinicalScaleAvailabilityPolicy,
   clinicalScalePresentationPolicy,
   scaleNounForClinicalScale,

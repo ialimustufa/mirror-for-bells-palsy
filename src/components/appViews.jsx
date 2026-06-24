@@ -4,7 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "rec
 import { DAY_END_HOUR, DAY_START_HOUR, INTERSTITIAL_SEC, MAX_EXERCISE_REPEATS, MAX_EXERCISE_REPS, MIN_EXERCISE_REPS, PROFILE_HOLD_SEC, PROFILE_REST_SEC } from "../domain/config";
 import { STANDARD_ASSESSMENT_EXERCISE_IDS, STANDARD_ASSESSMENT_REPS, STANDARD_ASSESSMENT_REST_SEC, summarizeAssessmentSession } from "../domain/assessment";
 import { STANDARD_SCALE_MOVEMENTS } from "../domain/clinicalScales";
-import { clinicalScalePresentationPolicy, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
+import { clinicalScalePresentationPolicy, compactClinicalScaleValueLabel, scaleNounForClinicalScale } from "../domain/clinicalScalePresentation";
 import { EXERCISES, MOOD_OPTIONS, PROFILE_ASSESSMENT_EXERCISES, PROFILE_STARTER_ASSESSMENT_EXERCISES, REGIONS } from "../domain/exercises";
 import { personalRecoveryFocusItems } from "../domain/personalRecoveryModel";
 import { summarizeJournalSafetyPrompts } from "../domain/safetyPrompts";
@@ -135,15 +135,6 @@ const STANDARD_SCALE_MOVEMENT_LABELS = Object.fromEntries(STANDARD_SCALE_MOVEMEN
 function omittedClinicalScaleMovementLabels(clinicalScales) {
   const ids = clinicalScales?.evidence?.omittedMovementExerciseIds ?? clinicalScales?.coverage?.unusableExerciseIds ?? [];
   return ids.map((id) => STANDARD_SCALE_MOVEMENT_LABELS[id] ?? id);
-}
-
-function compactClinicalScaleLabel(scales) {
-  if (!scales) return null;
-  return [
-    scales.houseBrackmann ? `HB ${scales.houseBrackmann.grade}` : null,
-    scales.sunnybrook ? `SB ${Math.round(scales.sunnybrook.compositeScore)}` : null,
-    scales.eface ? `eFACE ${Math.round(scales.eface.totalScore)}` : null,
-  ].filter(Boolean).join(" · ") || null;
 }
 
 function sourceSessionForAssessment(assessment, sessions = []) {
@@ -366,7 +357,8 @@ function HomeView({ data, streak, personalizedPlanIds, recommendedPlanIds, onSta
   const latestAssessmentDate = latestAssessment?.date ? formatSessionDate(latestAssessment) : null;
   const showClinicalScaleEstimates = data.prefs?.clinicalScaleEstimatesEnabled !== false;
   const latestClinicalScales = showClinicalScaleEstimates && latestAssessment?.clinicalScales?.status === "estimated" ? latestAssessment.clinicalScales.scales : null;
-  const latestClinicalLabel = compactClinicalScaleLabel(latestClinicalScales);
+  const clinicalScalePolicy = clinicalScalePresentationPolicy();
+  const latestClinicalLabel = compactClinicalScaleValueLabel(latestClinicalScales, clinicalScalePolicy);
   const latestMovement = latestSessionMovementProgress(data.sessions);
   const baselineStatus = profileStatus(data.movementProfile);
   const weakBaselineIds = baselineStatus?.retakeExercises?.map((ex) => ex.exerciseId) ?? [];
@@ -1960,7 +1952,7 @@ function PastAssessmentRow({ assessment, sourceSession, onOpen, showClinicalScal
   const coactivation = displayAssessment.coactivationRisk;
   const restingAsymmetry = displayAssessment.resting?.averageAsymmetryRatio;
   const clinicalScales = showClinicalScaleEstimates && displayAssessment.clinicalScales?.status === "estimated" ? displayAssessment.clinicalScales.scales : null;
-  const clinicalLabel = compactClinicalScaleLabel(clinicalScales);
+  const clinicalLabel = compactClinicalScaleValueLabel(clinicalScales, clinicalScalePresentationPolicy());
   return (
     <button
       onClick={() => sourceSession && onOpen?.(sourceSession)}

@@ -892,6 +892,10 @@ These values are not clinical-facing validated grades while
 The runtime presentation policy in `src/domain/clinicalScalePresentation.js`
 imports that same status file so app panels and printable reports keep the
 Mirror-estimate wording until the reviewed validation gate is explicitly opened.
+Compact dashboard and assessment-history summaries append the same per-scale
+status, so mixed validation states can show one scale as support while keeping
+the remaining House-Brackmann, Sunnybrook, or eFACE-style values labeled as
+estimates.
 Users can also turn off `prefs.clinicalScaleEstimatesEnabled` to hide optional
 clinical-scale estimates from the assessment summary, assessment history, and
 printable report output. The preference is display-only: validation datasets and

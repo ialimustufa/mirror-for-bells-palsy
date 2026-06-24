@@ -4,6 +4,7 @@ import validationStatus from "../docs/validation-status.json" with { type: "json
 import {
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  compactClinicalScaleValueLabel,
   clinicalScalePresentationPolicy,
   DEFAULT_VALIDATION_STATUS,
   scaleNounForClinicalScale,
@@ -27,6 +28,24 @@ function movementScore(exerciseId, ratio) {
     captureQuality: { key: "strong" },
     movementFeatures: { coactivation: { risk: "low", score: 0.02 } },
     scores: [ratio],
+  };
+}
+
+function reviewedClinicalScaleStatus(clinicalScaleAvailability) {
+  return {
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    clinicalScaleMinimumStandard: {
+      minReviewedAssessments: 30,
+    },
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability,
   };
 }
 
@@ -147,6 +166,34 @@ test("clinical scale presentation policy can keep individual scales as estimates
   assert.equal(scaleNounForClinicalScale(policy, "houseBrackmann"), "support value");
   assert.equal(scaleNounForClinicalScale(policy, "sunnybrook"), "estimate");
   assert.match(policy.shortNotice, /remaining values are Mirror estimates/);
+});
+
+test("compact clinical scale labels include validation-aware per-scale nouns", () => {
+  const scales = {
+    houseBrackmann: { grade: "II", label: "Mild dysfunction" },
+    sunnybrook: {
+      compositeScore: 86,
+      voluntaryMovementScore: 88,
+      restingSymmetryScore: 0,
+      synkinesisScore: 2,
+    },
+    eface: {
+      totalScore: 89,
+      staticScore: 93,
+      dynamicScore: 84,
+      synkinesisScore: 90,
+    },
+  };
+
+  assert.equal(compactClinicalScaleValueLabel(scales), "HB II estimate · SB 86 estimate · eFACE 89 estimate");
+
+  const mixedPolicy = clinicalScalePresentationPolicy(reviewedClinicalScaleStatus({
+    houseBrackmann: { clinicalFacingScoresAllowed: true },
+    sunnybrook: { clinicalFacingScoresAllowed: false },
+    eface: { clinicalFacingScoresAllowed: true },
+  }));
+
+  assert.equal(compactClinicalScaleValueLabel(scales, mixedPolicy), "HB II support · SB 86 estimate · eFACE 89 support");
 });
 
 test("clinical scale report rows and printable reports use the validation-aware estimate wording", () => {
