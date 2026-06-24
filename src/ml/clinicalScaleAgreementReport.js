@@ -173,10 +173,20 @@ function mismatchRows(validation, scaleKeys) {
 }
 
 function sourceValidationFrom(input, options) {
-  if (input?.kind === "mirror-clinical-scale-readiness-report" && input.sourceValidationReport) {
+  if (input?.kind === "mirror-clinical-scale-readiness-report") {
+    assertClinicalScaleReadinessReport(input);
     return input.sourceValidationReport;
   }
   return clinicalValidationReportFrom(input, options);
+}
+
+function assertClinicalScaleReadinessReport(input = {}) {
+  if (input.schemaVersion !== 1) {
+    throw new Error("clinical readiness report schemaVersion must be 1");
+  }
+  if (!input.sourceValidationReport || typeof input.sourceValidationReport !== "object") {
+    throw new Error("clinical readiness report must include sourceValidationReport");
+  }
 }
 
 function excludedLabelReasonLines(validation = {}, readiness = {}) {
@@ -258,7 +268,10 @@ function availabilityRecommendationLines(readiness = {}) {
 }
 
 function readinessFrom(input, options) {
-  if (input?.kind === "mirror-clinical-scale-readiness-report") return input;
+  if (input?.kind === "mirror-clinical-scale-readiness-report") {
+    assertClinicalScaleReadinessReport(input);
+    return input;
+  }
   return assessClinicalScaleReadiness(input, options);
 }
 

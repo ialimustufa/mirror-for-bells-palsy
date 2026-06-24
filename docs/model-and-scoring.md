@@ -1136,15 +1136,16 @@ model from movement labels alone; that requires reviewed landmark-localization
 annotations.
 
 The clinical-readiness command reads a reviewed dataset, combined validation
-report, or clinical-scale validation report and writes a release decision for the
-clinical-scale estimates. It evaluates House-Brackmann, Sunnybrook composite,
-and eFACE total rows independently, requiring each passing scale to meet the
-30-label, 10-distinct-validation-case, 80% observed agreement, and 80% Wilson
-lower-bound standard. The all-primary-scale status also requires all primary
-checks, the House-Brackmann severity-band case-mix gate, and current
-clinical-scale estimator-version evidence to pass. The case-mix gate counts only
-comparable House-Brackmann estimate/label pairs, so missing HB estimates cannot
-fill severity bands. It also emits
+report, or clinical-scale validation report and writes a schema-v1 release
+decision artifact for the clinical-scale estimates. It evaluates
+House-Brackmann, Sunnybrook composite, and eFACE total rows independently,
+requiring each passing scale to meet the 30-label,
+10-distinct-validation-case, 80% observed agreement, and 80% Wilson lower-bound
+standard. The all-primary-scale status also requires all primary checks, the
+House-Brackmann severity-band case-mix gate, and current clinical-scale
+estimator-version evidence to pass. The case-mix gate counts only comparable
+House-Brackmann estimate/label pairs, so missing HB estimates cannot fill
+severity bands. It also emits
 `clinicalScaleAvailabilityRecommendation` entries for the House-Brackmann,
 Sunnybrook, and eFACE status keys, so a reviewer can see which individual scale
 rows are evidence-eligible after human review when the full set is not ready.
@@ -1154,8 +1155,10 @@ rather than clinician-assigned grades. The full review protocol is documented in
 `docs/clinical-scale-review-protocol.md`.
 
 The clinical-report command converts a reviewed dataset, clinical validation
-report, or clinical-readiness report into a Markdown clinical-scale agreement
+report, or schema-v1 clinical-readiness report into a Markdown clinical-scale agreement
 report or, when the output path ends in `.json`, a structured agreement artifact.
+Saved readiness reports must also include the source validation report so
+agreement evidence remains traceable to the reviewed inputs.
 It records the dataset summary, primary-scale agreement table or rows, Wilson
 confidence intervals, House-Brackmann case-mix table, missing estimate counts,
 estimator-version counts, a scale-specific availability recommendation table,

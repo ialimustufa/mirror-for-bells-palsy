@@ -24,6 +24,10 @@ npm run validation:status
 npm run release:check # lint + tests + build + release doc checks
 ```
 
+Saved clinical-readiness reports are `mirror-clinical-scale-readiness-report`
+schema v1 artifacts. Keep their embedded source validation report intact when
+using them as input to `validation:clinical-report`.
+
 Routes:
 
 - `/` - main practice flow

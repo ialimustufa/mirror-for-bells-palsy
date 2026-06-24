@@ -173,13 +173,13 @@ npm run validate:dataset -- reviewed-dataset.jsonl validation-report.json
 npm run validation:clinical-readiness -- validation-report.json clinical-readiness-report.json
 ```
 
-7. Inspect the clinical readiness report. The full all-primary status requires
-   all primary scales to meet the configured observed agreement and Wilson
-   lower-bound standard. Scale-specific availability recommendations may identify
-   one primary scale that is evidence-eligible while another remains estimate-only.
-   The agreement sample plan shows how many additional perfect eligible labels
-   would be needed for a failing scale to clear the observed and Wilson gates;
-   use it for planning only, not as replacement evidence.
+7. Inspect the schema-v1 clinical readiness report. The full all-primary status
+   requires all primary scales to meet the configured observed agreement and
+   Wilson lower-bound standard. Scale-specific availability recommendations may
+   identify one primary scale that is evidence-eligible while another remains
+   estimate-only. The agreement sample plan shows how many additional perfect
+   eligible labels would be needed for a failing scale to clear the observed and
+   Wilson gates; use it for planning only, not as replacement evidence.
 8. Only after human review of the dataset, label process, and readiness report
    should `docs/validation-status.json` be updated.
 
@@ -318,9 +318,9 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
 - A reviewed dataset summary with at least 10 distinct pseudonymous validation
   cases counted through `validationCaseId`.
 - A clinical-scale validation report from `npm run validate:dataset`.
-- A clinical-scale readiness report from
-  `npm run validation:clinical-readiness` with `sourceDatasetSha256` preserved
-  from the reviewed validation dataset.
+- A schema-v1 clinical-scale readiness report from
+  `npm run validation:clinical-readiness` with `sourceDatasetSha256` and the
+  source validation report preserved from the reviewed validation dataset.
 - A clinical-scale reviewer-agreement report from
   `npm run validation:reviewer-agreement` run with `--source-dataset`, showing
   current-version, blinded, independent clinician sheets with the same

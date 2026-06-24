@@ -226,6 +226,7 @@ test("clinical scale readiness reports confidence standard without enabling clin
   const report = assessClinicalScaleReadiness(clinicalValidationReport(), { generatedAt: "2026-06-24T00:00:00.000Z" });
 
   assert.equal(report.status, "meets-clinical-scale-confidence-standard");
+  assert.equal(report.schemaVersion, 1);
   assert.equal(report.recommendation, "allow-controlled-estimate-availability-after-human-review");
   assert.equal(report.validationSummary.readyPrimaryScaleCount, 3);
   assert.equal(report.validationSummary.clinicalScaleAvailabilityRecommendation.houseBrackmann.releaseRecommendation, "eligible-after-human-review");

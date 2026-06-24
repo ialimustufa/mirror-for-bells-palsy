@@ -256,12 +256,15 @@ observed-agreement and Wilson lower-bound gates. This is a reviewer planning aid
 only; it assumes future rows are current-version, non-missing estimates within
 tolerance and does not replace collecting reviewed clinical data.
 
-After `npm run validation:clinical-readiness`, use
+After `npm run validation:clinical-readiness`, inspect the schema-v1 readiness
+artifact, then use
 `npm run validation:clinical-report -- clinical-readiness-report.json docs/validation/clinical-scale-agreement-YYYY-MM-DD.md`
 to create the human-readable clinical-scale agreement report, or use a `.json`
 output path to create the same release evidence as a structured artifact for
-machine checking. The report packages the dataset summary, excluded-label reason
-counts, agreement table/rows, Wilson intervals, missing estimate counts,
+machine checking. Clinical-report requires saved readiness artifacts to be
+schema-v1 and to retain their source validation report. The agreement report
+packages the dataset summary, excluded-label reason counts, agreement
+table/rows, Wilson intervals, missing estimate counts,
 scale-specific label gaps, duplicate/missing assessment-id counts,
 estimator-version counts, distinct validation-case counts, reference-standard
 control statements, House-Brackmann case-mix table, agreement sample plan,

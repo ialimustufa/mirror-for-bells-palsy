@@ -208,6 +208,52 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.match(report.note, /does not convert estimates into clinician-assigned grades/);
 });
 
+test("clinical scale agreement report accepts only schema-v1 readiness artifacts", () => {
+  const readinessReport = {
+    kind: "mirror-clinical-scale-readiness-report",
+    schemaVersion: 1,
+    generatedAt: "2026-06-24T12:00:00.000Z",
+    sourceDatasetSha256: SOURCE_DATASET_SHA256,
+    status: "meets-clinical-scale-confidence-standard",
+    recommendation: "allow-controlled-estimate-availability-after-human-review",
+    thresholds: {
+      minReviewedAssessments: 30,
+      minDistinctClinicalCases: 10,
+      minAgreementRate: 0.8,
+      minAgreementWilsonLowerBound: 0.8,
+      minUsableMovementCoverageRatio: 0.8,
+      clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
+      confidenceInterval: { method: "wilson-score", confidenceLevel: 0.95 },
+    },
+    validationSummary: {
+      readyPrimaryScaleCount: 3,
+      primaryScaleCount: 3,
+    },
+    byScale: {
+      houseBrackmann: { status: "meets-confidence-standard", ...scaleReport({ labeledCount: 30, withinToleranceCount: 30 }) },
+      sunnybrookComposite: { status: "meets-confidence-standard", ...scaleReport({ labeledCount: 30, withinToleranceCount: 30 }) },
+      efaceTotal: { status: "meets-confidence-standard", ...scaleReport({ labeledCount: 30, withinToleranceCount: 30 }) },
+    },
+    blockingReasons: [],
+    sourceValidationReport: validationReport(),
+  };
+
+  assert.equal(buildClinicalScaleAgreementReport(readinessReport).sourceDatasetSha256, SOURCE_DATASET_SHA256);
+
+  const unversionedReadinessReport = { ...readinessReport };
+  delete unversionedReadinessReport.schemaVersion;
+  assert.throws(
+    () => buildClinicalScaleAgreementReport(unversionedReadinessReport),
+    /clinical readiness report schemaVersion must be 1/,
+  );
+
+  const incompleteReadinessReport = { ...readinessReport, sourceValidationReport: null };
+  assert.throws(
+    () => buildClinicalScaleAgreementReport(incompleteReadinessReport),
+    /clinical readiness report must include sourceValidationReport/,
+  );
+});
+
 test("clinical scale agreement markdown marks non-ready scales as estimate-only recommendations", () => {
   const markdown = buildClinicalScaleAgreementMarkdown(validationReport({
     byScale: {

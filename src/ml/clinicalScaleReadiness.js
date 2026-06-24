@@ -162,6 +162,7 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       : "allow-controlled-estimate-availability-after-human-review";
   return {
     kind: "mirror-clinical-scale-readiness-report",
+    schemaVersion: 1,
     generatedAt,
     sourceDatasetSha256,
     status,

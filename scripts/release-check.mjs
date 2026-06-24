@@ -16,7 +16,7 @@ const REQUIRED_DOC_CHECKS = [
   },
   {
     path: "docs/model-and-scoring.md",
-    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /clinical-scale agreement\s+report/i, /clinical review package verification/i, /clinical-scale-agreement-reviewed/i, /ready exercise coverage/i, /per-scale evidence\s+summary/i, /validationCaseId/i, /distinct validation-case/i, /reviewerId/i, /distinct pseudonymous reviewer ids/i, /cross-severity House-Brackmann/i, /clinicianConfidence/i, /reviewedAt/i, /sourceDatasetSha256/i, /not diagnosis/i],
+    patterns: [/Safety Prompt Sources/i, /Validation Dataset Export/i, /schema-v1 clinical-readiness/i, /clinical-scale agreement\s+report/i, /clinical review package verification/i, /clinical-scale-agreement-reviewed/i, /ready exercise coverage/i, /per-scale evidence\s+summary/i, /validationCaseId/i, /distinct validation-case/i, /reviewerId/i, /distinct pseudonymous reviewer ids/i, /cross-severity House-Brackmann/i, /clinicianConfidence/i, /reviewedAt/i, /sourceDatasetSha256/i, /not diagnosis/i],
   },
   {
     path: "docs/algorithm-upgrade-roadmap.md",
