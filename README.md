@@ -6,8 +6,8 @@ Important: Mirror supports practice and self-tracking, but it does not diagnose,
 
 ## Try It
 
-- How it works, for anyone to try: [mirror-for-bells-palsy.onrender.com/try](https://mirror-for-bells-palsy.onrender.com/try)
-- Full practice app for folks who have Bell's palsy: [mirror-for-bells-palsy.onrender.com](https://mirror-for-bells-palsy.onrender.com/)
+- How it works, for anyone to try: [mirror.iali.in/try](https://mirror.iali.in/try) ([Render fallback](https://mirror-for-bells-palsy.onrender.com/try))
+- Full practice app for folks who have Bell's palsy: [mirror.iali.in](https://mirror.iali.in/) ([Render fallback](https://mirror-for-bells-palsy.onrender.com/))
 
 ## What Matters
 
