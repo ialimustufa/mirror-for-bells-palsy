@@ -887,6 +887,9 @@ Clinical-scale estimates are stored with explicit status and caveats:
 - Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
   Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
   treat missing or weak-capture movement rows as zero movement.
+- App panels and printable reports also surface scale-specific input gaps, such
+  as `House-Brackmann estimate unavailable: requires Gentle eye closure`, so a
+  withheld scale is not silently hidden when other eligible estimates remain.
 - v5 estimates also record required, available, and missing resting metric keys
   and require `estimateCalculationUsesCompleteRestingMetrics: true`.
 

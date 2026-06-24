@@ -19,6 +19,12 @@ const REQUIRED_RESTING_METRICS = Object.freeze([
 const REQUIRED_RESTING_METRIC_KEYS = Object.freeze(REQUIRED_RESTING_METRICS.map((metric) => metric.key));
 const REQUIRED_RESTING_METRIC_LABELS = Object.freeze(Object.fromEntries(REQUIRED_RESTING_METRICS.map((metric) => [metric.key, metric.label])));
 const HOUSE_BRACKMANN_REQUIRED_MOVEMENT_IDS = Object.freeze(["eye-close"]);
+const CLINICAL_SCALE_LABELS = Object.freeze({
+  houseBrackmann: "House-Brackmann",
+  sunnybrook: "Sunnybrook",
+  eface: "eFACE-style",
+});
+const STANDARD_SCALE_MOVEMENT_LABELS = Object.freeze(Object.fromEntries(STANDARD_SCALE_MOVEMENTS.map((movement) => [movement.exerciseId, movement.label])));
 
 const HOUSE_BRACKMANN_LABELS = Object.freeze({
   1: "Normal",
@@ -221,6 +227,34 @@ function clinicalScaleRestingEvidenceSummary(clinicalScales) {
     missingMetricKeys: missingKeys,
     missingMetricLabels: missingKeys.map((key) => REQUIRED_RESTING_METRIC_LABELS[key] ?? key),
   };
+}
+
+function clinicalScaleMovementLabels(exerciseIds = []) {
+  return exerciseIds.map((id) => STANDARD_SCALE_MOVEMENT_LABELS[id] ?? id);
+}
+
+function clinicalScaleInputGapSummaries(clinicalScales) {
+  if (!clinicalScales || clinicalScales.status !== "estimated") return [];
+  const scales = clinicalScales.scales ?? {};
+  const completenessByScale = clinicalScales.evidence?.scaleInputCompleteness ?? {};
+  return Object.entries(completenessByScale)
+    .map(([scaleKey, completeness]) => {
+      if (scales[scaleKey] || completeness?.complete !== false) return null;
+      const missingExerciseIds = Array.isArray(completeness.missingRequiredExerciseIds)
+        ? completeness.missingRequiredExerciseIds
+        : [];
+      if (!missingExerciseIds.length) return null;
+      const missingMovementLabels = clinicalScaleMovementLabels(missingExerciseIds);
+      const label = CLINICAL_SCALE_LABELS[scaleKey] ?? scaleKey;
+      return {
+        scaleKey,
+        label,
+        missingExerciseIds,
+        missingMovementLabels,
+        message: `${label} estimate unavailable: requires ${missingMovementLabels.join(", ")}.`,
+      };
+    })
+    .filter(Boolean);
 }
 
 function restingLevel(metric, mildThreshold, severeThreshold, severeScore = 1) {
@@ -473,6 +507,8 @@ export {
   MIN_USABLE_ASSESSMENT_COVERAGE_RATIO,
   REQUIRED_RESTING_METRIC_KEYS,
   STANDARD_SCALE_MOVEMENTS,
+  clinicalScaleInputGapSummaries,
+  clinicalScaleMovementLabels,
   clinicalScaleRestingEvidenceSummary,
   estimateClinicalScaleGrades,
 };

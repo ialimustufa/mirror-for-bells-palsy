@@ -255,6 +255,41 @@ test("clinical scale report rows and printable reports use the validation-aware 
   });
   assert.match(minimumRows.join(" "), /Omitted from scale formulas: Lip pucker/);
 
+  const houseBrackmannGapRows = clinicalScaleEstimateRows({
+    ...clinicalScales,
+    coverage: {
+      usableMovementCount: 4,
+      requiredMovementCount: 5,
+      ratio: 0.8,
+      unusableExerciseIds: ["eye-close"],
+    },
+    evidence: {
+      tier: "minimum-standard-assessment",
+      label: "Minimum standard-assessment evidence",
+      omittedMovementExerciseIds: ["eye-close"],
+      requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+      availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
+      missingRestingMetricKeys: [],
+      completeRestingMetrics: true,
+      scaleInputCompleteness: {
+        houseBrackmann: {
+          requiredExerciseIds: ["eye-close"],
+          usedExerciseIds: ["eyebrow-raise", "open-smile", "nose-wrinkle", "pucker"],
+          missingRequiredExerciseIds: ["eye-close"],
+          complete: false,
+        },
+      },
+    },
+    scales: {
+      sunnybrook: clinicalScales.scales.sunnybrook,
+      eface: clinicalScales.scales.eface,
+    },
+  });
+  assert.doesNotMatch(houseBrackmannGapRows.join(" "), /House-Brackmann estimate: Grade/);
+  assert.match(houseBrackmannGapRows.join(" "), /House-Brackmann estimate unavailable: requires Gentle eye closure/);
+  assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook estimate/);
+  assert.match(houseBrackmannGapRows.join(" "), /eFACE-style estimate/);
+
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
@@ -314,6 +349,26 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(html, /Evidence tier: Complete standard-assessment evidence/);
   assert.match(html, /Resting evidence: 3\/3 required resting metrics available/);
   assert.match(html, /These are Mirror estimates only/);
+
+  const missingEyeClosureHtml = buildSessionReportHtml({
+    kind: "assessment",
+    date: "2026-06-24",
+    ts: Date.parse("2026-06-24T09:00:00Z"),
+    duration: 70,
+    sessionAvg: 0.82,
+    restingMetrics: RESTING_METRICS,
+    scores: [
+      movementScore("eyebrow-raise", 0.94),
+      movementScore("open-smile", 0.88),
+      movementScore("nose-wrinkle", 0.84),
+      movementScore("pucker", 0.86),
+    ],
+  });
+
+  assert.doesNotMatch(missingEyeClosureHtml, /House-Brackmann estimate: Grade/);
+  assert.match(missingEyeClosureHtml, /House-Brackmann estimate unavailable: requires Gentle eye closure/);
+  assert.match(missingEyeClosureHtml, /Sunnybrook estimate/);
+  assert.match(missingEyeClosureHtml, /eFACE-style estimate/);
 
   const hiddenHtml = buildSessionReportHtml({
     kind: "assessment",

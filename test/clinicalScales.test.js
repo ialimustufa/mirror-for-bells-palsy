@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { estimateClinicalScaleGrades } from "../src/domain/clinicalScales.js";
+import { clinicalScaleInputGapSummaries, estimateClinicalScaleGrades } from "../src/domain/clinicalScales.js";
 
 const RESTING_METRICS = {
   version: 1,
@@ -118,6 +118,12 @@ test("clinical scale estimates omit House-Brackmann when eye closure is missing"
   assert.equal(result.scales.eface.dynamicItems.gentleEyeClosure, undefined);
   assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, false);
   assert.deepEqual(result.evidence.scaleInputCompleteness.houseBrackmann.missingRequiredExerciseIds, ["eye-close"]);
+
+  const inputGaps = clinicalScaleInputGapSummaries(result);
+  assert.equal(inputGaps.length, 1);
+  assert.equal(inputGaps[0].scaleKey, "houseBrackmann");
+  assert.deepEqual(inputGaps[0].missingMovementLabels, ["Gentle eye closure"]);
+  assert.equal(inputGaps[0].message, "House-Brackmann estimate unavailable: requires Gentle eye closure.");
 });
 
 test("clinical scale estimates do not use weak-capture movements in minimum evidence formulas", () => {

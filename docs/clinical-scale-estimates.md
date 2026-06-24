@@ -55,7 +55,10 @@ voluntary/synkinesis totals from usable movements only, and preserve
 required/available/missing resting metric keys in the evidence record. v5 also
 omits the House-Brackmann estimate when gentle eye closure is the omitted
 movement, rather than treating a missing eye-closure input as severe eye
-closure. Validation labels generated from older v1, v2, v3, or v4 estimates are
+closure. Assessment panels and printable reports show a scale-specific
+unavailable note when this happens, while still showing any eligible Sunnybrook
+and eFACE-style estimates from the same minimum-standard assessment. Validation
+labels generated from older v1, v2, v3, or v4 estimates are
 stale and do not count toward the release agreement gate.
 
 ## Implemented Estimates
