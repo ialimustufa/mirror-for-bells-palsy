@@ -152,9 +152,10 @@ After `npm run validation:clinical-readiness`, use
 to create the human-readable clinical-scale agreement report. That Markdown
 report packages the dataset summary, excluded-label reason counts, agreement
 table, Wilson intervals, missing estimate counts, estimator-version counts,
-reference-standard control statements, House-Brackmann case-mix table, blocking
-reasons, and mismatch samples that a release reviewer needs before any
-validation-status update. The release status artifact checker requires the report
+reference-standard control statements, House-Brackmann case-mix table,
+scale-specific availability recommendations, blocking reasons, and mismatch
+samples that a release reviewer needs before any validation-status update. The
+release status artifact checker requires the report
 to document the eligible blinded independent label count, all three
 House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
 current clinical-scale estimator version, the 80% usable-movement coverage

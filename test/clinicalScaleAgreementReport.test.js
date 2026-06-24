@@ -85,6 +85,10 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /House-Brackmann \| within one grade \| 30 \| 0 \| 30 \| 100\.0%/);
   assert.match(markdown, /Sunnybrook composite \| within 10 points/);
   assert.match(markdown, /eFACE total \| within 10 points/);
+  assert.match(markdown, /Scale-Specific Availability Recommendation/);
+  assert.match(markdown, /houseBrackmann \| House-Brackmann \| meets minimum \| true after human review/);
+  assert.match(markdown, /sunnybrook \| Sunnybrook composite \| meets minimum \| true after human review/);
+  assert.match(markdown, /This recommendation does not update `docs\/validation-status\.json`/);
   assert.match(markdown, /eFACE static/);
   assert.match(markdown, /95% Wilson score interval/);
   assert.match(markdown, /Excluded clinical-label rows: 0/);
@@ -109,6 +113,25 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /TRIPOD\+AI/);
   assert.match(markdown, /STARD 2015/);
   assert.match(markdown, /Good Machine Learning Practice/);
+});
+
+test("clinical scale agreement markdown marks non-ready scales as estimate-only recommendations", () => {
+  const markdown = buildClinicalScaleAgreementMarkdown(validationReport({
+    byScale: {
+      houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1, lower: 0.887 }),
+      sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 24, agreementRate: 0.8, lower: 0.63 }),
+      efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 24, agreementRate: 0.8, lower: 0.63 }),
+    },
+    blockingReasons: [
+      "sunnybrookComposite: needs 95% Wilson lower bound at least 80%",
+      "efaceTotal: needs 95% Wilson lower bound at least 80%",
+    ],
+  }));
+
+  assert.match(markdown, /Recommendation: allow-scale-specific-estimate-availability-after-human-review/);
+  assert.match(markdown, /houseBrackmann \| House-Brackmann \| meets minimum \| true after human review/);
+  assert.match(markdown, /sunnybrook \| Sunnybrook composite \| not ready \| false/);
+  assert.match(markdown, /eface \| eFACE total \| not ready \| false/);
 });
 
 test("clinical scale agreement markdown includes blockers and mismatch review rows", () => {

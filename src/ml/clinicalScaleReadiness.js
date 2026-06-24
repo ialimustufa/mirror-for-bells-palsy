@@ -1,6 +1,20 @@
 import { DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD, evaluateClinicalScaleEstimates } from "./validationEvaluation.js";
 
-const PRIMARY_CLINICAL_SCALE_KEYS = Object.freeze(["houseBrackmann", "sunnybrookComposite", "efaceTotal"]);
+const PRIMARY_CLINICAL_SCALE_CONFIG = Object.freeze({
+  houseBrackmann: {
+    availabilityKey: "houseBrackmann",
+    label: "House-Brackmann",
+  },
+  sunnybrookComposite: {
+    availabilityKey: "sunnybrook",
+    label: "Sunnybrook composite",
+  },
+  efaceTotal: {
+    availabilityKey: "eface",
+    label: "eFACE total",
+  },
+});
+const PRIMARY_CLINICAL_SCALE_KEYS = Object.freeze(Object.keys(PRIMARY_CLINICAL_SCALE_CONFIG));
 
 function finiteOrNull(value) {
   return Number.isFinite(value) ? Number(value) : null;
@@ -46,6 +60,8 @@ function summarizeScaleReadiness(scaleKey, scaleReport = {}, thresholds) {
   }
   return {
     scale: scaleKey,
+    availabilityKey: PRIMARY_CLINICAL_SCALE_CONFIG[scaleKey]?.availabilityKey ?? scaleKey,
+    label: PRIMARY_CLINICAL_SCALE_CONFIG[scaleKey]?.label ?? scaleKey,
     status: blockingReasons.length ? "not-ready" : "meets-confidence-standard",
     labeledCount,
     agreementRate: finiteOrNull(agreementRate),
@@ -55,6 +71,30 @@ function summarizeScaleReadiness(scaleKey, scaleReport = {}, thresholds) {
     meanAbsDelta: finiteOrNull(scaleReport.meanAbsDelta),
     blockingReasons,
   };
+}
+
+function scaleAvailabilityRecommendation(byScale, commonBlockingReasons = []) {
+  return Object.fromEntries(PRIMARY_CLINICAL_SCALE_KEYS.map((scaleKey) => {
+    const scale = byScale[scaleKey];
+    const evidenceMeetsMinimum = commonBlockingReasons.length === 0 && scale?.status === "meets-confidence-standard";
+    const blockingReasons = [
+      ...commonBlockingReasons,
+      ...(scale?.blockingReasons ?? []),
+    ];
+    return [
+      PRIMARY_CLINICAL_SCALE_CONFIG[scaleKey].availabilityKey,
+      {
+        scale: scaleKey,
+        label: PRIMARY_CLINICAL_SCALE_CONFIG[scaleKey].label,
+        evidenceMeetsMinimum,
+        recommendedClinicalFacingScoresAllowed: evidenceMeetsMinimum,
+        releaseRecommendation: evidenceMeetsMinimum ? "eligible-after-human-review" : "keep-as-estimate",
+        rationale: evidenceMeetsMinimum
+          ? ["Scale-specific evidence meets the reviewed-label, observed-agreement, and Wilson lower-bound standards."]
+          : blockingReasons,
+      },
+    ];
+  }));
 }
 
 function assessClinicalScaleReadiness(input = {}, options = {}) {
@@ -67,29 +107,37 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       summarizeScaleReadiness(scaleKey, clinicalValidation.byScale?.[scaleKey], thresholds),
     ]),
   );
-  const blockingReasons = [];
+  const commonBlockingReasons = [];
   if ((clinicalValidation.summary?.reviewedAssessmentCount ?? 0) < thresholds.minReviewedAssessments) {
-    blockingReasons.push(`needs at least ${thresholds.minReviewedAssessments} reviewed clinical-scale assessments`);
+    commonBlockingReasons.push(`needs at least ${thresholds.minReviewedAssessments} reviewed clinical-scale assessments`);
   }
   if (clinicalValidation.standard?.clinicalScaleEstimateVersion !== thresholds.clinicalScaleEstimateVersion) {
-    blockingReasons.push(`clinicalScaleEstimateVersion: needs validation report for estimator v${thresholds.clinicalScaleEstimateVersion}`);
+    commonBlockingReasons.push(`clinicalScaleEstimateVersion: needs validation report for estimator v${thresholds.clinicalScaleEstimateVersion}`);
   }
   if (!clinicalValidation.caseMix) {
-    blockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
+    commonBlockingReasons.push("caseMix: needs House-Brackmann severity-band coverage report");
   } else if (clinicalValidation.caseMix.blockingReasons?.length) {
-    blockingReasons.push(`caseMix: ${clinicalValidation.caseMix.blockingReasons.join("; ")}`);
+    commonBlockingReasons.push(`caseMix: ${clinicalValidation.caseMix.blockingReasons.join("; ")}`);
   }
+  const clinicalScaleAvailabilityRecommendation = scaleAvailabilityRecommendation(byScale, commonBlockingReasons);
+  const readyScaleCount = Object.values(clinicalScaleAvailabilityRecommendation).filter((scale) => scale.evidenceMeetsMinimum).length;
+  const blockingReasons = [...commonBlockingReasons];
   for (const scaleKey of PRIMARY_CLINICAL_SCALE_KEYS) {
     const scale = byScale[scaleKey];
     if (scale.blockingReasons.length) blockingReasons.push(`${scaleKey}: ${scale.blockingReasons.join("; ")}`);
   }
 
   const status = blockingReasons.length ? "needs-reviewed-clinical-scale-data" : "meets-clinical-scale-confidence-standard";
+  const recommendation = readyScaleCount === 0
+    ? "collect-reviewed-clinical-scale-labels"
+    : blockingReasons.length
+      ? "allow-scale-specific-estimate-availability-after-human-review"
+      : "allow-controlled-estimate-availability-after-human-review";
   return {
     kind: "mirror-clinical-scale-readiness-report",
     generatedAt,
     status,
-    recommendation: blockingReasons.length ? "collect-reviewed-clinical-scale-labels" : "allow-controlled-estimate-availability-after-human-review",
+    recommendation,
     thresholds: {
       ...thresholds,
       primaryScales: PRIMARY_CLINICAL_SCALE_KEYS,
@@ -112,8 +160,9 @@ function assessClinicalScaleReadiness(input = {}, options = {}) {
       assessmentClinicalScaleRecords: clinicalValidation.summary?.assessmentClinicalScaleRecords ?? 0,
       estimateVersionCounts: clinicalValidation.summary?.estimateVersionCounts ?? {},
       currentClinicalScaleEstimateVersionAssessmentCount: clinicalValidation.summary?.currentClinicalScaleEstimateVersionAssessmentCount ?? 0,
-      readyPrimaryScaleCount: Object.values(byScale).filter((scale) => scale.status === "meets-confidence-standard").length,
+      readyPrimaryScaleCount: readyScaleCount,
       primaryScaleCount: PRIMARY_CLINICAL_SCALE_KEYS.length,
+      clinicalScaleAvailabilityRecommendation,
       caseMix: clinicalValidation.caseMix ?? null,
       readyForClinicalFacingScoring: false,
       clinicalFacingScoresAllowedByReportAlone: false,

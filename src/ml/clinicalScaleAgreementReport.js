@@ -175,6 +175,30 @@ function referenceStandardControlLines(validation = {}, readiness = {}) {
   ];
 }
 
+function availabilityRecommendationLines(readiness = {}) {
+  const recommendations = readiness.validationSummary?.clinicalScaleAvailabilityRecommendation ?? {};
+  const entries = Object.entries(recommendations);
+  if (!entries.length) return [];
+  const rows = [
+    "",
+    "## Scale-Specific Availability Recommendation",
+    "",
+    "| Status key | Scale | Evidence status | Recommended clinical-facing flag | Rationale |",
+    "| --- | --- | --- | --- | --- |",
+  ];
+  for (const [availabilityKey, recommendation] of entries) {
+    rows.push([
+      markdownEscape(availabilityKey),
+      markdownEscape(recommendation.label ?? recommendation.scale ?? availabilityKey),
+      recommendation.evidenceMeetsMinimum ? "meets minimum" : "not ready",
+      recommendation.recommendedClinicalFacingScoresAllowed ? "true after human review" : "false",
+      markdownEscape((recommendation.rationale ?? []).join("; ") || recommendation.releaseRecommendation),
+    ].join(" | ").replace(/^/, "| ").replace(/$/, " |"));
+  }
+  rows.push("", "This recommendation does not update `docs/validation-status.json`; a human-reviewed release decision is still required.");
+  return rows;
+}
+
 function readinessFrom(input, options) {
   if (input?.kind === "mirror-clinical-scale-readiness-report") return input;
   return assessClinicalScaleReadiness(input, options);
@@ -222,6 +246,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     "## Primary Scale Agreement",
     "",
     scaleTable(PRIMARY_SCALE_LABELS, readiness, validation),
+    ...availabilityRecommendationLines(readiness),
     ...caseMixLines(validation, readiness),
     "",
     ...referenceStandardControlLines(validation, readiness),

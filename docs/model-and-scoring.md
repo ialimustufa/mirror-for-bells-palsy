@@ -1068,8 +1068,12 @@ clinical-scale estimates. It requires the primary House-Brackmann, Sunnybrook
 composite, and eFACE total checks to meet the 30-assessment, 80% observed
 agreement, and 80% Wilson lower-bound standard, plus the House-Brackmann
 severity-band case-mix gate and current clinical-scale estimator-version
-evidence. Passing this report still does not flip `clinicalFacingScoresAllowed`;
-a human-reviewed status update is required because Mirror values remain estimates
+evidence for the all-primary-scale status to pass. It also emits
+`clinicalScaleAvailabilityRecommendation` entries for the House-Brackmann,
+Sunnybrook, and eFACE status keys, so a reviewer can see which individual scale
+rows are evidence-eligible after human review when the full set is not ready.
+Passing this report still does not flip `clinicalFacingScoresAllowed`; a
+human-reviewed status update is required because Mirror values remain estimates
 rather than clinician-assigned grades. The full review protocol is documented in
 `docs/clinical-scale-review-protocol.md`.
 
@@ -1077,8 +1081,9 @@ The clinical-report command converts a reviewed dataset, clinical validation
 report, or clinical-readiness report into a Markdown clinical-scale agreement
 report. It records the dataset summary, primary-scale agreement table, Wilson
 confidence intervals, House-Brackmann case-mix table, missing estimate counts,
-estimator-version counts, blocking reasons, reference-standard controls, and a
-sample of out-of-tolerance assessment rows for adjudication. The report is
+estimator-version counts, a scale-specific availability recommendation table,
+blocking reasons, reference-standard controls, and a sample of out-of-tolerance
+assessment rows for adjudication. The report is
 designed for the release reviewer to attach under `docs/validation/` before any
 status update.
 

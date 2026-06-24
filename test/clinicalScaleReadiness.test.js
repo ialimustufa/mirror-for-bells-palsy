@@ -115,6 +115,23 @@ test("clinical scale readiness fails closed when observed agreement passes but W
   assert.match(report.blockingReasons.join("\n"), /Wilson lower bound/);
 });
 
+test("clinical scale readiness recommends only scale-specific availability when one primary scale meets evidence", () => {
+  const report = assessClinicalScaleReadiness(clinicalValidationReport({
+    byScale: {
+      houseBrackmann: scaleReport({ labeledCount: 30, withinToleranceCount: 30, agreementRate: 1, lower: 0.887 }),
+      sunnybrookComposite: scaleReport({ labeledCount: 30, withinToleranceCount: 24, agreementRate: 0.8, lower: 0.63, upper: 0.9 }),
+      efaceTotal: scaleReport({ labeledCount: 30, withinToleranceCount: 24, agreementRate: 0.8, lower: 0.63, upper: 0.9 }),
+    },
+  }), { generatedAt: "2026-06-24T00:00:00.000Z" });
+
+  assert.equal(report.status, "needs-reviewed-clinical-scale-data");
+  assert.equal(report.recommendation, "allow-scale-specific-estimate-availability-after-human-review");
+  assert.equal(report.validationSummary.readyPrimaryScaleCount, 1);
+  assert.equal(report.validationSummary.clinicalScaleAvailabilityRecommendation.houseBrackmann.recommendedClinicalFacingScoresAllowed, true);
+  assert.equal(report.validationSummary.clinicalScaleAvailabilityRecommendation.sunnybrook.recommendedClinicalFacingScoresAllowed, false);
+  assert.equal(report.validationSummary.clinicalScaleAvailabilityRecommendation.eface.recommendedClinicalFacingScoresAllowed, false);
+});
+
 test("clinical scale readiness fails closed without current estimator-version evidence", () => {
   const report = assessClinicalScaleReadiness(clinicalValidationReport({
     standard: {
@@ -137,6 +154,8 @@ test("clinical scale readiness reports confidence standard without enabling clin
   assert.equal(report.status, "meets-clinical-scale-confidence-standard");
   assert.equal(report.recommendation, "allow-controlled-estimate-availability-after-human-review");
   assert.equal(report.validationSummary.readyPrimaryScaleCount, 3);
+  assert.equal(report.validationSummary.clinicalScaleAvailabilityRecommendation.houseBrackmann.releaseRecommendation, "eligible-after-human-review");
+  assert.equal(report.validationSummary.clinicalScaleAvailabilityRecommendation.sunnybrook.recommendedClinicalFacingScoresAllowed, true);
   assert.equal(report.validationSummary.readyForClinicalFacingScoring, false);
   assert.equal(report.validationSummary.clinicalFacingScoresAllowedByReportAlone, false);
   assert.equal(report.validationSummary.excludedClinicalLabelCount, 0);
