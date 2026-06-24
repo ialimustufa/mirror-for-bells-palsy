@@ -305,6 +305,7 @@ export {
   VALIDATION_DATASET_APP_ID,
   VALIDATION_DATASET_KIND,
   VALIDATION_DATASET_VERSION,
+  VALIDATION_LABEL_SCHEMA_VERSION,
   buildValidationDatasetRecords,
   createValidationDatasetExportBlob,
 };

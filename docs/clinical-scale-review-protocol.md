@@ -23,7 +23,21 @@ clinician-assigned grade by itself.
 
 ## Reviewer Materials
 
-Use a blinded label sheet for primary review:
+Use a clinical review package for primary review:
+
+```bash
+npm run validation:clinical-review-package -- validation-dataset.jsonl clinical-review-package
+```
+
+The package writes `manifest.json`, `blinded-labels.csv`, and
+`reviewer-instructions.md`. The manifest records the source dataset path,
+source dataset SHA-256 hash, dataset export metadata, label schema version,
+current clinical-scale estimator version, blinded sheet row counts, and the
+80% observed/Wilson release standard. This makes the reviewer handoff auditable:
+later readiness evidence can prove which dataset and blinded sheet the reviewer
+received. The package does not enable clinical-facing scores by itself.
+
+For ad hoc review, a blinded label sheet can also be generated directly:
 
 ```bash
 npm run validation:label-sheet -- validation-dataset.jsonl blinded-labels.csv --blinded
@@ -124,8 +138,11 @@ evidence.
 1. Export a validation dataset from Progress after local data capture has been
    enabled during standard assessments, or after standard assessments have been
    completed when the immediate task is clinical-scale target labeling.
-2. Generate the blinded label sheet with `--blinded`.
-3. Assign target labels from the blinded sheet and the review materials.
+2. Generate the clinical review package, or generate a blinded label sheet with
+   `--blinded` for an ad hoc workflow.
+3. Assign target labels from the blinded sheet and the review materials. Keep
+   the review package manifest with the returned labels so the source dataset
+   hash and package metadata remain available for audit.
 4. Merge the labels back into a reviewed JSONL dataset.
 5. Run:
 

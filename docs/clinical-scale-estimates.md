@@ -116,7 +116,11 @@ after those artifact generation dates.
 Validation dataset exports now include assessment-level `assessmentClinicalScale`
 records whenever an included frame-sample session is a standard assessment. The
 primary review workflow uses a blinded label sheet as described in
-`docs/clinical-scale-review-protocol.md`. The normal label sheet can include
+`docs/clinical-scale-review-protocol.md`. Use
+`npm run validation:clinical-review-package -- validation-dataset.jsonl clinical-review-package`
+to create an auditable reviewer handoff with a source dataset hash,
+`manifest.json`, `blinded-labels.csv`, and `reviewer-instructions.md`. The
+normal label sheet can include
 Mirror's current estimates in read-only reference columns for audit, but the
 `--blinded` export hides those estimates for target assignment. The sheet has
 `assessmentClinicalScale` rows with empty target columns for reviewer-entered:

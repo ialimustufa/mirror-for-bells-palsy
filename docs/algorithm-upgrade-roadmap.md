@@ -230,7 +230,7 @@ Goal: stop tuning only against anecdotal captures.
 Work:
 
 - Define an opt-in local export package for clinician/user-labeled assessment clips or frame samples. Status: implemented for local validation JSONL exports with frame-sample records and assessment clinical-scale rows.
-- Label movement attempts with intended movement, affected side, quality, visible movement level, and coactivation notes; label clinical-scale assessment targets with House-Brackmann, Sunnybrook, and eFACE-style values. Status: implemented in the validation JSONL label schema, CSV label-sheet export, and label merge workflow.
+- Label movement attempts with intended movement, affected side, quality, visible movement level, and coactivation notes; label clinical-scale assessment targets with House-Brackmann, Sunnybrook, and eFACE-style values. Status: implemented in the validation JSONL label schema, CSV label-sheet export, clinical review package export with a blinded sheet plus source dataset hash manifest, and label merge workflow.
 - Compare MediaPipe landmark output and Mirror clinical-scale estimates on Bell's palsy faces against clinician-reviewed landmarks, region movement labels, or clinical-scale labels. Status: label-sheet and evaluator tooling implemented; actual reviewed dataset collection is still required.
 - Evaluate whether a lightweight correction model or clinical-domain landmark model is justified. Status: implemented as `npm run validation:model-readiness`, which fails closed without enough reviewed data, recommends threshold review before model training, and does not justify clinical-domain landmark models without reviewed landmark annotations.
 

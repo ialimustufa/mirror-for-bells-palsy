@@ -110,6 +110,13 @@ checks for:
   evidence stay together. A reviewer still has to choose which eligible scales
   to enable and copy the reviewed fields into `docs/validation-status.json`; the
   helper does not edit the status file or bypass the clinical release gate.
+- `npm run validation:clinical-review-package -- <validation-dataset.jsonl>
+  <output-dir>` creates a blinded reviewer handoff with `manifest.json`,
+  `blinded-labels.csv`, and `reviewer-instructions.md`. The manifest records the
+  source dataset SHA-256 hash, dataset export metadata, label schema version,
+  current clinical-scale estimator version, blinded row counts, and the 80%
+  observed/Wilson release standard so future reviewer labels can be traced to
+  the exact package that was distributed.
 - Reviewer-agreement and adjudication CSVs must preserve current estimator
   version, pseudonymous `validationCaseId`, pseudonymous `reviewerId`, and
   estimate-evidence provenance for each reviewer sheet; stale, missing,
