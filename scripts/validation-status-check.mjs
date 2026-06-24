@@ -36,6 +36,13 @@ const CLINICAL_SCALE_AVAILABILITY = Object.freeze({
 const CLINICAL_SCALE_AVAILABILITY_KEYS = Object.freeze(Object.keys(CLINICAL_SCALE_AVAILABILITY));
 const DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
 const DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND = 3;
+const DEFAULT_CONFIDENCE_LEVEL = 0.95;
+const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({
+  0.9: 1.6448536269514722,
+  0.95: 1.959963984540054,
+  0.99: 2.5758293035489004,
+});
+const WILSON_INTERVAL_TOLERANCE = 0.0006;
 
 function assertCondition(condition, message) {
   if (!condition) throw new Error(message);
@@ -86,13 +93,52 @@ function assertRatioMatchesCounts(value, numerator, denominator, field) {
   );
 }
 
-function assertWilsonIntervalContainsRate({ lower, upper }, rate, field) {
+function compactNumber(value, digits = 4) {
+  return Number.isFinite(value) ? Number(value.toFixed(digits)) : null;
+}
+
+function zScoreForConfidenceLevel(confidenceLevel) {
+  return WILSON_Z_BY_CONFIDENCE_LEVEL[confidenceLevel] ?? WILSON_Z_BY_CONFIDENCE_LEVEL[DEFAULT_CONFIDENCE_LEVEL];
+}
+
+function wilsonScoreInterval(successes, total, confidenceLevel = DEFAULT_CONFIDENCE_LEVEL) {
+  if (!Number.isFinite(successes) || !Number.isFinite(total) || total <= 0) return null;
+  const z = zScoreForConfidenceLevel(confidenceLevel);
+  const phat = successes / total;
+  const z2 = z * z;
+  const denominator = 1 + z2 / total;
+  const center = (phat + z2 / (2 * total)) / denominator;
+  const margin = (z / denominator) * Math.sqrt((phat * (1 - phat) / total) + (z2 / (4 * total * total)));
+  return {
+    method: "wilson-score",
+    confidenceLevel,
+    lower: compactNumber(Math.max(0, center - margin), 4),
+    upper: compactNumber(Math.min(1, center + margin), 4),
+  };
+}
+
+function assertWilsonIntervalMatchesCounts(interval, successes, total, field) {
+  assertCondition(interval && typeof interval === "object", `${field} must be present`);
+  const confidenceLevel = interval.confidenceLevel ?? DEFAULT_CONFIDENCE_LEVEL;
+  assertCondition(confidenceLevel === DEFAULT_CONFIDENCE_LEVEL, `${field}.confidenceLevel must be ${DEFAULT_CONFIDENCE_LEVEL}`);
+  const expected = wilsonScoreInterval(successes, total, confidenceLevel);
+  assertCondition(expected, `${field} must have a positive label denominator`);
+  const { lower, upper } = interval;
+  const rate = successes / total;
   assertRatioBetweenZeroAndOne(lower, `${field}.lower`);
-  assertCondition(lower <= rate + 0.0005, `${field}.lower must not exceed the observed agreement rate`);
+  assertCondition(lower <= rate + WILSON_INTERVAL_TOLERANCE, `${field}.lower must not exceed the observed agreement rate`);
+  assertCondition(
+    Math.abs(lower - expected.lower) <= WILSON_INTERVAL_TOLERANCE,
+    `${field}.lower must match Wilson score lower bound for ${successes}/${total}`,
+  );
   if (upper != null) {
     assertRatioBetweenZeroAndOne(upper, `${field}.upper`);
-    assertCondition(lower <= upper + 0.0005, `${field}.lower must not exceed ${field}.upper`);
-    assertCondition(upper + 0.0005 >= rate, `${field}.upper must not be below the observed agreement rate`);
+    assertCondition(lower <= upper + WILSON_INTERVAL_TOLERANCE, `${field}.lower must not exceed ${field}.upper`);
+    assertCondition(upper + WILSON_INTERVAL_TOLERANCE >= rate, `${field}.upper must not be below the observed agreement rate`);
+    assertCondition(
+      Math.abs(upper - expected.upper) <= WILSON_INTERVAL_TOLERANCE,
+      `${field}.upper must match Wilson score upper bound for ${successes}/${total}`,
+    );
   }
 }
 
@@ -219,11 +265,23 @@ function percentFromCell(cell) {
   return Number.isFinite(value) ? value / 100 : null;
 }
 
+function percentIntervalFromCell(cell) {
+  const values = [...String(cell ?? "").matchAll(/(\d+(?:\.\d+)?)%/g)]
+    .map((match) => Number(match[1]))
+    .filter(Number.isFinite)
+    .map((value) => value / 100);
+  return {
+    lower: values[0] ?? null,
+    upper: values[1] ?? null,
+  };
+}
+
 function primaryScaleAgreementRow(text, scaleKey, scaleLabel) {
   const rowPattern = new RegExp(`^\\|\\s*${escapeRegExp(scaleLabel)}\\s*\\|`, "i");
   const row = text.split(/\r?\n/).find((line) => rowPattern.test(line));
   if (!row) return null;
   const cells = row.split("|").slice(1, -1).map((cell) => cell.trim());
+  const agreementConfidenceInterval = percentIntervalFromCell(cells[6]);
   return {
     scaleKey,
     label: cells[0] ?? scaleLabel,
@@ -231,33 +289,47 @@ function primaryScaleAgreementRow(text, scaleKey, scaleLabel) {
     missingEstimateCount: integerFromCell(cells[3]),
     withinToleranceCount: integerFromCell(cells[4]),
     agreementRate: percentFromCell(cells[5]),
-    agreementWilsonLowerBound: percentFromCell(cells[6]),
+    agreementConfidenceInterval: {
+      method: "wilson-score",
+      confidenceLevel: DEFAULT_CONFIDENCE_LEVEL,
+      ...agreementConfidenceInterval,
+    },
+    agreementWilsonLowerBound: agreementConfidenceInterval.lower,
     status: cells[8] ?? "",
   };
+}
+
+function assertPrimaryScaleAgreementRowMetrics(row, fieldPrefix) {
+  assertCondition(row && typeof row === "object", `${fieldPrefix} must be present`);
+  assertNonNegativeInteger(row.labeledCount, `${fieldPrefix}.labeledCount`);
+  assertNonNegativeInteger(row.missingEstimateCount, `${fieldPrefix}.missingEstimateCount`);
+  assertNonNegativeInteger(row.withinToleranceCount, `${fieldPrefix}.withinToleranceCount`);
+  assertCondition(
+    row.missingEstimateCount <= row.labeledCount,
+    `${fieldPrefix}.missingEstimateCount cannot exceed labeledCount`,
+  );
+  assertCondition(
+    row.withinToleranceCount <= row.labeledCount - row.missingEstimateCount,
+    `${fieldPrefix}.withinToleranceCount cannot exceed non-missing labels`,
+  );
+  assertRatioMatchesCounts(row.agreementRate, row.withinToleranceCount, row.labeledCount, `${fieldPrefix}.agreementRate`);
+  const agreementConfidenceInterval = row.agreementConfidenceInterval ?? {
+    confidenceLevel: DEFAULT_CONFIDENCE_LEVEL,
+    lower: row.agreementWilsonLowerBound,
+  };
+  assertWilsonIntervalMatchesCounts(
+    agreementConfidenceInterval,
+    row.withinToleranceCount,
+    row.labeledCount,
+    `${fieldPrefix}.agreementConfidenceInterval`,
+  );
 }
 
 function primaryScaleAgreementRowFromJson(report, artifactPath, scaleKey, scaleLabel) {
   const agreementKey = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.agreementKey;
   const row = report.primaryScaleAgreementRows?.[scaleKey] ?? report.primaryScaleAgreementRows?.[agreementKey];
-  assertCondition(row && typeof row === "object", `${artifactPath}.primaryScaleAgreementRows.${scaleKey} must be present`);
-  assertNonNegativeInteger(row.labeledCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.labeledCount`);
-  assertNonNegativeInteger(row.missingEstimateCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.missingEstimateCount`);
-  assertNonNegativeInteger(row.withinToleranceCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.withinToleranceCount`);
-  assertCondition(
-    row.missingEstimateCount <= row.labeledCount,
-    `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.missingEstimateCount cannot exceed labeledCount`,
-  );
-  assertCondition(
-    row.withinToleranceCount <= row.labeledCount - row.missingEstimateCount,
-    `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.withinToleranceCount cannot exceed non-missing labels`,
-  );
-  assertRatioMatchesCounts(row.agreementRate, row.withinToleranceCount, row.labeledCount, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.agreementRate`);
+  assertPrimaryScaleAgreementRowMetrics(row, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}`);
   const agreementWilsonLowerBound = row.agreementWilsonLowerBound ?? row.agreementConfidenceInterval?.lower;
-  assertWilsonIntervalContainsRate(
-    { lower: agreementWilsonLowerBound, upper: row.agreementConfidenceInterval?.upper },
-    row.agreementRate,
-    `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.agreementConfidenceInterval`,
-  );
   assertCondition(typeof row.status === "string" && row.status.length > 0, `${artifactPath}.primaryScaleAgreementRows.${scaleKey}.status must be present`);
   return {
     scaleKey,
@@ -453,6 +525,10 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
       primaryScaleAgreementRow(text, config.agreementKey, config.agreementLabel),
     ]),
   );
+  for (const [scaleKey, row] of Object.entries(primaryScaleAgreementRows)) {
+    const scaleLabel = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.agreementLabel ?? scaleKey;
+    assertPrimaryScaleAgreementRowMetrics(row, `${artifactPath}.${scaleLabel} agreement row`);
+  }
   const primaryScaleWilsonLowerBounds = Object.fromEntries(
     Object.entries(primaryScaleAgreementRows).map(([scaleKey, row]) => [scaleKey, row?.agreementWilsonLowerBound ?? null]),
   );
@@ -597,9 +673,10 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     }
     assertRatioMatchesCounts(scale.withinToleranceRate, scale.withinToleranceCount, scale.pairedCount, `${artifactPath}.byScale.${scaleKey}.withinToleranceRate`);
     assertCondition(scale.withinToleranceConfidenceInterval?.method === "wilson-score", `${artifactPath}.byScale.${scaleKey}.withinToleranceConfidenceInterval.method must be wilson-score`);
-    assertWilsonIntervalContainsRate(
+    assertWilsonIntervalMatchesCounts(
       scale.withinToleranceConfidenceInterval,
-      scale.withinToleranceRate,
+      scale.withinToleranceCount,
+      scale.pairedCount,
       `${artifactPath}.byScale.${scaleKey}.withinToleranceConfidenceInterval`,
     );
     return scale.pairedCount;

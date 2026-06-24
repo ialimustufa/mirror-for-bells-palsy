@@ -105,7 +105,8 @@ Structured clinical-scale agreement and reviewer-agreement JSON reports used by
 that gate must declare schema version 1 so stale machine-readable evidence is
 rejected instead of silently interpreted as current. The same gate also
 cross-checks observed agreement rates against their within-tolerance counts and
-label or paired-label denominators.
+label or paired-label denominators, then recomputes the reported Wilson score
+intervals from those counts.
 
 ## Validation Workflow
 

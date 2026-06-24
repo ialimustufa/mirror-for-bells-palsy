@@ -15,6 +15,7 @@ const CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement
 const STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-agreement-2026-06-24.json";
 const REVIEWER_AGREEMENT_REPORT_PATH = "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json";
 const THRESHOLD_CALIBRATION_REPORT_PATH = "docs/validation/threshold-calibration-2026-06-23.json";
+const TEST_WILSON_Z_95 = 1.959963984540054;
 
 function enabledScaleEvidence(overrides = {}) {
   return {
@@ -29,7 +30,7 @@ function enabledScaleEvidence(overrides = {}) {
     reviewerPairedLabelCount: 30,
     reviewerDistinctValidationCaseCount: 30,
     reviewerObservedAgreementRate: 1,
-    reviewerAgreementWilsonLowerBound: 0.887,
+    reviewerAgreementWilsonLowerBound: testWilsonScoreInterval(30, 30).lower,
     ...overrides,
   };
 }
@@ -275,14 +276,28 @@ function passingThresholdReport({ readyExercises = 5 } = {}) {
   });
 }
 
+function testWilsonScoreInterval(successes, total) {
+  const phat = successes / total;
+  const z2 = TEST_WILSON_Z_95 * TEST_WILSON_Z_95;
+  const denominator = 1 + z2 / total;
+  const center = (phat + z2 / (2 * total)) / denominator;
+  const margin = (TEST_WILSON_Z_95 / denominator) * Math.sqrt((phat * (1 - phat) / total) + (z2 / (4 * total * total)));
+  return {
+    method: "wilson-score",
+    confidenceLevel: 0.95,
+    lower: Number(Math.max(0, center - margin).toFixed(4)),
+    upper: Number(Math.min(1, center + margin).toFixed(4)),
+  };
+}
+
 function passingClinicalReviewerAgreementReport({
   comparedCount = 30,
   primaryPairedCount = 30,
   blockingReasons = [],
   withinToleranceRate = 1,
-  wilsonLower = 0.887,
 } = {}) {
   const withinToleranceCount = Math.round(primaryPairedCount * withinToleranceRate);
+  const wilsonInterval = testWilsonScoreInterval(withinToleranceCount, primaryPairedCount);
   const sameBandCount = Math.floor(primaryPairedCount / 3);
   const representedSeverityBandCount = sameBandCount >= 3 ? 3 : 0;
   return JSON.stringify({
@@ -357,8 +372,8 @@ function passingClinicalReviewerAgreementReport({
         exactMatchCount: withinToleranceCount,
         withinToleranceCount,
         withinToleranceRate,
-        withinToleranceConfidenceInterval: { method: "wilson-score", confidenceLevel: 0.95, lower: wilsonLower, upper: 1 },
-        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
+        withinToleranceConfidenceInterval: wilsonInterval,
+        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonInterval.lower >= 0.8,
         blockingReasons: [],
       },
       sunnybrookComposite: {
@@ -367,8 +382,8 @@ function passingClinicalReviewerAgreementReport({
         exactMatchCount: withinToleranceCount,
         withinToleranceCount,
         withinToleranceRate,
-        withinToleranceConfidenceInterval: { method: "wilson-score", confidenceLevel: 0.95, lower: wilsonLower, upper: 1 },
-        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
+        withinToleranceConfidenceInterval: wilsonInterval,
+        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonInterval.lower >= 0.8,
         blockingReasons: [],
       },
       efaceTotal: {
@@ -377,8 +392,8 @@ function passingClinicalReviewerAgreementReport({
         exactMatchCount: withinToleranceCount,
         withinToleranceCount,
         withinToleranceRate,
-        withinToleranceConfidenceInterval: { method: "wilson-score", confidenceLevel: 0.95, lower: wilsonLower, upper: 1 },
-        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonLower >= 0.8,
+        withinToleranceConfidenceInterval: wilsonInterval,
+        meetsMinimumStandard: withinToleranceRate >= 0.8 && wilsonInterval.lower >= 0.8,
         blockingReasons: [],
       },
     },
@@ -653,7 +668,7 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].excludedReviewerPairCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryPairedCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementRate, 1);
-  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementWilsonLowerBound, 0.887);
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].minimumPrimaryAgreementWilsonLowerBound, testWilsonScoreInterval(30, 30).lower);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerAInsufficientEstimateEvidenceCount, 0);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].reviewerBInsufficientEstimateEvidenceCount, 0);
   assert.deepEqual(result.artifacts.clinicalReviewerAgreementReports[0].reviewerAReviewerIds, ["reviewer-a"]);
@@ -815,6 +830,36 @@ test("validation status rejects reviewer agreement rates that do not match count
   );
 });
 
+test("validation status rejects structured clinical agreement Wilson bounds that do not match counts", () => {
+  const structuredReport = JSON.parse(passingStructuredClinicalAgreementReport());
+  structuredReport.primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound = 0.8;
+
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(JSON.stringify(structuredReport), STRUCTURED_CLINICAL_AGREEMENT_REPORT_PATH),
+    /primaryScaleAgreementRows\.houseBrackmann\.agreementConfidenceInterval\.lower must match Wilson score lower bound for 30\/30/,
+  );
+});
+
+test("validation status rejects Markdown clinical agreement Wilson bounds that do not match counts", () => {
+  const markdownReport = passingClinicalAgreementReport()
+    .replace("| House-Brackmann | within one grade | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI |", "| House-Brackmann | within one grade | 30 | 0 | 30 | 100.0% | 80.0%-100.0% 95% Wilson CI |");
+
+  assert.throws(
+    () => validateClinicalScaleAgreementReportText(markdownReport, CLINICAL_AGREEMENT_REPORT_PATH),
+    /House-Brackmann agreement row\.agreementConfidenceInterval\.lower must match Wilson score lower bound for 30\/30/,
+  );
+});
+
+test("validation status rejects reviewer agreement Wilson bounds that do not match counts", () => {
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.byScale.houseBrackmannGrade.withinToleranceConfidenceInterval.lower = 0.8;
+
+  assert.throws(
+    () => validateClinicalScaleReviewerAgreementReportText(JSON.stringify(reviewerReport), REVIEWER_AGREEMENT_REPORT_PATH),
+    /byScale\.houseBrackmannGrade\.withinToleranceConfidenceInterval\.lower must match Wilson score lower bound for 30\/30/,
+  );
+});
+
 test("validation status artifacts reject structured clinical agreement reports without required controls", async () => {
   const status = {
     ...BASE_STATUS,
@@ -864,7 +909,7 @@ test("validation status evidence helper derives per-scale status summaries from 
   assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerPairedLabelCount, 30);
   assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerDistinctValidationCaseCount, 30);
   assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerObservedAgreementRate, 1);
-  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerAgreementWilsonLowerBound, 0.887);
+  assert.equal(clinicalScaleAvailability.houseBrackmann.reviewerAgreementWilsonLowerBound, testWilsonScoreInterval(30, 30).lower);
   assert.equal(clinicalScaleAvailability.sunnybrook.clinicalFacingScoresAllowed, true);
   assert.equal(clinicalScaleAvailability.eface.clinicalFacingScoresAllowed, true);
 });
@@ -1222,7 +1267,6 @@ test("validation status artifacts reject reviewer agreement reports with low Wil
         "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
         "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport({
           withinToleranceRate: 0.8,
-          wilsonLower: 0.63,
         }),
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),
@@ -1780,7 +1824,7 @@ test("validation status artifacts reject clinical agreement reports with low Wil
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),
     }),
-    /Wilson lower-bound agreement/,
+    /agreementConfidenceInterval\.lower must match Wilson score lower bound/,
   );
 });
 

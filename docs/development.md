@@ -95,7 +95,8 @@ checks for:
   for status updates because `npm run validation:status` can validate the
   counts, Wilson intervals, House-Brackmann case mix, and reference-standard
   controls without parsing tables. Reported observed agreement rates must match
-  their within-tolerance numerator and label denominator.
+  their within-tolerance numerator and label denominator, and Wilson bounds must
+  match those same counts.
 - `docs/validation-status.json` must list reviewer-agreement JSON artifacts in
   `clinicalScaleReviewerAgreementReports` before clinical-facing clinical-scale
   support can be enabled.
@@ -123,7 +124,7 @@ checks for:
   tier, usable-movement coverage, used/omitted movement provenance, or
   scale-input/resting-metric provenance, before adjudication output can support
   readiness. Reviewer observed agreement rates must match the within-tolerance
-  paired-label counts.
+  paired-label counts, and reviewer Wilson bounds must match those counts.
 - Reviewer-agreement reports must compute primary agreement only from eligible
   reviewer pairs and must show at least 30 eligible paired labels for each
   enabled primary scale, zero excluded reviewer pairs, zero incomplete
