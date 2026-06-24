@@ -372,6 +372,67 @@ test("validation status accepts documented clinical agreement state", () => {
   assert.equal(status.clinicalFacingScoresAllowed, true);
 });
 
+test("validation status rejects unknown status values", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      status: "maybe-clinical-someday",
+    }),
+    /status must be one of/,
+  );
+});
+
+test("validation status rejects clinical artifacts under non-clinical status", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      status: "production-thresholds-calibrated",
+      reviewedDatasetCount: 2,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 30,
+      readyExerciseCount: 5,
+      clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+      thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+      productionThresholdConstantsCalibrated: true,
+    }),
+    /clinical scale agreement reports require status clinical-scale-agreement-reviewed/,
+  );
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      status: "production-thresholds-calibrated",
+      reviewedDatasetCount: 2,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 30,
+      readyExerciseCount: 5,
+      clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+      productionThresholdConstantsCalibrated: true,
+    }),
+    /clinical scale reviewer agreement reports require status clinical-scale-agreement-reviewed/,
+  );
+});
+
+test("validation status rejects clinical-facing support under non-clinical status", () => {
+  assert.throws(
+    () => validateStatus({
+      ...BASE_STATUS,
+      status: "production-thresholds-calibrated",
+      reviewedDatasetCount: 2,
+      reviewedFrameCount: 1200,
+      reviewedClinicalScaleAssessmentCount: 30,
+      readyExerciseCount: 5,
+      clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+      clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+      thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.md"],
+      productionThresholdConstantsCalibrated: true,
+      clinicalFacingScoresAllowed: true,
+      clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+    }),
+    /clinical scale agreement reports require status clinical-scale-agreement-reviewed|clinical-facing scores require status clinical-scale-agreement-reviewed/,
+  );
+});
+
 test("validation status artifacts accept documented clinical and calibration reports", async () => {
   const status = {
     ...BASE_STATUS,
@@ -1006,6 +1067,7 @@ test("validation status rejects calibrated thresholds without reports", () => {
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
       reviewedDatasetCount: 1,
       reviewedFrameCount: 1200,
       readyExerciseCount: 5,
@@ -1019,6 +1081,7 @@ test("validation status rejects clinical-facing scores without reviewed coverage
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
       clinicalFacingScoresAllowed: true,
       clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
     }),
@@ -1064,6 +1127,7 @@ test("validation status rejects global clinical-facing availability with no enab
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
       reviewedDatasetCount: 1,
       reviewedFrameCount: 1200,
       reviewedClinicalScaleAssessmentCount: 30,
@@ -1087,6 +1151,7 @@ test("validation status rejects clinical-facing scores without clinical agreemen
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
       reviewedDatasetCount: 1,
       reviewedFrameCount: 1200,
       reviewedClinicalScaleAssessmentCount: 30,
@@ -1104,6 +1169,7 @@ test("validation status rejects clinical-facing scores without reviewer agreemen
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
       reviewedDatasetCount: 1,
       reviewedFrameCount: 1200,
       reviewedClinicalScaleAssessmentCount: 30,
@@ -1122,6 +1188,7 @@ test("validation status rejects clinical agreement reports without reviewed asse
   assert.throws(
     () => validateStatus({
       ...BASE_STATUS,
+      status: "clinical-scale-agreement-reviewed",
       reviewedDatasetCount: 1,
       reviewedClinicalScaleAssessmentCount: 12,
       clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],

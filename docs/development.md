@@ -58,10 +58,12 @@ checks for:
 - `docs/validation-status.json`, which must explicitly say whether reviewed datasets exist, whether production thresholds have been calibrated, and whether clinical-facing scores are allowed. Referenced calibration and clinical-scale agreement artifacts are also checked for the expected report markers.
 - Runtime clinical-scale presentation policy, which reads `docs/validation-status.json`
   before app panels or reports can use clinical-facing wording and fails closed
-  if the status file weakens the documented 30-assessment, 10-case, 80%
-  observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
-  Wilson-confidence-interval, current-estimator-version, review-protocol, or
-  House-Brackmann case-mix floors.
+  unless the status is explicitly `clinical-scale-agreement-reviewed`; it also
+  fails closed if the status file weakens the documented 30-assessment, 10-case,
+  80% observed-agreement, 80% Wilson lower-bound,
+  80% usable-movement-coverage, Wilson-confidence-interval,
+  current-estimator-version, review-protocol, or House-Brackmann case-mix
+  floors.
 - Clinical-scale readiness only counts rows with `sourceLabelSheetMode: blinded`
   plus explicitly blinded, independently clinician-assigned or adjudicated labels
   from the current clinical-scale estimator version and a pseudonymous

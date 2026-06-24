@@ -4,6 +4,8 @@ import validationStatus from "../docs/validation-status.json" with { type: "json
 import {
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleReleaseStatusBlockers,
+  clinicalScaleReleaseStatusEligible,
   clinicalScaleValidationStandardBlockers,
   clinicalScaleValidationStandardEligible,
   compactClinicalScaleValueLabel,
@@ -110,11 +112,34 @@ test("clinical scale presentation policy switches copy only with complete releas
 
   assert.equal(clinicalFacingStatusEligible(status), true);
   assert.equal(policy.mode, "clinical-facing-supported");
+  assert.equal(policy.validationReleaseStatusEligible, true);
   assert.equal(policy.validationStandardEligible, true);
   assert.equal(policy.badgeLabel, "Validated");
   assert.equal(policy.scaleNoun, "support value");
   assert.match(policy.shortNotice, /validation gate/);
   assert.match(policy.reportNotice, /clinician interpretation/);
+});
+
+test("clinical scale presentation policy fails closed when release status is contradictory", () => {
+  const status = {
+    ...reviewedClinicalScaleStatus({
+      houseBrackmann: { clinicalFacingScoresAllowed: true },
+      sunnybrook: { clinicalFacingScoresAllowed: true },
+      eface: { clinicalFacingScoresAllowed: true },
+    }),
+    status: "tooling-ready-needs-reviewed-data",
+  };
+  const policy = clinicalScalePresentationPolicy(status);
+
+  assert.equal(clinicalFacingStatusEligible(status), false);
+  assert.equal(clinicalScaleReleaseStatusEligible(status), false);
+  assert.match(clinicalScaleReleaseStatusBlockers(status).join("\n"), /clinical-scale-agreement-reviewed/);
+  assert.equal(policy.validationReleaseStatusEligible, false);
+  assert.match(policy.validationReleaseStatusBlockers.join("\n"), /clinical-scale-agreement-reviewed/);
+  assert.equal(policy.mode, "mirror-estimate");
+  assert.equal(policy.anyClinicalScaleSupportAllowed, false);
+  assert.equal(policy.badgeLabel, "Estimate");
+  assert.match(policy.shortNotice, /not clinician-assigned/);
 });
 
 test("clinical scale presentation policy fails closed when the runtime validation standard is weak", () => {
@@ -373,6 +398,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(houseBrackmannGapRows.join(" "), /Sunnybrook input: 4\/5 standard movements used; omitted Gentle eye closure/);
 
   const supportedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
+    status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,
@@ -391,6 +417,7 @@ test("clinical scale report rows and printable reports use the validation-aware 
   assert.match(supportedRows[0], /House-Brackmann support value/);
 
   const mixedRows = clinicalScaleEstimateRows(clinicalScales, clinicalScalePresentationPolicy({
+    status: "clinical-scale-agreement-reviewed",
     reviewedDatasetCount: 2,
     reviewedFrameCount: 1200,
     reviewedClinicalScaleAssessmentCount: 30,

@@ -9,6 +9,12 @@ const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const DEFAULT_MIN_DISTINCT_CLINICAL_CASES = 10;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
 const DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO = 0.8;
+const VALID_STATUS_VALUES = Object.freeze([
+  "tooling-ready-needs-reviewed-data",
+  "production-thresholds-calibrated",
+  "clinical-scale-agreement-reviewed",
+]);
+const CLINICAL_SCALE_RELEASE_STATUS = "clinical-scale-agreement-reviewed";
 const PRIMARY_CLINICAL_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
 const CLINICAL_SCALE_AVAILABILITY = Object.freeze({
   houseBrackmann: {
@@ -536,6 +542,7 @@ function validateStatus(status) {
   assertCondition(status.schemaVersion === 1, "validation status schemaVersion must be 1");
   assertCondition(typeof status.updatedAt === "string" && ISO_DATE_RE.test(status.updatedAt), "updatedAt must use YYYY-MM-DD");
   assertCondition(typeof status.status === "string" && status.status.length > 0, "status is required");
+  assertCondition(VALID_STATUS_VALUES.includes(status.status), `status must be one of: ${VALID_STATUS_VALUES.join(", ")}`);
   assertNonNegativeInteger(status.reviewedDatasetCount, "reviewedDatasetCount");
   assertNonNegativeInteger(status.reviewedFrameCount, "reviewedFrameCount");
   assertNonNegativeInteger(status.reviewedClinicalScaleAssessmentCount, "reviewedClinicalScaleAssessmentCount");
@@ -556,6 +563,7 @@ function validateStatus(status) {
     assertCondition(status.thresholdCalibrationReports.length > 0, "threshold constants cannot be marked calibrated without calibration reports");
   }
   if (status.clinicalScaleAgreementReports.length > 0) {
+    assertCondition(status.status === CLINICAL_SCALE_RELEASE_STATUS, `clinical scale agreement reports require status ${CLINICAL_SCALE_RELEASE_STATUS}`);
     assertCondition(status.reviewedDatasetCount > 0, "clinical scale agreement reports require reviewed datasets");
     assertCondition(
       status.reviewedClinicalScaleAssessmentCount >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
@@ -563,6 +571,7 @@ function validateStatus(status) {
     );
   }
   if (status.clinicalScaleReviewerAgreementReports.length > 0) {
+    assertCondition(status.status === CLINICAL_SCALE_RELEASE_STATUS, `clinical scale reviewer agreement reports require status ${CLINICAL_SCALE_RELEASE_STATUS}`);
     assertCondition(status.reviewedDatasetCount > 0, "clinical scale reviewer agreement reports require reviewed datasets");
     assertCondition(
       status.reviewedClinicalScaleAssessmentCount >= status.clinicalScaleMinimumStandard.minReviewedAssessments,
@@ -570,6 +579,7 @@ function validateStatus(status) {
     );
   }
   if (status.clinicalFacingScoresAllowed) {
+    assertCondition(status.status === CLINICAL_SCALE_RELEASE_STATUS, `clinical-facing scores require status ${CLINICAL_SCALE_RELEASE_STATUS}`);
     assertCondition(status.productionThresholdConstantsCalibrated, "clinical-facing scores require calibrated production thresholds");
     assertCondition(status.reviewedFrameCount > 0, "clinical-facing scores require reviewed frame coverage");
     assertCondition(

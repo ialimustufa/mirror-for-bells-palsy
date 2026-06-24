@@ -11,6 +11,7 @@ const REQUIRED_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
 const REQUIRED_MIN_ASSESSMENTS_PER_SEVERITY_BAND = 3;
 const REQUIRED_CONFIDENCE_INTERVAL = "wilson-95";
 const REQUIRED_REVIEW_PROTOCOL = "docs/clinical-scale-review-protocol.md";
+const CLINICAL_SCALE_RELEASE_STATUS = "clinical-scale-agreement-reviewed";
 
 function numberAtLeast(value, minimum) {
   return Number.isFinite(Number(value)) && Number(value) >= minimum;
@@ -59,6 +60,16 @@ function clinicalScaleValidationStandardEligible(status = DEFAULT_VALIDATION_STA
   return clinicalScaleValidationStandardBlockers(status).length === 0;
 }
 
+function clinicalScaleReleaseStatusBlockers(status = DEFAULT_VALIDATION_STATUS) {
+  return status?.status === CLINICAL_SCALE_RELEASE_STATUS
+    ? []
+    : [`status must be ${CLINICAL_SCALE_RELEASE_STATUS}`];
+}
+
+function clinicalScaleReleaseStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
+  return clinicalScaleReleaseStatusBlockers(status).length === 0;
+}
+
 function clinicalFacingStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
   const standard = status?.clinicalScaleMinimumStandard ?? {};
   const minReviewedAssessments = Number.isInteger(standard.minReviewedAssessments)
@@ -66,6 +77,7 @@ function clinicalFacingStatusEligible(status = DEFAULT_VALIDATION_STATUS) {
     : REQUIRED_MIN_REVIEWED_ASSESSMENTS;
   return Boolean(
     clinicalScaleValidationStandardEligible(status)
+      && clinicalScaleReleaseStatusEligible(status)
       && status?.clinicalFacingScoresAllowed === true
       && status?.productionThresholdConstantsCalibrated === true
       && Number(status?.reviewedDatasetCount) > 0
@@ -134,6 +146,8 @@ function clinicalScalePresentationPolicy(status = DEFAULT_VALIDATION_STATUS) {
     mixedClinicalScaleSupport,
     validationStandardEligible: clinicalScaleValidationStandardEligible(status),
     validationStandardBlockers: clinicalScaleValidationStandardBlockers(status),
+    validationReleaseStatusEligible: clinicalScaleReleaseStatusEligible(status),
+    validationReleaseStatusBlockers: clinicalScaleReleaseStatusBlockers(status),
     primaryClinicalScaleSupportCount,
     primaryClinicalScaleCount: CLINICAL_SCALE_PRESENTATION_KEYS.length,
     scaleAvailability,
@@ -177,6 +191,8 @@ export {
   DEFAULT_VALIDATION_STATUS,
   clinicalFacingScaleStatusEligible,
   clinicalFacingStatusEligible,
+  clinicalScaleReleaseStatusBlockers,
+  clinicalScaleReleaseStatusEligible,
   clinicalScaleValidationStandardBlockers,
   clinicalScaleValidationStandardEligible,
   compactClinicalScaleValueLabel,

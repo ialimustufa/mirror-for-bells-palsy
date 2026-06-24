@@ -1201,7 +1201,8 @@ enabled by changing only a UI component. The runtime policy also requires the
 same high-level status evidence as the release gate: reviewed dataset and frame
 counts, reviewed clinical-scale assessment coverage, calibration reports,
 clinical agreement reports, reviewer-agreement reports, calibrated thresholds,
-and the explicit `clinicalFacingScoresAllowed` flag. It also audits the
+the explicit `clinicalFacingScoresAllowed` flag, and the explicit
+`clinical-scale-agreement-reviewed` status value. It also audits the
 machine-readable minimum standard before using clinical-facing wording: the
 30-assessment floor, 10 distinct validation cases, 80% observed agreement, 80%
 Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence

@@ -17,8 +17,9 @@ sessions. It covers:
 - Optional eFACE static, dynamic, and synkinesis domain labels.
 
 Mirror estimates remain estimates unless the release status explicitly says
-otherwise. Even a passing readiness report does not turn an estimate into a
-clinician-assigned grade.
+`clinical-scale-agreement-reviewed` and the referenced agreement artifacts pass.
+Even a passing readiness report does not turn an estimate into a
+clinician-assigned grade by itself.
 
 ## Reviewer Materials
 
