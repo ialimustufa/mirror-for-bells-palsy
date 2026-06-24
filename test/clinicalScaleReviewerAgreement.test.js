@@ -317,6 +317,31 @@ test("clinical-scale reviewer agreement blocks narrow House-Brackmann case mix",
   assert.match(report.blockingReasons.join("\n"), /houseBrackmannCaseMix: needs 3 House-Brackmann severity bands/);
 });
 
+test("clinical-scale reviewer agreement blocks House-Brackmann cross-severity band disagreements", () => {
+  const reviewerARows = Array.from({ length: 30 }, (_, index) => ({
+    assessmentId: `assessment-${index + 1}:clinical-scale`,
+    houseBrackmannGrade: index % 3 === 0 ? "II" : index % 3 === 1 ? "III" : "V",
+    sunnybrookComposite: index % 3 === 0 ? 88 : index % 3 === 1 ? 72 : 48,
+    efaceTotal: index % 3 === 0 ? 86 : index % 3 === 1 ? 70 : 51,
+  }));
+  const reviewerBRows = reviewerARows.map((row, index) => ({
+    ...row,
+    houseBrackmannGrade: index === 0 ? "III" : row.houseBrackmannGrade,
+  }));
+
+  const report = compareClinicalScaleReviewerLabels(reviewerCsv(reviewerARows), reviewerCsv(reviewerBRows, "reviewer-b"), {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.byScale.houseBrackmannGrade.withinToleranceRate, 1);
+  assert.equal(report.byScale.houseBrackmannGrade.meetsMinimumStandard, true);
+  assert.equal(report.houseBrackmannCaseMix.representedSeverityBandCount, 3);
+  assert.equal(report.houseBrackmannCaseMix.crossSeverityBandDisagreementCount, 1);
+  assert.match(report.houseBrackmannCaseMix.blockingReasons.join("\n"), /requires adjudication/);
+  assert.match(report.blockingReasons.join("\n"), /House-Brackmann cross-severity band reviewer disagreement/);
+  assert.equal(report.summary.readyPrimaryScaleCount, 3);
+});
+
 test("clinical-scale reviewer agreement lets primary scales meet evidence independently", () => {
   const rows = Array.from({ length: 30 }, (_, index) => ({
     assessmentId: `assessment-${index + 1}:clinical-scale`,

@@ -288,7 +288,8 @@ pseudonymous reviewer id in each raw reviewer sheet with no reviewer-id overlap
 between sheets, at least 80% observed reviewer agreement, Wilson lower-bound
 reviewer agreement meeting the configured 80% standard, House-Brackmann reviewer
 case mix with HB I-II, HB III-IV, and HB V-VI each represented by enough
-same-band eligible reviewer pairs, and no excluded reviewer-pair,
+same-band eligible reviewer pairs, zero cross-severity House-Brackmann reviewer
+disagreements, and no excluded reviewer-pair,
 reviewer-sheet metadata, or estimate-evidence blockers. The estimate-evidence
 blockers include missing or inconsistent movement provenance and missing or
 incomplete resting-metric provenance. A disabled primary scale can remain an

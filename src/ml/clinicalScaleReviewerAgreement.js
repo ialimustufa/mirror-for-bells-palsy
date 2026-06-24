@@ -1126,6 +1126,9 @@ function summarizeHouseBrackmannCaseMix(accumulator, options = {}) {
   if (representedSeverityBandCount < minHouseBrackmannSeverityBands) {
     blockingReasons.push(`needs ${minHouseBrackmannSeverityBands} House-Brackmann severity bands with at least ${minAssessmentsPerSeverityBand} same-band paired reviewer labels`);
   }
+  if (accumulator.crossSeverityBandDisagreementCount > 0) {
+    blockingReasons.push(`requires adjudication for ${accumulator.crossSeverityBandDisagreementCount} House-Brackmann cross-severity band reviewer disagreement${accumulator.crossSeverityBandDisagreementCount === 1 ? "" : "s"}`);
+  }
   return {
     minHouseBrackmannSeverityBands,
     minAssessmentsPerSeverityBand,

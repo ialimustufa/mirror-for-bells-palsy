@@ -1183,8 +1183,10 @@ that scale. The artifact must also show exactly one pseudonymous reviewer id in
 each raw reviewer sheet, no reviewer-id overlap between the two sheets, and HB
 I-II, HB III-IV, and HB V-VI
 represented by at least three same-band eligible paired reviewer labels, so a
-reviewer-agreement report cannot pass on one severity range alone. Disabled
-primary scales may stay
+reviewer-agreement report cannot pass on one severity range alone. Any
+House-Brackmann cross-severity band reviewer disagreement must be adjudicated
+before the reviewer-agreement artifact can support clinical-facing release.
+Disabled primary scales may stay
 in estimate mode when their rows are not ready, but metadata, blinding,
 current-version, and estimate-evidence blockers still invalidate the artifact. It
 also rejects reviewer rows that are unblinded, non-independent, non-clinician,
@@ -1273,10 +1275,11 @@ provenance, no excluded reviewer-pair, metadata, or estimate-evidence blockers,
 zero incomplete scale-specific estimate-input skips for every enabled primary
 scale, at least 30 eligible paired labels on every enabled primary scale, at
 least 10 distinct pseudonymous validation cases, at least 80% observed reviewer
-agreement, distinct pseudonymous reviewer ids for the raw reviewer sheets, and
-Wilson lower-bound reviewer agreement meeting the configured 80% standard, plus
-House-Brackmann same-band reviewer severity coverage, before clinical-facing
-support can be enabled for that scale.
+agreement, distinct pseudonymous reviewer ids for the raw reviewer sheets, zero
+cross-severity House-Brackmann reviewer disagreements, and Wilson lower-bound
+reviewer agreement meeting the configured 80% standard, plus House-Brackmann
+same-band reviewer severity coverage, before clinical-facing support can be
+enabled for that scale.
 Clinical review package verification report paths must point to JSON
 `mirror-clinical-scale-review-package-verification` schema-v1 artifacts with
 `status: passed`, a source dataset SHA-256 match, blinded-manifest controls,

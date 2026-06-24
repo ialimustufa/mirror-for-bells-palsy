@@ -1819,6 +1819,46 @@ test("validation status artifacts reject reviewer agreement reports with narrow 
   );
 });
 
+test("validation status artifacts reject reviewer agreement reports with cross-severity House-Brackmann disagreements", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    clinicalScaleReviewPackageVerificationReports: [REVIEW_PACKAGE_VERIFICATION_REPORT_PATH],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    thresholdCalibrationSourceDatasetSha256s: [SOURCE_DATASET_SHA256],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: ENABLED_CLINICAL_SCALE_AVAILABILITY,
+  };
+  const reviewerReport = JSON.parse(passingClinicalReviewerAgreementReport());
+  reviewerReport.summary.houseBrackmannCrossSeverityBandDisagreementCount = 1;
+  reviewerReport.houseBrackmannCaseMix.crossSeverityBandDisagreementCount = 1;
+  reviewerReport.houseBrackmannCaseMix.crossSeverityBandDisagreements = [{
+    assessmentId: "assessment-1:clinical-scale",
+    reviewerA: "HB II",
+    reviewerB: "HB III",
+    reviewerASeverityBand: "HB I-II mild/normal",
+    reviewerBSeverityBand: "HB III-IV moderate",
+  }];
+
+  await assert.rejects(
+    () => validateStatusArtifacts(status, {
+      readArtifactText: artifactReader({
+        "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport(),
+        "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": JSON.stringify(reviewerReport),
+        "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+      }),
+    }),
+    /House-Brackmann reviewer severity-band case mix/,
+  );
+});
+
 test("validation status artifacts reject clinical agreement reports with duplicate assessment ids", async () => {
   const status = {
     ...BASE_STATUS,

@@ -330,7 +330,8 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   cases, distinct pseudonymous reviewer ids for the two reviewer sheets, and at
   least 80% observed and Wilson lower-bound reviewer agreement on every enabled
   primary scale, House-Brackmann reviewer case mix across all three severity
-  bands, with no reviewer-sheet metadata blockers.
+  bands, zero cross-severity House-Brackmann reviewer disagreements, and no
+  reviewer-sheet metadata blockers.
 - A clinical review package verification report showing the returned blinded
   sheet still matched the original source dataset hash, row identities, hidden
   estimate-value columns, unchanged estimate-provenance columns, and the current
