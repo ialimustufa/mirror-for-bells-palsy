@@ -39,13 +39,16 @@ function sampleRecords() {
           status: "estimated",
           version: CLINICAL_SCALE_ESTIMATE_VERSION,
           evidence: {
-            tier: "complete-standard-assessment",
-            label: "Complete standard-assessment evidence",
+            tier: "minimum-standard-assessment",
+            label: "Minimum standard-assessment evidence",
+            estimatedMovementExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+            omittedMovementExerciseIds: ["pucker"],
+            calculationUsesOnlyUsableMovements: true,
           },
           coverage: {
-            usableMovementCount: 5,
+            usableMovementCount: 4,
             requiredMovementCount: 5,
-            ratio: 1,
+            ratio: 0.8,
           },
           scales: {
             houseBrackmann: { grade: "III", numericGrade: 3 },
@@ -79,10 +82,13 @@ test("validation label sheet exports frame sample and clinical scale label rows"
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "III");
   assert.equal(rows[1].estimatedSunnybrookComposite, 72);
-  assert.equal(rows[1].estimateEvidenceTier, "complete-standard-assessment");
-  assert.equal(rows[1].estimateUsableMovementCoverageRatio, 1);
-  assert.equal(rows[1].estimateUsableMovementCount, 5);
+  assert.equal(rows[1].estimateEvidenceTier, "minimum-standard-assessment");
+  assert.equal(rows[1].estimateUsableMovementCoverageRatio, 0.8);
+  assert.equal(rows[1].estimateUsableMovementCount, 4);
   assert.equal(rows[1].estimateRequiredMovementCount, 5);
+  assert.equal(rows[1].estimateUsedMovementExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateOmittedMovementExerciseIds, "pucker");
+  assert.equal(rows[1].estimateCalculationUsesOnlyUsableMovements, "true");
   assert.equal(rows[1].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(rows[1].sourceLabelSheetMode, "unblinded");
   assert.equal(rows[1].reviewBlinded, "");
@@ -103,10 +109,13 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(rows[1].rowType, "assessmentClinicalScale");
   assert.equal(rows[1].assessmentId, "assessment-1:clinical-scale");
   assert.equal(rows[1].estimateStatus, "estimated");
-  assert.equal(rows[1].estimateEvidenceTier, "complete-standard-assessment");
-  assert.equal(rows[1].estimateUsableMovementCoverageRatio, 1);
-  assert.equal(rows[1].estimateUsableMovementCount, 5);
+  assert.equal(rows[1].estimateEvidenceTier, "minimum-standard-assessment");
+  assert.equal(rows[1].estimateUsableMovementCoverageRatio, 0.8);
+  assert.equal(rows[1].estimateUsableMovementCount, 4);
   assert.equal(rows[1].estimateRequiredMovementCount, 5);
+  assert.equal(rows[1].estimateUsedMovementExerciseIds, "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(rows[1].estimateOmittedMovementExerciseIds, "pucker");
+  assert.equal(rows[1].estimateCalculationUsesOnlyUsableMovements, "true");
   assert.equal(rows[1].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(rows[1].estimatedHouseBrackmannGrade, "");
   assert.equal(rows[1].estimatedSunnybrookComposite, "");
@@ -118,8 +127,11 @@ test("validation label sheet can hide Mirror estimates for blinded review", () =
   assert.equal(clinicalRow[index.clinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(clinicalRow[index.estimatedSunnybrookComposite], "");
   assert.equal(clinicalRow[index.estimateStatus], "estimated");
-  assert.equal(clinicalRow[index.estimateEvidenceTier], "complete-standard-assessment");
-  assert.equal(clinicalRow[index.estimateUsableMovementCoverageRatio], "1");
+  assert.equal(clinicalRow[index.estimateEvidenceTier], "minimum-standard-assessment");
+  assert.equal(clinicalRow[index.estimateUsableMovementCoverageRatio], "0.8");
+  assert.equal(clinicalRow[index.estimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle");
+  assert.equal(clinicalRow[index.estimateOmittedMovementExerciseIds], "pucker");
+  assert.equal(clinicalRow[index.estimateCalculationUsesOnlyUsableMovements], "true");
   assert.equal(clinicalRow[index.houseBrackmannGrade], "");
   assert.equal(clinicalRow[index.sourceLabelSheetMode], "blinded");
   assert.equal(clinicalRow[index.reviewBlinded], "");

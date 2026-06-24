@@ -12,7 +12,7 @@ const PREVIOUS_ESTIMATOR_VERSION_KEY = `v${CLINICAL_SCALE_ESTIMATE_VERSION - 1}`
 
 function reviewerCsv(rows) {
   return [
-    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
+    "rowType,sampleId,assessmentId,sessionId,sessionTs,date,estimateStatus,estimateEvidenceTier,estimateUsableMovementCoverageRatio,estimateUsableMovementCount,estimateRequiredMovementCount,estimateUsedMovementExerciseIds,estimateOmittedMovementExerciseIds,estimateCalculationUsesOnlyUsableMovements,clinicalScaleEstimateVersion,houseBrackmannGrade,sunnybrookComposite,efaceTotal,efaceStatic,efaceDynamic,efaceSynkinesis,clinicianConfidence,sourceLabelSheetMode,reviewBlinded,labelSource,reviewerRole,reviewedAt,notes",
     ...rows.map((row) => [
       "assessmentClinicalScale",
       "",
@@ -25,6 +25,9 @@ function reviewerCsv(rows) {
       row.estimateUsableMovementCoverageRatio ?? 1,
       row.estimateUsableMovementCount ?? 5,
       row.estimateRequiredMovementCount ?? 5,
+      row.estimateUsedMovementExerciseIds ?? "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker",
+      row.estimateOmittedMovementExerciseIds ?? "",
+      row.estimateCalculationUsesOnlyUsableMovements ?? "true",
       row.clinicalScaleEstimateVersion ?? CLINICAL_SCALE_ESTIMATE_VERSION,
       row.houseBrackmannGrade ?? "",
       row.sunnybrookComposite ?? "",
@@ -179,12 +182,19 @@ test("clinical-scale adjudication CSV preserves raw reviewer labels and can be m
   assert.equal(row[index.estimateStatus], "estimated");
   assert.equal(row[index.estimateEvidenceTier], "complete-standard-assessment");
   assert.equal(row[index.estimateUsableMovementCoverageRatio], "1");
+  assert.equal(row[index.estimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.estimateOmittedMovementExerciseIds], "");
+  assert.equal(row[index.estimateCalculationUsesOnlyUsableMovements], "true");
   assert.equal(row[index.reviewerAClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(row[index.reviewerBClinicalScaleEstimateVersion], String(CLINICAL_SCALE_ESTIMATE_VERSION));
   assert.equal(row[index.reviewerAEstimateStatus], "estimated");
   assert.equal(row[index.reviewerBEstimateStatus], "estimated");
   assert.equal(row[index.reviewerAEstimateEvidenceTier], "complete-standard-assessment");
   assert.equal(row[index.reviewerBEstimateEvidenceTier], "complete-standard-assessment");
+  assert.equal(row[index.reviewerAEstimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.reviewerBEstimateUsedMovementExerciseIds], "eyebrow-raise|eye-close|open-smile|nose-wrinkle|pucker");
+  assert.equal(row[index.reviewerAEstimateCalculationUsesOnlyUsableMovements], "true");
+  assert.equal(row[index.reviewerBEstimateCalculationUsesOnlyUsableMovements], "true");
   assert.equal(row[index.reviewerAHouseBrackmannGrade], "III");
   assert.equal(row[index.reviewerBHouseBrackmannGrade], "IV");
   assert.equal(row[index.reviewerANotes], "A note");
@@ -294,6 +304,52 @@ test("clinical-scale reviewer agreement blocks insufficient estimate evidence pr
   assert.match(report.blockingReasons.join("\n"), /estimate evidence gates/);
   assert.match(report.blockingReasons.join("\n"), /estimateEvidence: reviewer sheets disagree/);
   assert.match(report.adjudicationRows[0].disagreementSummary, /Estimate evidence/);
+});
+
+test("clinical-scale reviewer agreement blocks mismatched omitted movement provenance", () => {
+  const reviewerA = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      estimateEvidenceTier: "minimum-standard-assessment",
+      estimateUsableMovementCoverageRatio: 0.8,
+      estimateUsableMovementCount: 4,
+      estimateRequiredMovementCount: 5,
+      estimateUsedMovementExerciseIds: "eyebrow-raise|eye-close|open-smile|nose-wrinkle",
+      estimateOmittedMovementExerciseIds: "pucker",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+  ]);
+  const reviewerB = reviewerCsv([
+    {
+      assessmentId: "assessment-1:clinical-scale",
+      estimateEvidenceTier: "minimum-standard-assessment",
+      estimateUsableMovementCoverageRatio: 0.8,
+      estimateUsableMovementCount: 4,
+      estimateRequiredMovementCount: 5,
+      estimateUsedMovementExerciseIds: "eyebrow-raise|open-smile|nose-wrinkle|pucker",
+      estimateOmittedMovementExerciseIds: "eye-close",
+      houseBrackmannGrade: "III",
+      sunnybrookComposite: 76,
+      efaceTotal: 73,
+    },
+  ]);
+
+  const report = compareClinicalScaleReviewerLabels(reviewerA, reviewerB, {
+    generatedAt: "2026-06-24T12:00:00.000Z",
+  });
+
+  assert.equal(report.summary.eligibleReviewerPairCount, 0);
+  assert.equal(report.summary.excludedReviewerPairCount, 1);
+  assert.equal(report.summary.excludedReviewerPairReasons["reviewer sheets have mismatched estimate evidence"], 1);
+  assert.equal(report.summary.estimateEvidenceMismatchCount, 1);
+  assert.equal(report.byScale.houseBrackmannGrade.pairedCount, 0);
+  assert.match(report.blockingReasons.join("\n"), /estimateEvidence: reviewer sheets disagree for 1 assessment labels/);
+  assert.match(report.adjudicationRows[0].disagreementSummary, /Estimate evidence/);
+  assert.equal(report.adjudicationRows[0].estimateUsedMovementExerciseIds, "");
+  assert.equal(report.adjudicationRows[0].reviewerAEstimateOmittedMovementExerciseIds, "pucker");
+  assert.equal(report.adjudicationRows[0].reviewerBEstimateOmittedMovementExerciseIds, "eye-close");
 });
 
 test("clinical-scale reviewer agreement blocks unblinded or non-independent reviewer sheets", () => {

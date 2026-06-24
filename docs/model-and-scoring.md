@@ -984,6 +984,10 @@ dataset version, summary counts, and a label schema. Subsequent lines include:
 - `assessmentClinicalScale` records for included standard assessment sessions,
   with the current House-Brackmann, Sunnybrook, and eFACE-style estimates plus
   empty reviewer target fields.
+- Assessment clinical-scale rows include estimate status, evidence tier, usable
+  movement coverage, used/omitted movement exercise IDs, and the
+  usable-movements-only calculation flag so reviewer sheets remain tied to the
+  exact estimator inputs.
 - `frameSample` records with the original sampled frame payload, including
   landmarks/blendshapes/pose/scoring metadata when those fields were captured.
 - A `label` template on each frame sample with `intendedMovement`, `affectedSide`,
@@ -1019,9 +1023,10 @@ npm run validation:clinical-report -- clinical-readiness-report.json docs/valida
 The label-sheet command creates a CSV for clinician, user, or developer review.
 The sheet includes `frameSample` rows and `assessmentClinicalScale` rows. Use
 `--blinded` for primary clinical-scale review so Mirror estimate columns are left
-blank during target assignment. The merge command copies reviewed label fields
-back into a new JSONL dataset without changing the original export. The evaluator
-replays labeled frame samples through
+blank during target assignment while preserving estimate provenance columns such
+as evidence tier, coverage, used/omitted movement IDs, and estimator version. The
+merge command copies reviewed label fields back into a new JSONL dataset without
+changing the original export. The evaluator replays labeled frame samples through
 the current scorer and reports
 scored-frame agreement, accuracy, false-positive rate, false-negative rate, and
 mean absolute stored-vs-replayed score drift. Frames labeled with

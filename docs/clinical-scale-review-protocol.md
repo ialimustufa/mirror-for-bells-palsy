@@ -167,9 +167,11 @@ If multiple reviewers label the same assessment:
   single readiness dataset.
 - Treat missing, stale, or mismatched `clinicalScaleEstimateVersion` values,
   estimate status, complete/minimum evidence tier, or 80% usable-movement
-  coverage as adjudication blockers; both raw reviewer sheets and the final
-  adjudicated row must preserve the current qualifying estimate provenance before
-  labels can count.
+  coverage as adjudication blockers. Used and omitted movement exercise IDs must
+  also match between reviewer sheets, because a 4/5 estimate with a different
+  omitted movement is a different estimator input. Both raw reviewer sheets and
+  the final adjudicated row must preserve the current qualifying estimate
+  provenance before labels can count.
 - Treat unblinded, non-independent, non-clinician, uncertain, copied, rehearsal,
   incomplete, or out-of-range reviewer rows as adjudication blockers. They should
   be recollected from a blinded current-version sheet rather than resolved by

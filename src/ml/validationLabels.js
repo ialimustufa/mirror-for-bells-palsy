@@ -20,6 +20,9 @@ const LABEL_COLUMNS = [
   "estimateUsableMovementCoverageRatio",
   "estimateUsableMovementCount",
   "estimateRequiredMovementCount",
+  "estimateUsedMovementExerciseIds",
+  "estimateOmittedMovementExerciseIds",
+  "estimateCalculationUsesOnlyUsableMovements",
   "clinicalScaleEstimateVersion",
   "estimatedHouseBrackmannGrade",
   "estimatedHouseBrackmannNumericGrade",
@@ -129,6 +132,14 @@ function formatNumber(value, digits = 1) {
   return Number.isFinite(value) ? Number(value.toFixed(digits)) : "";
 }
 
+function formatList(value) {
+  return Array.isArray(value) ? value.filter(Boolean).join("|") : String(value ?? "");
+}
+
+function formatBoolean(value) {
+  return typeof value === "boolean" ? String(value) : "";
+}
+
 function frameLabelRowFromRecord(line) {
   const record = line.record;
   const frame = record.frame ?? {};
@@ -156,6 +167,9 @@ function frameLabelRowFromRecord(line) {
     estimateUsableMovementCoverageRatio: "",
     estimateUsableMovementCount: "",
     estimateRequiredMovementCount: "",
+    estimateUsedMovementExerciseIds: "",
+    estimateOmittedMovementExerciseIds: "",
+    estimateCalculationUsesOnlyUsableMovements: "",
     clinicalScaleEstimateVersion: "",
     estimatedHouseBrackmannGrade: "",
     estimatedHouseBrackmannNumericGrade: "",
@@ -214,6 +228,9 @@ function assessmentClinicalLabelRowFromRecord(line, options = {}) {
     estimateUsableMovementCoverageRatio: formatNumber(coverage.ratio ?? sourceSummary.usableMovementCoverageRatio, 4),
     estimateUsableMovementCount: coverage.usableMovementCount ?? sourceSummary.usableMovementCount ?? "",
     estimateRequiredMovementCount: coverage.requiredMovementCount ?? sourceSummary.requiredMovementCount ?? "",
+    estimateUsedMovementExerciseIds: formatList(evidence.estimatedMovementExerciseIds ?? sourceSummary.estimateUsedMovementExerciseIds),
+    estimateOmittedMovementExerciseIds: formatList(evidence.omittedMovementExerciseIds ?? sourceSummary.estimateOmittedMovementExerciseIds),
+    estimateCalculationUsesOnlyUsableMovements: formatBoolean(evidence.calculationUsesOnlyUsableMovements ?? sourceSummary.estimateCalculationUsesOnlyUsableMovements),
     clinicalScaleEstimateVersion: estimate.version ?? "",
     estimatedHouseBrackmannGrade: houseBrackmann.grade ?? "",
     estimatedHouseBrackmannNumericGrade: houseBrackmann.numericGrade ?? "",

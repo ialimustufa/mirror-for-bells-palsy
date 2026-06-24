@@ -67,6 +67,12 @@ const ADJUDICATION_EXTRA_COLUMNS = Object.freeze([
   "reviewerBEstimateEvidenceTier",
   "reviewerAEstimateUsableMovementCoverageRatio",
   "reviewerBEstimateUsableMovementCoverageRatio",
+  "reviewerAEstimateUsedMovementExerciseIds",
+  "reviewerBEstimateUsedMovementExerciseIds",
+  "reviewerAEstimateOmittedMovementExerciseIds",
+  "reviewerBEstimateOmittedMovementExerciseIds",
+  "reviewerAEstimateCalculationUsesOnlyUsableMovements",
+  "reviewerBEstimateCalculationUsesOnlyUsableMovements",
   "reviewerAHouseBrackmannGrade",
   "reviewerBHouseBrackmannGrade",
   "reviewerASunnybrookComposite",
@@ -190,6 +196,10 @@ function estimateUsableMovementCoverageRatio(row = {}) {
 function estimateMovementCount(row = {}, key) {
   const count = Number(row?.[key]);
   return Number.isInteger(count) ? count : null;
+}
+
+function normalizedEstimateEvidenceText(row = {}, key) {
+  return String(row?.[key] ?? "").trim();
 }
 
 function estimateEvidenceReasons(row = {}, options = {}) {
@@ -491,12 +501,18 @@ function estimateEvidenceKey(row = {}) {
   const coverage = estimateUsableMovementCoverageRatio(row);
   const usableCount = estimateMovementCount(row, "estimateUsableMovementCount");
   const requiredCount = estimateMovementCount(row, "estimateRequiredMovementCount");
+  const usedMovementIds = normalizedEstimateEvidenceText(row, "estimateUsedMovementExerciseIds");
+  const omittedMovementIds = normalizedEstimateEvidenceText(row, "estimateOmittedMovementExerciseIds");
+  const calculationUsesOnlyUsableMovements = normalizedEstimateEvidenceText(row, "estimateCalculationUsesOnlyUsableMovements");
   return [
     estimateStatus(row) || "missing-status",
     estimateEvidenceTier(row) || "missing-tier",
     Number.isFinite(coverage) ? coverage.toFixed(4) : "missing-coverage",
     usableCount == null ? "missing-usable-count" : usableCount,
     requiredCount == null ? "missing-required-count" : requiredCount,
+    usedMovementIds || "missing-used-movements",
+    omittedMovementIds || "missing-omitted-movements",
+    calculationUsesOnlyUsableMovements || "missing-calculation-input-filter",
   ].join("/");
 }
 
@@ -546,6 +562,9 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.estimateUsableMovementCoverageRatio = reviewerAEvidence === reviewerBEvidence ? estimateUsableMovementCoverageRatio(reviewerA) ?? "" : "";
   row.estimateUsableMovementCount = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateUsableMovementCount ?? "" : "";
   row.estimateRequiredMovementCount = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateRequiredMovementCount ?? "" : "";
+  row.estimateUsedMovementExerciseIds = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateUsedMovementExerciseIds ?? "" : "";
+  row.estimateOmittedMovementExerciseIds = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateOmittedMovementExerciseIds ?? "" : "";
+  row.estimateCalculationUsesOnlyUsableMovements = reviewerAEvidence === reviewerBEvidence ? reviewerA?.estimateCalculationUsesOnlyUsableMovements ?? "" : "";
   row.reviewerAClinicalScaleEstimateVersion = reviewerAVersion ?? "";
   row.reviewerBClinicalScaleEstimateVersion = reviewerBVersion ?? "";
   row.reviewerAEstimateStatus = estimateStatus(reviewerA);
@@ -554,6 +573,12 @@ function adjudicationRow(assessmentId, reviewerA, reviewerB) {
   row.reviewerBEstimateEvidenceTier = estimateEvidenceTier(reviewerB);
   row.reviewerAEstimateUsableMovementCoverageRatio = estimateUsableMovementCoverageRatio(reviewerA) ?? "";
   row.reviewerBEstimateUsableMovementCoverageRatio = estimateUsableMovementCoverageRatio(reviewerB) ?? "";
+  row.reviewerAEstimateUsedMovementExerciseIds = reviewerA?.estimateUsedMovementExerciseIds ?? "";
+  row.reviewerBEstimateUsedMovementExerciseIds = reviewerB?.estimateUsedMovementExerciseIds ?? "";
+  row.reviewerAEstimateOmittedMovementExerciseIds = reviewerA?.estimateOmittedMovementExerciseIds ?? "";
+  row.reviewerBEstimateOmittedMovementExerciseIds = reviewerB?.estimateOmittedMovementExerciseIds ?? "";
+  row.reviewerAEstimateCalculationUsesOnlyUsableMovements = reviewerA?.estimateCalculationUsesOnlyUsableMovements ?? "";
+  row.reviewerBEstimateCalculationUsesOnlyUsableMovements = reviewerB?.estimateCalculationUsesOnlyUsableMovements ?? "";
   row.reviewerAHouseBrackmannGrade = formatHouseBrackmann(reviewerA?.houseBrackmannGrade);
   row.reviewerBHouseBrackmannGrade = formatHouseBrackmann(reviewerB?.houseBrackmannGrade);
   row.reviewerASunnybrookComposite = reviewerA?.sunnybrookComposite ?? "";
