@@ -190,9 +190,10 @@ Before `clinicalFacingScoresAllowed` can be set to `true`, the repo must have:
   `npm run validation:clinical-readiness`.
 - A clinical-scale reviewer-agreement report from
   `npm run validation:reviewer-agreement` showing current-version, blinded,
-  independent clinician sheets with at least 30 paired primary-scale labels and
-  at least 80% observed and Wilson lower-bound reviewer agreement on each
-  primary scale, with no reviewer-sheet metadata blockers.
+  independent clinician sheets with at least 30 paired labels on every enabled
+  primary scale and at least 80% observed and Wilson lower-bound reviewer
+  agreement on every enabled primary scale, with no reviewer-sheet metadata
+  blockers.
 - A House-Brackmann case-mix section showing all three severity bands with the
   required minimum labels per represented band.
 - Primary-scale Wilson intervals whose lower bounds meet the machine-readable
@@ -212,16 +213,16 @@ Until those artifacts exist, Mirror must keep clinical-scale values labeled as
 Mirror estimates only.
 
 The release gate runs `npm run validation:status`, which verifies that referenced
-clinical-scale agreement reports exist and contain a passing confidence-standard
-status, all three primary scale rows, Wilson lower-bound agreement meeting the
-minimum, explicit reference-standard controls, an eligible blinded independent
-label count meeting the minimum reviewed-assessment floor, a House-Brackmann
-case-mix section meeting the severity-band minimum, current estimator-version
-evidence, the 80% usable-movement coverage floor, complete/minimum estimate
-evidence-tier controls, a reviewer-agreement artifact meeting the paired-label floor plus the
-observed-agreement and Wilson lower-bound reviewer-agreement gates, and
-release-control text. A status update that only changes counts or report paths
-without matching artifacts must fail the release check.
+clinical-scale agreement reports exist and contain all three primary scale rows,
+enabled-scale rows with Wilson lower-bound agreement meeting the minimum,
+explicit reference-standard controls, an eligible blinded independent label count
+meeting the minimum reviewed-assessment floor, a House-Brackmann case-mix section
+meeting the severity-band minimum, current estimator-version evidence, the 80%
+usable-movement coverage floor, complete/minimum estimate evidence-tier
+controls, a reviewer-agreement artifact meeting the paired-label floor plus the
+observed-agreement and Wilson lower-bound reviewer-agreement gates for every
+enabled scale, and release-control text. A status update that only changes counts
+or report paths without matching artifacts must fail the release check.
 
 ## References
 

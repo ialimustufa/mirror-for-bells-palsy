@@ -14,6 +14,11 @@ const ENABLED_CLINICAL_SCALE_AVAILABILITY = {
   sunnybrook: { clinicalFacingScoresAllowed: true },
   eface: { clinicalFacingScoresAllowed: true },
 };
+const HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY = {
+  houseBrackmann: { clinicalFacingScoresAllowed: true },
+  sunnybrook: { clinicalFacingScoresAllowed: false },
+  eface: { clinicalFacingScoresAllowed: false },
+};
 
 const BASE_STATUS = {
   schemaVersion: 1,
@@ -95,6 +100,19 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 - Reference standard controls: \`sourceLabelSheetMode\`, \`reviewBlinded\`, estimator \`version\`, estimate evidence tier/coverage controls, \`labelSource\`, clinical \`reviewerRole\`, and valid primary target fields must be present before rows count toward readiness.
 - Release control: this report alone cannot enable clinical-facing scores; \`docs/validation-status.json\` must be reviewed and updated separately.
 `;
+}
+
+function houseBrackmannOnlyClinicalAgreementReport() {
+  return passingClinicalAgreementReport({ readyPrimaryScales: 1 })
+    .replace("Status: meets-clinical-scale-confidence-standard", "Status: needs-scale-specific-release-review")
+    .replace(
+      "| Sunnybrook composite | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |",
+      "| Sunnybrook composite | within 10 points | 30 | 0 | 20 | 66.7% | 48.8%-80.8% 95% Wilson CI | 14.0 | not-ready |",
+    )
+    .replace(
+      "| eFACE total | within 10 points | 30 | 0 | 30 | 100.0% | 88.7%-100.0% 95% Wilson CI | 4.0 | meets-confidence-standard |",
+      "| eFACE total | within 10 points | 30 | 0 | 20 | 66.7% | 48.8%-80.8% 95% Wilson CI | 14.0 | not-ready |",
+    );
 }
 
 function passingThresholdReport({ readyExercises = 5 } = {}) {
@@ -199,6 +217,34 @@ function passingClinicalReviewerAgreementReport({
   });
 }
 
+function houseBrackmannOnlyClinicalReviewerAgreementReport() {
+  const report = JSON.parse(passingClinicalReviewerAgreementReport());
+  report.summary.readyPrimaryScaleCount = 1;
+  for (const scaleKey of ["sunnybrookComposite", "efaceTotal"]) {
+    report.byScale[scaleKey] = {
+      ...report.byScale[scaleKey],
+      withinToleranceCount: 20,
+      withinToleranceRate: 0.6667,
+      withinToleranceConfidenceInterval: {
+        method: "wilson-score",
+        confidenceLevel: 0.95,
+        lower: 0.488,
+        upper: 0.808,
+      },
+      meetsMinimumStandard: false,
+      blockingReasons: [
+        "needs at least 80% within 10 points",
+        "needs 95% Wilson lower bound at least 80% for within 10 points",
+      ],
+    };
+  }
+  report.blockingReasons = [
+    "sunnybrookComposite: needs at least 80% within 10 points; needs 95% Wilson lower bound at least 80% for within 10 points",
+    "efaceTotal: needs at least 80% within 10 points; needs 95% Wilson lower bound at least 80% for within 10 points",
+  ];
+  return JSON.stringify(report);
+}
+
 function artifactReader(artifacts) {
   return async (path) => {
     if (Object.hasOwn(artifacts, path)) return artifacts[path];
@@ -285,6 +331,37 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.thresholdCalibrationReports[0].readyExerciseCount, 5);
 });
 
+test("validation status artifacts accept scale-specific clinical availability for a passing primary scale", async () => {
+  const status = {
+    ...BASE_STATUS,
+    status: "clinical-scale-agreement-reviewed",
+    reviewedDatasetCount: 2,
+    reviewedFrameCount: 1200,
+    reviewedClinicalScaleAssessmentCount: 30,
+    readyExerciseCount: 5,
+    clinicalScaleAgreementReports: ["docs/validation/clinical-scale-agreement-2026-06-24.md"],
+    clinicalScaleReviewerAgreementReports: ["docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json"],
+    thresholdCalibrationReports: ["docs/validation/threshold-calibration-2026-06-23.json"],
+    productionThresholdConstantsCalibrated: true,
+    clinicalFacingScoresAllowed: true,
+    clinicalScaleAvailability: HOUSE_BRACKMANN_ONLY_CLINICAL_SCALE_AVAILABILITY,
+  };
+
+  const result = await validateStatusArtifacts(status, {
+    readArtifactText: artifactReader({
+      "docs/validation/clinical-scale-agreement-2026-06-24.md": houseBrackmannOnlyClinicalAgreementReport(),
+      "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": houseBrackmannOnlyClinicalReviewerAgreementReport(),
+      "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
+    }),
+  });
+
+  assert.equal(result.status.clinicalScaleAvailability.houseBrackmann.clinicalFacingScoresAllowed, true);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.houseBrackmann.agreementWilsonLowerBound, 0.887);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.agreementWilsonLowerBound, 0.488);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].primaryScaleAgreementRows.sunnybrook.status, "not-ready");
+  assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].byScale.sunnybrookComposite.meetsMinimumStandard, false);
+});
+
 test("validation status artifacts reject reviewer agreement reports with too few paired labels", async () => {
   const status = {
     ...BASE_STATUS,
@@ -337,7 +414,7 @@ test("validation status artifacts reject reviewer agreement reports with metadat
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),
     }),
-    /reviewer-agreement blocking reasons/,
+    /no excluded reviewer-pair or metadata blockers/,
   );
 });
 
@@ -743,7 +820,7 @@ test("validation status artifacts reject clinical agreement reports that do not 
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),
     }),
-    /passing clinical-scale readiness status/,
+    /every enabled primary scale/,
   );
 });
 

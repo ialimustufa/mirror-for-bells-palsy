@@ -8,9 +8,25 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
 const DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO = 0.8;
-const PRIMARY_CLINICAL_SCALE_COUNT = 3;
 const PRIMARY_CLINICAL_REVIEW_SCALE_KEYS = Object.freeze(["houseBrackmannGrade", "sunnybrookComposite", "efaceTotal"]);
-const CLINICAL_SCALE_AVAILABILITY_KEYS = Object.freeze(["houseBrackmann", "sunnybrook", "eface"]);
+const CLINICAL_SCALE_AVAILABILITY = Object.freeze({
+  houseBrackmann: {
+    agreementKey: "houseBrackmann",
+    agreementLabel: "House-Brackmann",
+    reviewerKey: "houseBrackmannGrade",
+  },
+  sunnybrook: {
+    agreementKey: "sunnybrookComposite",
+    agreementLabel: "Sunnybrook composite",
+    reviewerKey: "sunnybrookComposite",
+  },
+  eface: {
+    agreementKey: "efaceTotal",
+    agreementLabel: "eFACE total",
+    reviewerKey: "efaceTotal",
+  },
+});
+const CLINICAL_SCALE_AVAILABILITY_KEYS = Object.freeze(Object.keys(CLINICAL_SCALE_AVAILABILITY));
 const DEFAULT_MIN_HOUSE_BRACKMANN_SEVERITY_BANDS = 3;
 const DEFAULT_MIN_ASSESSMENTS_PER_HOUSE_BRACKMANN_SEVERITY_BAND = 3;
 
@@ -115,21 +131,48 @@ function percentFromMatch(text, pattern) {
   return Number.isFinite(value) ? value / 100 : null;
 }
 
-function primaryScaleWilsonLowerBound(text, scaleLabel) {
-  const rowPattern = new RegExp(`^\\|\\s*${escapeRegExp(scaleLabel)}\\s*\\|`, "i");
-  const row = text.split(/\r?\n/).find((line) => rowPattern.test(line));
-  if (!row) return null;
-  const cells = row.split("|").slice(1, -1).map((cell) => cell.trim());
-  const interval = cells[6] ?? "";
-  const match = interval.match(/(\d+(?:\.\d+)?)%\s*-/);
+function integerFromCell(cell) {
+  const value = Number(String(cell ?? "").replace(/,/g, ""));
+  return Number.isInteger(value) ? value : null;
+}
+
+function percentFromCell(cell) {
+  const match = String(cell ?? "").match(/(\d+(?:\.\d+)?)%/);
   if (!match) return null;
   const value = Number(match[1]);
   return Number.isFinite(value) ? value / 100 : null;
 }
 
+function primaryScaleAgreementRow(text, scaleKey, scaleLabel) {
+  const rowPattern = new RegExp(`^\\|\\s*${escapeRegExp(scaleLabel)}\\s*\\|`, "i");
+  const row = text.split(/\r?\n/).find((line) => rowPattern.test(line));
+  if (!row) return null;
+  const cells = row.split("|").slice(1, -1).map((cell) => cell.trim());
+  return {
+    scaleKey,
+    label: cells[0] ?? scaleLabel,
+    labeledCount: integerFromCell(cells[2]),
+    missingEstimateCount: integerFromCell(cells[3]),
+    withinToleranceCount: integerFromCell(cells[4]),
+    agreementRate: percentFromCell(cells[5]),
+    agreementWilsonLowerBound: percentFromCell(cells[6]),
+    status: cells[8] ?? "",
+  };
+}
+
+function enabledClinicalScaleKeys(status = {}) {
+  return CLINICAL_SCALE_AVAILABILITY_KEYS.filter((scaleKey) => (
+    status.clinicalScaleAvailability?.[scaleKey]?.clinicalFacingScoresAllowed === true
+  ));
+}
+
+function allPrimaryClinicalScalesEnabled(status = {}) {
+  return enabledClinicalScaleKeys(status).length === CLINICAL_SCALE_AVAILABILITY_KEYS.length;
+}
+
 function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /# Mirror Clinical Scale Agreement Report/i, artifactPath, "the Mirror clinical-scale agreement report heading");
-  assertTextMatches(text, /Status:\s*meets-clinical-scale-confidence-standard/i, artifactPath, "a passing clinical-scale readiness status");
+  assertTextMatches(text, /Status:\s*\S+/i, artifactPath, "a clinical-scale readiness status");
   assertTextMatches(text, /House-Brackmann\s*\|/i, artifactPath, "House-Brackmann agreement row");
   assertTextMatches(text, /Sunnybrook composite\s*\|/i, artifactPath, "Sunnybrook composite agreement row");
   assertTextMatches(text, /eFACE total\s*\|/i, artifactPath, "eFACE total agreement row");
@@ -164,15 +207,20 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
     integerFromMatch(text, /HB V-VI severe\/complete\s*\|\s*(\d+)\s*\|\s*yes/i),
   ];
   const minimumHouseBrackmannSeverityBandLabelCount = Math.min(...houseBrackmannSeverityBandCounts.map((count) => count ?? 0));
-  const primaryScaleWilsonLowerBounds = {
-    houseBrackmann: primaryScaleWilsonLowerBound(text, "House-Brackmann"),
-    sunnybrookComposite: primaryScaleWilsonLowerBound(text, "Sunnybrook composite"),
-    efaceTotal: primaryScaleWilsonLowerBound(text, "eFACE total"),
-  };
+  const primaryScaleAgreementRows = Object.fromEntries(
+    Object.entries(CLINICAL_SCALE_AVAILABILITY).map(([scaleKey, config]) => [
+      scaleKey,
+      primaryScaleAgreementRow(text, config.agreementKey, config.agreementLabel),
+    ]),
+  );
+  const primaryScaleWilsonLowerBounds = Object.fromEntries(
+    Object.entries(primaryScaleAgreementRows).map(([scaleKey, row]) => [scaleKey, row?.agreementWilsonLowerBound ?? null]),
+  );
   const minimumPrimaryScaleWilsonLowerBound = Math.min(...Object.values(primaryScaleWilsonLowerBounds).map((value) => value ?? 0));
   const readyPrimaryScaleCount = integerFromMatch(text, /Ready primary scales:\s*(\d+)\/\d+/i);
   return {
     path: artifactPath,
+    status: text.match(/Status:\s*([^\n]+)/i)?.[1]?.trim() ?? null,
     reviewedClinicalScaleAssessmentCount,
     eligibleBlindedIndependentLabelCount,
     clinicalScaleEstimateVersion,
@@ -180,6 +228,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
     minimumLabelsPerRepresentedSeverityBand,
     representedHouseBrackmannSeverityBandCount,
     minimumHouseBrackmannSeverityBandLabelCount,
+    primaryScaleAgreementRows,
     primaryScaleWilsonLowerBounds,
     minimumPrimaryScaleWilsonLowerBound,
     readyPrimaryScaleCount,
@@ -249,7 +298,6 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     `${artifactPath}.summary.requiredClinicalScaleEstimateVersion must be ${CLINICAL_SCALE_ESTIMATE_VERSION}`,
   );
   assertCondition(Array.isArray(report.blockingReasons), `${artifactPath} must include blockingReasons array`);
-  assertCondition(report.blockingReasons.length === 0, `${artifactPath} must have no reviewer-agreement blocking reasons`);
   assertCondition(Array.isArray(report.reviewerSheetIssues), `${artifactPath} must include reviewerSheetIssues array`);
   assertCondition(report.reviewerSheetIssues.length === 0, `${artifactPath} must have no reviewer-sheet metadata issues`);
   assertCondition(report.byScale && typeof report.byScale === "object", `${artifactPath} must include byScale reviewer agreement results`);
@@ -285,10 +333,90 @@ function validateClinicalScaleReviewerAgreementReportText(text, artifactPath) {
     estimateVersionMismatchCount: report.summary.estimateVersionMismatchCount,
     estimateEvidenceMismatchCount: report.summary.estimateEvidenceMismatchCount,
     requiredClinicalScaleEstimateVersion: report.summary.requiredClinicalScaleEstimateVersion,
+    blockingReasons: report.blockingReasons,
+    byScale: report.byScale,
     minimumPrimaryPairedCount: Math.min(...primaryPairedCounts),
     minimumPrimaryAgreementRate: Math.min(...primaryAgreementRates),
     minimumPrimaryAgreementWilsonLowerBound: Math.min(...primaryAgreementWilsonLowerBounds),
   };
+}
+
+function clinicalAgreementReportHasCommonEvidence(report, status) {
+  return (
+    (report.reviewedClinicalScaleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.eligibleBlindedIndependentLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && report.clinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
+    && (report.minimumUsableMovementCoverageRatio ?? 0) >= status.clinicalScaleMinimumStandard.minUsableMovementCoverageRatio
+    && (report.representedHouseBrackmannSeverityBandCount ?? 0) >= status.clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands
+    && (report.minimumLabelsPerRepresentedSeverityBand ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
+    && (report.minimumHouseBrackmannSeverityBandLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
+  );
+}
+
+function clinicalAgreementScaleMeetsMinimum(report, status, scaleKey) {
+  const row = report.primaryScaleAgreementRows?.[scaleKey];
+  return Boolean(
+    row
+      && (row.labeledCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (row.agreementRate ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementRate
+      && (row.agreementWilsonLowerBound ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
+      && /meets-confidence-standard/i.test(row.status ?? "")
+  );
+}
+
+function clinicalAgreementReportMeetsScaleSet(report, status, scaleKeys) {
+  return Boolean(
+    clinicalAgreementReportHasCommonEvidence(report, status)
+      && (!allPrimaryClinicalScalesEnabled(status) || /meets-clinical-scale-confidence-standard/i.test(report.status ?? ""))
+      && scaleKeys.every((scaleKey) => clinicalAgreementScaleMeetsMinimum(report, status, scaleKey))
+  );
+}
+
+function reviewerAgreementReportHasCommonEvidence(report, status) {
+  return (
+    report.requiredClinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
+    && (report.comparedAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.eligibleReviewerPairCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.excludedReviewerPairCount ?? 0) === 0
+    && (report.reviewerAEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.reviewerBEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+    && (report.reviewerAIneligibleAssessmentCount ?? 0) === 0
+    && (report.reviewerBIneligibleAssessmentCount ?? 0) === 0
+    && (report.reviewerAStaleOrMissingEstimateVersionCount ?? 0) === 0
+    && (report.reviewerBStaleOrMissingEstimateVersionCount ?? 0) === 0
+    && (report.reviewerAInsufficientEstimateEvidenceCount ?? 0) === 0
+    && (report.reviewerBInsufficientEstimateEvidenceCount ?? 0) === 0
+    && (report.estimateVersionMismatchCount ?? 0) === 0
+    && (report.estimateEvidenceMismatchCount ?? 0) === 0
+  );
+}
+
+function reviewerAgreementScaleMeetsMinimum(report, status, scaleKey) {
+  const reviewerKey = CLINICAL_SCALE_AVAILABILITY[scaleKey]?.reviewerKey;
+  const scale = reviewerKey ? report.byScale?.[reviewerKey] : null;
+  return Boolean(
+    scale
+      && (scale.pairedCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
+      && (scale.withinToleranceRate ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementRate
+      && (scale.withinToleranceConfidenceInterval?.lower ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
+      && scale.meetsMinimumStandard !== false
+  );
+}
+
+function reviewerAgreementBlockingReasonsAllowed(report, enabledScaleKeys) {
+  const enabledReviewerKeys = new Set(enabledScaleKeys.map((scaleKey) => CLINICAL_SCALE_AVAILABILITY[scaleKey]?.reviewerKey));
+  return (report.blockingReasons ?? []).every((reason) => {
+    const scaleKey = String(reason ?? "").split(":")[0]?.trim();
+    return PRIMARY_CLINICAL_REVIEW_SCALE_KEYS.includes(scaleKey) && !enabledReviewerKeys.has(scaleKey);
+  });
+}
+
+function reviewerAgreementReportMeetsScaleSet(report, status, scaleKeys) {
+  return Boolean(
+    reviewerAgreementReportHasCommonEvidence(report, status)
+      && reviewerAgreementBlockingReasonsAllowed(report, scaleKeys)
+      && scaleKeys.every((scaleKey) => reviewerAgreementScaleMeetsMinimum(report, status, scaleKey))
+  );
 }
 
 async function readArtifactText(path, options = {}) {
@@ -369,45 +497,19 @@ async function validateStatusArtifacts(status, options = {}) {
     thresholdCalibrationReports.push(validateThresholdCalibrationReportText(text, artifactPath));
   }
   if (status.clinicalScaleAgreementReports.length > 0) {
-    const reportMeetingMinimum = clinicalAgreementReports.find((report) => (
-      (report.reviewedClinicalScaleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && (report.eligibleBlindedIndependentLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && report.clinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
-      && (report.minimumUsableMovementCoverageRatio ?? 0) >= status.clinicalScaleMinimumStandard.minUsableMovementCoverageRatio
-      && (report.representedHouseBrackmannSeverityBandCount ?? 0) >= status.clinicalScaleMinimumStandard.minHouseBrackmannSeverityBands
-      && (report.minimumLabelsPerRepresentedSeverityBand ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
-      && (report.minimumHouseBrackmannSeverityBandLabelCount ?? 0) >= status.clinicalScaleMinimumStandard.minAssessmentsPerSeverityBand
-      && (report.minimumPrimaryScaleWilsonLowerBound ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
-      && (report.readyPrimaryScaleCount ?? 0) >= PRIMARY_CLINICAL_SCALE_COUNT
-    ));
+    const requiredScaleKeys = status.clinicalFacingScoresAllowed ? enabledClinicalScaleKeys(status) : CLINICAL_SCALE_AVAILABILITY_KEYS;
+    const reportMeetingMinimum = clinicalAgreementReports.find((report) => clinicalAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
       reportMeetingMinimum,
-      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, current estimator version, 80% estimate evidence coverage, 80% Wilson lower-bound agreement, House-Brackmann severity-band case mix, and 3/3 ready primary scales meeting the minimum standard",
+      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, current estimator version, 80% estimate evidence coverage, 80% observed agreement, 80% Wilson lower-bound agreement, House-Brackmann severity-band case mix, and every enabled primary scale meeting the minimum standard",
     );
   }
   if (status.clinicalScaleReviewerAgreementReports.length > 0) {
-    const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => (
-      report.requiredClinicalScaleEstimateVersion === status.clinicalScaleMinimumStandard.clinicalScaleEstimateVersion
-      && (report.comparedAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && (report.eligibleReviewerPairCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && (report.excludedReviewerPairCount ?? 0) === 0
-      && (report.reviewerAEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && (report.reviewerBEligibleAssessmentCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && (report.reviewerAIneligibleAssessmentCount ?? 0) === 0
-      && (report.reviewerBIneligibleAssessmentCount ?? 0) === 0
-      && (report.reviewerAStaleOrMissingEstimateVersionCount ?? 0) === 0
-      && (report.reviewerBStaleOrMissingEstimateVersionCount ?? 0) === 0
-      && (report.reviewerAInsufficientEstimateEvidenceCount ?? 0) === 0
-      && (report.reviewerBInsufficientEstimateEvidenceCount ?? 0) === 0
-      && (report.estimateVersionMismatchCount ?? 0) === 0
-      && (report.estimateEvidenceMismatchCount ?? 0) === 0
-      && (report.minimumPrimaryPairedCount ?? 0) >= status.clinicalScaleMinimumStandard.minReviewedAssessments
-      && (report.minimumPrimaryAgreementRate ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementRate
-      && (report.minimumPrimaryAgreementWilsonLowerBound ?? 0) >= status.clinicalScaleMinimumStandard.minAgreementWilsonLowerBound
-    ));
+    const requiredScaleKeys = status.clinicalFacingScoresAllowed ? enabledClinicalScaleKeys(status) : CLINICAL_SCALE_AVAILABILITY_KEYS;
+    const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => reviewerAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired primary labels, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no excluded reviewer-pair or metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, and no excluded reviewer-pair or metadata blockers",
     );
   }
   if (status.productionThresholdConstantsCalibrated) {

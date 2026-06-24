@@ -1090,9 +1090,12 @@ stale/missing estimator-version rows, estimate-evidence blockers, and
 disagreement rows. Agreement denominators include only eligible reviewer pairs
 that pass the blinding, independence, current-version, and estimate-evidence
 gates; excluded reviewer pairs are counted separately and cannot support release.
-Each primary scale must have at least 30 eligible paired labels, at least 80%
-observed reviewer agreement, and a Wilson lower confidence bound of at least 80%
-before the reviewer agreement artifact can support clinical-facing release. It
+Each scale enabled in `clinicalScaleAvailability` must have at least 30 eligible
+paired labels, at least 80% observed reviewer agreement, and a Wilson lower
+confidence bound of at least 80% before the reviewer agreement artifact can
+support clinical-facing release for that scale. Disabled primary scales may stay
+in estimate mode when their rows are not ready, but metadata, blinding,
+current-version, and estimate-evidence blockers still invalidate the artifact. It
 also rejects reviewer rows that are unblinded, non-independent, non-clinician,
 uncertain, copied, rehearsal, incomplete, out-of-range, or paired with an
 insufficient Mirror estimate. Missing, stale, or mismatched
@@ -1123,19 +1126,22 @@ clinical-facing status must name at least one enabled primary scale.
 
 `npm run validation:status` validates both the status JSON and any referenced
 report artifacts. Clinical agreement report paths must point to Markdown reports
-with the Mirror clinical-scale agreement heading, a passing confidence-standard
-status, primary House-Brackmann/Sunnybrook/eFACE rows, primary Wilson lower
-bounds meeting the configured standard, House-Brackmann case-mix coverage,
-current estimator-version evidence, the 80% usable-movement coverage floor,
-complete/minimum estimate evidence-tier controls, explicit reference-standard
-controls, and release-control text. Clinical reviewer-agreement report paths must point to JSON
+with the Mirror clinical-scale agreement heading, primary
+House-Brackmann/Sunnybrook/eFACE rows, enabled-scale rows with at least 80%
+observed agreement and an 80% Wilson lower bound, House-Brackmann case-mix
+coverage, current estimator-version evidence, the 80% usable-movement coverage
+floor, complete/minimum estimate evidence-tier controls, explicit
+reference-standard controls, and release-control text. When all three primary
+scales are enabled, the report status must also be the passing
+confidence-standard status. Clinical reviewer-agreement report paths must point
+to JSON
 `mirror-clinical-scale-reviewer-agreement-report` artifacts with current-version
 eligible reviewer sheets, complete/minimum estimate evidence and 80%
 usable-movement coverage provenance, no excluded reviewer-pair, metadata, or
-estimate-evidence blockers, at least 30 eligible paired labels on each primary
-scale, at least 80% observed reviewer agreement, and Wilson lower-bound reviewer
-agreement meeting the configured 80% standard before clinical-facing
-clinical-scale support can be enabled.
+estimate-evidence blockers, at least 30 eligible paired labels on every enabled
+primary scale, at least 80% observed reviewer agreement, and Wilson lower-bound
+reviewer agreement meeting the configured 80% standard before clinical-facing
+support can be enabled for that scale.
 Threshold calibration report paths must point to JSON
 `mirror-threshold-calibration-report` artifacts with ready-exercise coverage that
 matches the status claim.
