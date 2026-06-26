@@ -29,27 +29,27 @@ Mirror can derive optional House-Brackmann-inspired, Sunnybrook-style, and eFACE
 
 Scale-inspired estimates require:
 
-- At least 80% usable standard-assessment movement coverage.
+- At least 60% usable standard-assessment movement coverage.
 - Complete resting asymmetry metrics from neutral calibration: palpebral
   fissure, nasolabial/midface proxy, and oral commissure vertical position.
 - Usable or strong capture quality for scored movements when capture quality is present.
 
 If the evidence standard is not met, Mirror saves `clinicalScales.status = "insufficient-data"` and does not emit scale values.
-When the 80% floor is met, Mirror also records an evidence tier:
+When the 60% floor is met, Mirror also records an evidence tier:
 
 - `complete-standard-assessment` when all five standard movements and resting
   metrics are available.
-- `minimum-standard-assessment` when exactly the local 80% movement floor is met.
+- `minimum-standard-assessment` when exactly the local 60% movement floor is met.
 - `insufficient-standard-evidence` when estimates are blocked.
 
-The tier appears in assessment panels and printable reports so a 4/5 movement
+The tier appears in assessment panels and printable reports so a 3/5 movement
 estimate is not presented with the same evidence strength as a complete 5/5
 assessment.
 
 The current clinical-scale estimator is v5. v5 records evidence tiers, clamps
 eFACE-style proxy scores to the 0-100 range, excludes missing or weak-capture
 movements from the scale formulas, and fails closed unless all required
-resting/static metrics are present. Minimum-standard 4/5 estimates report omitted
+resting/static metrics are present. Minimum-standard partial estimates report omitted
 movement IDs in `evidence.omittedMovementExerciseIds`, normalize Sunnybrook
 voluntary/synkinesis totals from usable movements only, and preserve
 required/available/missing resting metric keys in the evidence record. v5 also
@@ -59,7 +59,7 @@ closure. Assessment panels and printable reports show a scale-specific
 unavailable note when this happens, while still showing any eligible Sunnybrook
 and eFACE-style estimates from the same minimum-standard assessment. Clinical
 release validation is stricter than display: Sunnybrook and eFACE primary-scale
-agreement rows require complete scale-specific movement input, so normalized 4/5
+agreement rows require complete scale-specific movement input, so normalized partial
 Sunnybrook/eFACE estimates are counted as missing estimates for those scale
 denominators instead of comparable agreement. Validation labels generated from
 older v1, v2, v3, or v4 estimates are
@@ -107,7 +107,7 @@ threshold calibration, clinical and reviewer agreement report paths, clinical
 evidence source-hash lists, threshold report paths with matching
 `thresholdCalibrationSourceDatasetSha256s`, and the documented minimum standard:
 30 reviewed assessments, 10 distinct validation cases, 80% observed agreement,
-an 80% Wilson lower bound, 80% usable movement coverage, Wilson 95% confidence
+an 80% Wilson lower bound, 60% usable movement coverage, Wilson 95% confidence
 intervals, the current clinical-scale estimator version, source-dataset SHA-256
 traceability, and House-Brackmann severity-band floors. The status file must
 record per-scale `clinicalScaleAvailability` evidence for House-Brackmann,
@@ -217,7 +217,7 @@ qualifying current-version evidence with the exact v5 estimator inputs.
 House-Brackmann agreement treats an estimate as missing unless these provenance
 fields or the overall used-movement provenance show that gentle eye closure was
 used. Sunnybrook and eFACE rows preserve their own used/omitted movement lists
-so a 4/5 normalized estimate is auditable without inferring scale inputs from
+so a normalized partial estimate is auditable without inferring scale inputs from
 unrelated columns. For release agreement, those incomplete Sunnybrook/eFACE
 primary estimates are still reported in the scale denominator, but as missing
 estimates rather than comparable agreement. Assessment panels and printable
@@ -256,7 +256,7 @@ default minimum standard is:
   because the reference-standard package cannot prove reviewer identity.
   The paired Mirror estimate must also have `status: estimated`, a v5
   `complete-standard-assessment` or `minimum-standard-assessment` evidence tier,
-  at least 80% usable movement coverage, used/omitted movement exercise IDs that
+  at least 60% usable movement coverage, used/omitted movement exercise IDs that
   match the coverage counts, and
   `estimateCalculationUsesOnlyUsableMovements: true`. It must also preserve
   Sunnybrook/eFACE input-completeness provenance and
@@ -264,7 +264,7 @@ default minimum standard is:
   metrics were available, with
   `estimateCalculationUsesCompleteRestingMetrics: true`. Sunnybrook and eFACE
   primary-scale comparisons require that provenance to show complete
-  scale-specific movement input; normalized 4/5 estimates remain displayable
+  scale-specific movement input; normalized partial estimates remain displayable
   Mirror estimates but count as missing estimates for those release denominators.
   Missing or invalid
   estimates are reported as missing estimates in that scale's denominator rather
@@ -309,7 +309,7 @@ samples that a release reviewer needs before any validation-status update. The
 release status artifact checker requires the Markdown or JSON report
 to document the eligible blinded independent label count, all three
 House-Brackmann severity bands, the primary-scale Wilson lower bounds, the
-current clinical-scale estimator version, the 80% usable-movement coverage
+current clinical-scale estimator version, the 60% usable-movement coverage
 floor, the complete/minimum estimate evidence-tier gate, complete resting-metric
 provenance, scale-specific label/estimate gap counters, and the
 `sourceLabelSheetMode`/`reviewBlinded`/estimator
@@ -321,7 +321,7 @@ Clinical-facing availability also requires a reviewer-agreement JSON artifact in
 `clinicalScaleReviewerAgreementReports` showing current-version, blinded,
 independent clinician sheets with qualifying complete/minimum estimate evidence,
 the same `sourceDatasetSha256` as the clinical agreement and passed review
-package verification reports, at least 80% usable movement coverage, paired
+package verification reports, at least 60% usable movement coverage, paired
 labels for every enabled primary scale meeting the same reviewed-assessment
 floor, at least 10 distinct pseudonymous validation cases, exactly one
 pseudonymous reviewer id in each raw reviewer sheet with no reviewer-id overlap

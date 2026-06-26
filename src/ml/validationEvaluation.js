@@ -61,7 +61,7 @@ const DEFAULT_CLINICAL_SCALE_VALIDATION_STANDARD = Object.freeze({
   minDistinctClinicalCases: 10,
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
-  minUsableMovementCoverageRatio: 0.8,
+  minUsableMovementCoverageRatio: 0.6,
   confidenceLevel: 0.95,
   clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
 });

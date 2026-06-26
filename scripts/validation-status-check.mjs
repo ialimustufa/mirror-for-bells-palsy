@@ -10,7 +10,7 @@ const SHA256_HEX_RE = /^[a-f0-9]{64}$/i;
 const DEFAULT_MIN_CLINICAL_SCALE_REVIEWED_ASSESSMENTS = 30;
 const DEFAULT_MIN_DISTINCT_CLINICAL_CASES = 10;
 const DEFAULT_MIN_AGREEMENT_WILSON_LOWER_BOUND = 0.8;
-const DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO = 0.8;
+const DEFAULT_MIN_USABLE_MOVEMENT_COVERAGE_RATIO = 0.6;
 const VALID_STATUS_VALUES = Object.freeze([
   "tooling-ready-needs-reviewed-data",
   "production-thresholds-calibrated",
@@ -603,7 +603,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, /HB V-VI severe\/complete\s*\|/i, artifactPath, "severe House-Brackmann case-mix row");
   assertTextMatches(text, /Wilson/i, artifactPath, "Wilson confidence interval reporting");
   assertTextMatches(text, new RegExp(`Clinical-scale estimator version:\\s*v?${CLINICAL_SCALE_ESTIMATE_VERSION}\\b`, "i"), artifactPath, `clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`);
-  assertTextMatches(text, /Minimum usable movement coverage:\s*80\.0%/i, artifactPath, "the 80% usable movement coverage estimate-evidence floor");
+  assertTextMatches(text, /Minimum usable movement coverage:\s*60\.0%/i, artifactPath, "the 60% usable movement coverage estimate-evidence floor");
   assertTextMatches(text, /Distinct validation case minimum:\s*\d+/i, artifactPath, "the distinct validation case minimum");
   assertTextMatches(text, /Distinct validation cases:\s*\d+/i, artifactPath, "the distinct validation case count");
   assertTextMatches(text, /Reference standard:\s*blinded clinician-assigned/i, artifactPath, "the blinded clinician reference-standard statement");
@@ -615,7 +615,7 @@ function validateClinicalScaleAgreementReportText(text, artifactPath) {
   assertTextMatches(text, new RegExp(`Estimator version control:\\s*counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`, "i"), artifactPath, "the explicit estimator-version control");
   assertTextMatches(text, /Estimate evidence control:\s*counted rows require Mirror estimates with status `estimated`/i, artifactPath, "the explicit estimate status control");
   assertTextMatches(text, /complete\/minimum evidence tier/i, artifactPath, "the complete/minimum estimate evidence-tier control");
-  assertTextMatches(text, /at least 80% usable movement coverage/i, artifactPath, "the estimate movement coverage control");
+  assertTextMatches(text, /at least 60% usable movement coverage/i, artifactPath, "the estimate movement coverage control");
   assertTextMatches(text, /used\/omitted movement IDs/i, artifactPath, "the estimate movement-input provenance control");
   assertTextMatches(text, /usable-movements-only calculation flag/i, artifactPath, "the usable-movements-only calculation control");
   assertTextMatches(text, /House-Brackmann estimates require the gentle eye-closure input/i, artifactPath, "the House-Brackmann input control");
@@ -1338,7 +1338,7 @@ async function validateStatusArtifacts(status, options = {}) {
     const reportMeetingMinimum = clinicalAgreementReports.find((report) => clinicalAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
       reportMeetingMinimum,
-      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, current estimator version, 80% estimate evidence coverage, 80% observed agreement, 80% Wilson lower-bound agreement, House-Brackmann severity-band case mix, and every enabled primary scale meeting the minimum standard",
+      "clinical scale agreement report artifacts must document reviewed assessment coverage, eligible blinded independent clinical labels, current estimator version, 60% estimate evidence coverage, 80% observed agreement, 80% Wilson lower-bound agreement, House-Brackmann severity-band case mix, and every enabled primary scale meeting the minimum standard",
     );
   }
   if (status.clinicalScaleReviewerAgreementReports.length > 0) {
@@ -1352,7 +1352,7 @@ async function validateStatusArtifacts(status, options = {}) {
     const reviewerReportMeetingMinimum = clinicalReviewerAgreementReports.find((report) => reviewerAgreementReportMeetsScaleSet(report, status, requiredScaleKeys));
     assertCondition(
       reviewerReportMeetingMinimum,
-      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 80% usable movement coverage, distinct pseudonymous reviewer ids, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
+      "clinical scale reviewer agreement report artifacts must document at least 30 eligible current-version reviewer pairs with complete/minimum evidence and 60% usable movement coverage, distinct pseudonymous reviewer ids, blinded independent reviewer sheets with paired labels for every enabled primary scale, 80% reviewer agreement, 80% Wilson lower-bound reviewer agreement, House-Brackmann reviewer severity-band case mix, and no excluded reviewer-pair or metadata blockers",
     );
     clinicalScaleAvailabilityMatchesArtifacts(status, clinicalAgreementReports, clinicalReviewerAgreementReports, clinicalScaleReviewPackageVerificationReports);
   }

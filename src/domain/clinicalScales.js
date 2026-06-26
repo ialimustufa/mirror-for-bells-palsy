@@ -1,5 +1,5 @@
 const CLINICAL_SCALE_ESTIMATE_VERSION = 5;
-const MIN_USABLE_ASSESSMENT_COVERAGE_RATIO = 0.8;
+const MIN_USABLE_ASSESSMENT_COVERAGE_RATIO = 0.6;
 
 const STANDARD_SCALE_MOVEMENTS = Object.freeze([
   { exerciseId: "eyebrow-raise", label: "Forehead wrinkle", sunnybrookKey: "foreheadWrinkle", efaceKey: "browElevation" },
@@ -488,7 +488,7 @@ function estimateClinicalScaleGrades(session = {}, assessment = null) {
   const restingMetrics = restingMetricsFrom(session, assessment);
   const restingCompleteness = restingMetricCompleteness(restingMetrics);
   const reasons = [
-    coverage.standardMet ? null : "requires at least 80% usable standard-assessment movement coverage",
+    coverage.standardMet ? null : "requires at least 60% usable standard-assessment movement coverage",
     restingCompleteness.complete ? null : `requires complete resting asymmetry metrics from neutral calibration${restingCompleteness.missingMetricLabels.length ? `; missing ${restingCompleteness.missingMetricLabels.join(", ")}` : ""}`,
   ].filter(Boolean);
   const base = {

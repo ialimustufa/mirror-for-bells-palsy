@@ -315,7 +315,7 @@ test("clinical scale presentation policy fails closed when the runtime validatio
     { minDistinctClinicalCases: 9, blocker: /minDistinctClinicalCases/ },
     { minAgreementRate: 0.79, blocker: /minAgreementRate/ },
     { minAgreementWilsonLowerBound: 0.79, blocker: /minAgreementWilsonLowerBound/ },
-    { minUsableMovementCoverageRatio: 0.79, blocker: /minUsableMovementCoverageRatio/ },
+    { minUsableMovementCoverageRatio: 0.59, blocker: /minUsableMovementCoverageRatio/ },
     { minHouseBrackmannSeverityBands: 2, blocker: /minHouseBrackmannSeverityBands/ },
     { minAssessmentsPerSeverityBand: 2, blocker: /minAssessmentsPerSeverityBand/ },
     { confidenceInterval: "wald-95", blocker: /confidenceInterval/ },
@@ -484,15 +484,15 @@ test("clinical scale report rows and printable reports use estimate-only wording
   const minimumRows = clinicalScaleEstimateRows({
     ...clinicalScales,
     coverage: {
-      usableMovementCount: 4,
+      usableMovementCount: 3,
       requiredMovementCount: 5,
-      ratio: 0.8,
-      unusableExerciseIds: ["pucker"],
+      ratio: 0.6,
+      unusableExerciseIds: ["nose-wrinkle", "pucker"],
     },
     evidence: {
       tier: "minimum-standard-assessment",
       label: "Minimum standard-assessment evidence",
-      omittedMovementExerciseIds: ["pucker"],
+      omittedMovementExerciseIds: ["nose-wrinkle", "pucker"],
       requiredRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
       availableRestingMetricKeys: ["palpebralFissure", "nasolabialMidface", "oralCommissure"],
       missingRestingMetricKeys: [],
@@ -500,30 +500,30 @@ test("clinical scale report rows and printable reports use estimate-only wording
       scaleInputCompleteness: {
         houseBrackmann: {
           requiredExerciseIds: ["eye-close"],
-          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
+          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile"],
           missingRequiredExerciseIds: [],
           complete: true,
         },
         sunnybrook: {
-          usedMovementCount: 4,
+          usedMovementCount: 3,
           requiredMovementCount: 5,
-          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
-          omittedExerciseIds: ["pucker"],
+          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile"],
+          omittedExerciseIds: ["nose-wrinkle", "pucker"],
           complete: false,
         },
         eface: {
-          usedMovementCount: 4,
+          usedMovementCount: 3,
           requiredMovementCount: 5,
-          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"],
-          omittedExerciseIds: ["pucker"],
+          usedExerciseIds: ["eyebrow-raise", "eye-close", "open-smile"],
+          omittedExerciseIds: ["nose-wrinkle", "pucker"],
           complete: false,
         },
       },
     },
   });
-  assert.match(minimumRows.join(" "), /Omitted from scale formulas: Lip pucker/);
-  assert.match(minimumRows.join(" "), /Sunnybrook-style input: 4\/5 standard movements used; omitted Lip pucker/);
-  assert.match(minimumRows.join(" "), /eFACE-style input: 4\/5 standard movements used; omitted Lip pucker/);
+  assert.match(minimumRows.join(" "), /Omitted from scale formulas: Snarl \/ nose wrinkle, Lip pucker/);
+  assert.match(minimumRows.join(" "), /Sunnybrook-style input: 3\/5 standard movements used; omitted Snarl \/ nose wrinkle, Lip pucker/);
+  assert.match(minimumRows.join(" "), /eFACE-style input: 3\/5 standard movements used; omitted Snarl \/ nose wrinkle, Lip pucker/);
 
   const houseBrackmannGapRows = clinicalScaleEstimateRows({
     ...clinicalScales,

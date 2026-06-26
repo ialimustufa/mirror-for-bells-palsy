@@ -180,7 +180,7 @@ test("clinical-scale reviewer agreement reports per-scale agreement and adjudica
   assert.equal(report.standard.minAgreementRate, 0.8);
   assert.equal(report.standard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.standard.minDistinctClinicalCases, 10);
-  assert.equal(report.standard.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.standard.minUsableMovementCoverageRatio, 0.6);
   assert.equal(report.standard.requiresV3MovementProvenance, true);
   assert.equal(report.standard.requiresV4RestingMetricProvenance, true);
   assert.equal(report.standard.requiresHouseBrackmannRequiredInput, true);
@@ -512,7 +512,7 @@ test("clinical-scale reviewer agreement blocks insufficient estimate evidence pr
     {
       assessmentId: "assessment-1:clinical-scale",
       estimateEvidenceTier: "insufficient-standard-evidence",
-      estimateUsableMovementCoverageRatio: 0.6,
+      estimateUsableMovementCoverageRatio: 0.5,
       estimateUsableMovementCount: 3,
       houseBrackmannGrade: "III",
       sunnybrookComposite: 76,

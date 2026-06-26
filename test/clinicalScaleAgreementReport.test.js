@@ -54,7 +54,7 @@ function validationReport(overrides = {}) {
       minAgreementWilsonLowerBound: 0.8,
       minReviewedAssessments: 30,
       minDistinctClinicalCases: 10,
-      minUsableMovementCoverageRatio: 0.8,
+      minUsableMovementCoverageRatio: 0.6,
       sunnybrookTolerance: 10,
       efaceTolerance: 10,
       confidenceInterval: {
@@ -118,7 +118,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, /Distinct validation case minimum: 10/);
   assert.match(markdown, new RegExp(`Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, new RegExp(`Source dataset SHA-256: ${SOURCE_DATASET_SHA256}`));
-  assert.match(markdown, /Minimum usable movement coverage: 80\.0%/);
+  assert.match(markdown, /Minimum usable movement coverage: 60\.0%/);
   assert.match(markdown, /Estimator input provenance: counted current-version rows preserve used\/omitted movement IDs/);
   assert.match(markdown, /Sunnybrook\/eFACE input-completeness provenance/);
   assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates[\s\S]*Sunnybrook\/eFACE input-completeness provenance/);
@@ -158,7 +158,7 @@ test("clinical scale agreement markdown summarizes primary scale readiness", () 
   assert.match(markdown, new RegExp(`Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}`));
   assert.match(markdown, /Estimate evidence control: counted rows require Mirror estimates with status `estimated`/);
   assert.match(markdown, /complete\/minimum evidence tier/);
-  assert.match(markdown, /at least 80% usable movement coverage/);
+  assert.match(markdown, /at least 60% usable movement coverage/);
   assert.match(markdown, /used\/omitted movement IDs/);
   assert.match(markdown, /usable-movements-only calculation flag/);
   assert.match(markdown, /House-Brackmann estimates require the gentle eye-closure input/);
@@ -189,7 +189,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.evidenceStandard.minAgreementWilsonLowerBound, 0.8);
   assert.equal(report.evidenceStandard.minReviewedAssessments, 30);
   assert.equal(report.evidenceStandard.minDistinctClinicalCases, 10);
-  assert.equal(report.evidenceStandard.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.evidenceStandard.minUsableMovementCoverageRatio, 0.6);
   assert.equal(report.evidenceStandard.clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
   assert.equal(report.evidenceStandard.requiresExplicitClinicalConfidence, true);
   assert.equal(report.evidenceStandard.requiresIsoReviewTimestamp, true);
@@ -210,7 +210,7 @@ test("clinical scale agreement JSON packages machine-readable release evidence",
   assert.equal(report.referenceStandardControls.isoReviewTimestamp, true);
   assert.equal(report.referenceStandardControls.sourceDatasetHashTraceability, true);
   assert.equal(report.referenceStandardControls.houseBrackmannRequiredInput, true);
-  assert.equal(report.referenceStandardControls.minUsableMovementCoverageRatio, 0.8);
+  assert.equal(report.referenceStandardControls.minUsableMovementCoverageRatio, 0.6);
   assert.equal(report.clinicalScaleAvailabilityRecommendation.houseBrackmann.evidenceMeetsMinimum, true);
   assert.match(report.note, /does not convert estimates into clinician-assigned grades/);
 });
@@ -228,7 +228,7 @@ test("clinical scale agreement report accepts only schema-v1 readiness artifacts
       minDistinctClinicalCases: 10,
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
-      minUsableMovementCoverageRatio: 0.8,
+      minUsableMovementCoverageRatio: 0.6,
       clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       confidenceInterval: { method: "wilson-score", confidenceLevel: 0.95 },
     },

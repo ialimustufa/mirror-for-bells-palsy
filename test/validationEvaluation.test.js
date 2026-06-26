@@ -550,7 +550,7 @@ test("clinical scale evaluation excludes labels paired with insufficient estimat
       sunnybrook: 72,
       eface: 70,
       evidenceTier: "insufficient-standard-evidence",
-      usableMovementCoverageRatio: 0.6,
+      usableMovementCoverageRatio: 0.5,
     }, validLabel),
     clinicalRecord("assessment-out-of-range-estimate:clinical-scale", {
       hb: 3,

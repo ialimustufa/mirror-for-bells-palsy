@@ -74,7 +74,7 @@ checks for:
   agreement evidence summaries for any future reviewed House-Brackmann,
   Sunnybrook, or eFACE scale entry, or
   if the status file weakens the documented 30-assessment, 10-case, 80%
-  observed-agreement, 80% Wilson lower-bound, 80% usable-movement-coverage,
+  observed-agreement, 80% Wilson lower-bound, 60% usable-movement-coverage,
   Wilson-confidence-interval, current-estimator-version, review-protocol,
   explicit clinical-confidence, UTC ISO review-timestamp, source-dataset
   SHA-256 traceability, or House-Brackmann case-mix floors.
@@ -90,7 +90,7 @@ checks for:
   no-valid-primary-target rows are excluded and reported separately.
 - Referenced clinical-scale agreement reports must include a reference-standard
   controls section, current estimator-version evidence, complete/minimum
-  estimate evidence-tier controls, the 80% usable-movement coverage floor, and
+  estimate evidence-tier controls, the 60% usable-movement coverage floor, and
   used/omitted movement input provenance, House-Brackmann required-input
   provenance, Sunnybrook/eFACE input-completeness provenance with complete
   scale-specific movement input for counted Sunnybrook/eFACE primary

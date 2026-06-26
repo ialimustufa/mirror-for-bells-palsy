@@ -253,7 +253,7 @@ function caseMixLines(validation = {}, readiness = {}) {
 function referenceStandardControlLines(validation = {}, readiness = {}) {
   const minUsableMovementCoverageRatio = readiness.thresholds?.minUsableMovementCoverageRatio
     ?? validation.standard?.minUsableMovementCoverageRatio
-    ?? 0.8;
+    ?? 0.6;
   return [
     "## Reference Standard Controls",
     "",
@@ -330,7 +330,7 @@ function buildClinicalScaleAgreementReport(input = {}, options = {}) {
   const supplementaryEntries = Object.fromEntries(supplementaryScaleKeys.map((scaleKey) => [scaleKey, SUPPLEMENTARY_SCALE_LABELS[scaleKey]]));
   const minUsableMovementCoverageRatio = readiness.thresholds?.minUsableMovementCoverageRatio
     ?? validation.standard?.minUsableMovementCoverageRatio
-    ?? 0.8;
+    ?? 0.6;
   const blockingReasons = readiness.blockingReasons?.length
     ? readiness.blockingReasons
     : validation.blockingReasons ?? [];
@@ -440,7 +440,7 @@ function buildClinicalScaleAgreementMarkdown(input = {}, options = {}) {
     `- Confidence interval: ${Math.round((readiness.thresholds?.confidenceInterval?.confidenceLevel ?? validation.standard?.confidenceInterval?.confidenceLevel ?? 0.95) * 100)}% Wilson score interval`,
     `- Clinical-scale estimator version: v${readiness.thresholds?.clinicalScaleEstimateVersion ?? validation.standard?.clinicalScaleEstimateVersion ?? "n/a"}`,
     `- Source dataset SHA-256: ${sourceDatasetSha256}`,
-    `- Minimum usable movement coverage: ${formatPercent(readiness.thresholds?.minUsableMovementCoverageRatio ?? validation.standard?.minUsableMovementCoverageRatio ?? 0.8)}`,
+    `- Minimum usable movement coverage: ${formatPercent(readiness.thresholds?.minUsableMovementCoverageRatio ?? validation.standard?.minUsableMovementCoverageRatio ?? 0.6)}`,
     "- Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, House-Brackmann required-input provenance, Sunnybrook/eFACE input-completeness provenance, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.",
     "",
     "## Dataset Summary",

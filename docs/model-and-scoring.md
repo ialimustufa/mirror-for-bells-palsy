@@ -869,11 +869,11 @@ Scale-inspired estimates are stored with explicit status and caveats:
 - `version: 5` for the current estimator. Reviewed v1/v2/v3/v4 clinical-scale
   labels are stale after the v5 House-Brackmann eye-closure input guard
   and cannot support the clinical-facing release gate.
-- `status: "estimated"` only when the 80% evidence standard is met.
+- `status: "estimated"` only when the 60% evidence standard is met.
 - `status: "insufficient-data"` when movement coverage or complete resting
   metrics are missing.
 - `evidence.tier: "complete-standard-assessment"` when all five standard
-  movements are usable, `"minimum-standard-assessment"` when the local 4/5
+  movements are usable, `"minimum-standard-assessment"` when the local 3/5
   movement floor is met, or `"insufficient-standard-evidence"` when estimates
   are blocked.
 - Scale formulas use only movements that meet the usable movement/capture-quality
@@ -884,12 +884,12 @@ Scale-inspired estimates are stored with explicit status and caveats:
 - eFACE is represented as an eFACE-style domain estimate from available static,
   dynamic, and synkinesis proxies, with proxy scores clamped to 0-100; it is not
   a clinician-entered eFACE form.
-- Minimum-standard 4/5 estimates report the omitted movement IDs and normalize
+- Minimum-standard partial estimates report the omitted movement IDs and normalize
   Sunnybrook voluntary/synkinesis totals from usable movements only. They do not
   treat missing or weak-capture movement rows as zero movement.
 - Clinical-release validation is stricter than estimate display for
   Sunnybrook/eFACE: primary-scale agreement comparisons require complete
-  scale-specific movement input, so normalized 4/5 Sunnybrook/eFACE estimates
+  scale-specific movement input, so normalized partial Sunnybrook/eFACE estimates
   count as missing estimates in those release denominators.
 - App panels and printable reports also surface scale-specific input gaps, such
   as `House-Brackmann-inspired estimate unavailable: requires Gentle eye closure`, so a
@@ -929,7 +929,7 @@ The report includes:
 - Average session symmetry.
 - Standard assessment sections for rest, voluntary movement, and coactivation when the report is an assessment.
 - Resting asymmetry metrics for assessment reports when neutral calibration was available.
-- Scale-inspired estimate rows on the assessment completion summary and assessment reports when the 80% evidence standard is met, including the complete/minimum evidence tier, or an insufficient-data reason when it is not.
+- Scale-inspired estimate rows on the assessment completion summary and assessment reports when the 60% evidence standard is met, including the complete/minimum evidence tier, or an insufficient-data reason when it is not.
 - Affected-side movement from the user's first saved baseline, when available.
 - Affected-side movement relative to the proper side today versus at baseline, when available.
 - Per-exercise average symmetry.
@@ -1082,7 +1082,7 @@ estimator-version, blank-confidence, low-confidence, or uncertain-confidence
 rows, plus rows without a UTC ISO `reviewedAt` timestamp, are excluded and
 reported. This
 same counted-row gate requires the paired Mirror estimate to be `status:
-"estimated"` with a complete/minimum v5 evidence tier and at least 80% usable
+"estimated"` with a complete/minimum v5 evidence tier and at least 60% usable
 movement coverage. For v5, counted rows must also preserve used/omitted movement
 exercise IDs, `estimateCalculationUsesOnlyUsableMovements: true`,
 Sunnybrook/eFACE input-completeness provenance, required, available, and missing
@@ -1097,7 +1097,7 @@ reference-standard package cannot prove reviewer identity. House-Brackmann
 agreement treats the paired estimate
 as missing unless the estimate provenance shows the required gentle eye-closure
 input was used. Sunnybrook and eFACE primary agreement comparisons require
-complete scale-specific movement input; normalized 4/5 Sunnybrook/eFACE
+complete scale-specific movement input; normalized partial Sunnybrook/eFACE
 estimates stay auditable but count as missing estimates for those release
 denominators. Valid primary targets
 count scale by scale; a missing or invalid estimate is reported as a missing
@@ -1193,7 +1193,7 @@ also rejects reviewer rows that are unblinded, non-independent, non-clinician,
 uncertain, copied, rehearsal, incomplete, out-of-range, or paired with an
 insufficient Mirror estimate. Missing, stale, or mismatched
 clinical-scale estimator versions, estimate status, complete/minimum evidence
-tier, or 80% usable-movement coverage are blocking report findings because
+tier, or 60% usable-movement coverage are blocking report findings because
 adjudicated labels must remain tied to the qualifying estimate evidence that
 generated the blinded review package. When an adjudication output path is
 provided, it writes a CSV with raw reviewer values, raw estimator versions, and
@@ -1234,7 +1234,7 @@ reviewer, and package-verification report path arrays and their matching
 source-hash arrays. The release decision remains a future human-reviewed status
 file update. It also audits the machine-readable minimum standard for future
 validation review: the 30-assessment floor, 10 distinct validation cases, 80%
-observed agreement, 80% Wilson lower bound, 80% usable movement coverage, Wilson
+observed agreement, 80% Wilson lower bound, 60% usable movement coverage, Wilson
 95% confidence interval, current clinical-scale estimator version, review
 protocol, and House-Brackmann severity-band floors must remain at or above the
 documented release standard. The status file must also include
@@ -1271,7 +1271,7 @@ Clinical reviewer-agreement report paths must point to JSON
 current-version eligible reviewer sheets, `sourceDatasetSha256` matching the
 clinical agreement report and listed passed review package verification report,
 within-tolerance rates that match the reported paired-label counts and Wilson
-score intervals, complete/minimum estimate evidence and 80% usable-movement
+score intervals, complete/minimum estimate evidence and 60% usable-movement
 coverage provenance, scale-specific input provenance, complete resting-metric
 provenance, no excluded reviewer-pair, metadata, or estimate-evidence blockers,
 zero incomplete scale-specific estimate-input skips for every enabled primary

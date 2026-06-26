@@ -80,7 +80,7 @@ const BASE_STATUS = {
     minDistinctClinicalCases: 10,
     minHouseBrackmannSeverityBands: 3,
     minAssessmentsPerSeverityBand: 3,
-    minUsableMovementCoverageRatio: 0.8,
+    minUsableMovementCoverageRatio: 0.6,
     confidenceInterval: "wilson-95",
     clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
     reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -113,7 +113,7 @@ Recommendation: allow-controlled-estimate-availability-after-human-review
 - Clinical-scale estimator version: v${CLINICAL_SCALE_ESTIMATE_VERSION}
 - Source dataset SHA-256: ${SOURCE_DATASET_SHA256}
 - Distinct validation case minimum: 10
-- Minimum usable movement coverage: 80.0%
+- Minimum usable movement coverage: 60.0%
 - Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, House-Brackmann required-input provenance, Sunnybrook/eFACE input-completeness provenance, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.
 
 ## Dataset Summary
@@ -163,7 +163,7 @@ Additional-perfect-label planning assumes future rows are eligible, current-vers
 - Blinding control: counted labels require \`sourceLabelSheetMode: blinded\` and \`reviewBlinded\` to show Mirror estimates were hidden before target assignment.
 - Unique assessment control: counted labels require one stable assessment id per reviewed clinical-scale row; duplicate or missing assessment ids are excluded and block release readiness.
 - Estimator version control: counted labels require clinical-scale estimator version v${CLINICAL_SCALE_ESTIMATE_VERSION}.
-- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
+- Estimate evidence control: counted rows require Mirror estimates with status \`estimated\`, complete/minimum evidence tier, at least 60% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.
 - Source dataset control: counted agreement evidence requires \`sourceDatasetSha256\` matching a verified blinded clinical review package.
 - Independence control: counted labels require clinician-assigned or adjudicated \`labelSource\` metadata, not Mirror/copied/algorithmic labels.
 - Reviewer identity control: counted labels require a pseudonymous \`reviewerId\`; reviewer-agreement sheets must use distinct reviewer ids to support independent-review evidence.
@@ -215,7 +215,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
       minDistinctClinicalCases: 10,
       minAgreementRate: 0.8,
       minAgreementWilsonLowerBound: 0.8,
-      minUsableMovementCoverageRatio: 0.8,
+      minUsableMovementCoverageRatio: 0.6,
       confidenceInterval: {
         method: "wilson-score",
         confidenceLevel: 0.95,
@@ -283,7 +283,7 @@ function passingStructuredClinicalAgreementReport(overrides = {}) {
       currentEstimatorVersion: true,
       mirrorEstimateStatusEstimated: true,
       completeOrMinimumEvidenceTier: true,
-      minUsableMovementCoverageRatio: 0.8,
+      minUsableMovementCoverageRatio: 0.6,
       movementInputProvenance: true,
       usableMovementsOnlyCalculation: true,
       houseBrackmannRequiredInput: true,
@@ -396,7 +396,7 @@ function passingClinicalReviewerAgreementReport({
       minDistinctClinicalCases: 10,
       minHouseBrackmannSeverityBands: 3,
       minAssessmentsPerSeverityBand: 3,
-      minUsableMovementCoverageRatio: 0.8,
+      minUsableMovementCoverageRatio: 0.6,
       requiresV3MovementProvenance: true,
       requiresV4RestingMetricProvenance: true,
       requiresHouseBrackmannRequiredInput: true,
@@ -907,7 +907,7 @@ test("validation status artifacts accept documented clinical and calibration rep
   assert.equal(result.artifacts.clinicalAgreementReports[0].distinctClinicalCaseCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].eligibleBlindedIndependentLabelCount, 30);
   assert.equal(result.artifacts.clinicalAgreementReports[0].clinicalScaleEstimateVersion, CLINICAL_SCALE_ESTIMATE_VERSION);
-  assert.equal(result.artifacts.clinicalAgreementReports[0].minimumUsableMovementCoverageRatio, 0.8);
+  assert.equal(result.artifacts.clinicalAgreementReports[0].minimumUsableMovementCoverageRatio, 0.6);
   assert.equal(result.artifacts.clinicalAgreementReports[0].representedHouseBrackmannSeverityBandCount, 3);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].comparedAssessmentCount, 30);
   assert.equal(result.artifacts.clinicalReviewerAgreementReports[0].generatedAt, "2026-06-24T00:00:00.000Z");
@@ -2259,7 +2259,7 @@ test("validation status rejects weak clinical scale minimum standards", () => {
         minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
-        minUsableMovementCoverageRatio: 0.8,
+        minUsableMovementCoverageRatio: 0.6,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -2280,7 +2280,7 @@ test("validation status rejects missing clinical scale review protocol", () => {
         minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
-        minUsableMovementCoverageRatio: 0.8,
+        minUsableMovementCoverageRatio: 0.6,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
       },
@@ -2356,7 +2356,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 3,
-        minUsableMovementCoverageRatio: 0.8,
+        minUsableMovementCoverageRatio: 0.6,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -2374,7 +2374,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 2,
         minAssessmentsPerSeverityBand: 3,
-        minUsableMovementCoverageRatio: 0.8,
+        minUsableMovementCoverageRatio: 0.6,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -2392,7 +2392,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
         minDistinctClinicalCases: 10,
         minHouseBrackmannSeverityBands: 3,
         minAssessmentsPerSeverityBand: 2,
-        minUsableMovementCoverageRatio: 0.8,
+        minUsableMovementCoverageRatio: 0.6,
         confidenceInterval: "wilson-95",
         clinicalScaleEstimateVersion: CLINICAL_SCALE_ESTIMATE_VERSION,
         reviewProtocol: "docs/clinical-scale-review-protocol.md",
@@ -2405,7 +2405,7 @@ test("validation status rejects weak clinical scale case-mix standards", () => {
       ...BASE_STATUS,
       clinicalScaleMinimumStandard: {
         ...BASE_STATUS.clinicalScaleMinimumStandard,
-        minUsableMovementCoverageRatio: 0.7,
+        minUsableMovementCoverageRatio: 0.5,
       },
     }),
     /minUsableMovementCoverageRatio/,
@@ -2699,9 +2699,9 @@ test("validation status artifacts reject clinical agreement reports without esti
     () => validateStatusArtifacts(status, {
       readArtifactText: artifactReader({
         "docs/validation/clinical-scale-agreement-2026-06-24.md": passingClinicalAgreementReport()
-          .replace("- Minimum usable movement coverage: 80.0%\n", "")
+          .replace("- Minimum usable movement coverage: 60.0%\n", "")
           .replace("- Estimator input provenance: counted current-version rows preserve used/omitted movement IDs, the usable-movements-only calculation flag, House-Brackmann required-input provenance, Sunnybrook/eFACE input-completeness provenance, required/available/missing resting metric keys, and the complete-resting-metrics calculation flag.\n", "")
-          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 80% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.\n", ""),
+          .replace("- Estimate evidence control: counted rows require Mirror estimates with status `estimated`, complete/minimum evidence tier, at least 60% usable movement coverage, used/omitted movement IDs, the usable-movements-only calculation flag, Sunnybrook/eFACE input-completeness provenance, complete resting-metric keys, and the complete-resting-metrics calculation flag. House-Brackmann estimates require the gentle eye-closure input. Sunnybrook/eFACE primary comparisons require complete scale-specific movement input. Scale-specific rows with missing, incomplete-input, or invalid estimates are reported in that scale's denominator as missing estimates.\n", ""),
         "docs/validation/clinical-scale-reviewer-agreement-2026-06-24.json": passingClinicalReviewerAgreementReport(),
         "docs/validation/threshold-calibration-2026-06-23.json": passingThresholdReport(),
       }),

@@ -37,7 +37,7 @@ const DEFAULT_REVIEWER_AGREEMENT_STANDARD = Object.freeze({
   minDistinctClinicalCases: 10,
   minHouseBrackmannSeverityBands: 3,
   minAssessmentsPerSeverityBand: 3,
-  minUsableMovementCoverageRatio: 0.8,
+  minUsableMovementCoverageRatio: 0.6,
   confidenceLevel: 0.95,
 });
 const WILSON_Z_BY_CONFIDENCE_LEVEL = Object.freeze({

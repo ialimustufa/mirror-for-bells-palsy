@@ -209,13 +209,13 @@ Clinical-scale readiness uses the machine-readable standard in
   clinical-scale estimator version count toward the reviewed-assessment floor. A
   valid primary target then counts only for that scale's agreement denominator.
 - The paired Mirror estimate must also be a current-version `status: estimated`
-  row with a complete or minimum evidence tier, at least 80% usable movement
+  row with a complete or minimum evidence tier, at least 60% usable movement
   coverage, used/omitted movement exercise IDs, and the usable-movements-only
   calculation flag. Sunnybrook and eFACE estimates must preserve scale-specific
   input-completeness provenance, and House-Brackmann estimates must preserve
   provenance showing that the required gentle eye-closure input was used.
   Sunnybrook and eFACE primary-scale comparisons require that provenance to show
-  complete scale-specific movement input; normalized 4/5 estimates remain
+  complete scale-specific movement input; normalized partial estimates remain
   auditable Mirror estimates but count as missing estimates for those release
   denominators. A missing, incomplete-input, or invalid estimate is reported in
   that scale's denominator as a missing estimate rather than excluding other
@@ -251,13 +251,13 @@ If multiple reviewers label the same assessment:
 - Do not mix raw reviewer rows and adjudicated rows for the same assessment in a
   single readiness dataset.
 - Treat missing, stale, or mismatched `clinicalScaleEstimateVersion` values,
-  estimate status, complete/minimum evidence tier, or 80% usable-movement
+  estimate status, complete/minimum evidence tier, or 60% usable-movement
   coverage as adjudication blockers. Used and omitted movement exercise IDs must
-  also be present and match between reviewer sheets, because a 4/5 estimate with
+  also be present and match between reviewer sheets, because a partial estimate with
   a different omitted movement is a different estimator input. House-Brackmann
   input-completeness fields must show the required gentle eye-closure input was
   used before a House-Brackmann estimate can count. Current blinded sheets also
-  preserve Sunnybrook and eFACE input-completeness fields so each normalized 4/5
+  preserve Sunnybrook and eFACE input-completeness fields so each normalized partial
   estimate can be audited by scale, but those incomplete Sunnybrook/eFACE
   primary estimates do not count as comparable release evidence. Required,
   available, and missing resting
@@ -389,7 +389,7 @@ enabled-scale rows with Wilson lower-bound agreement meeting the minimum,
 explicit reference-standard controls, an eligible blinded independent label count
 meeting the minimum reviewed-assessment floor, a distinct validation-case count
 meeting the `validationCaseId` floor, a House-Brackmann case-mix section meeting
-the severity-band minimum, current estimator-version evidence, the 80% usable
+the severity-band minimum, current estimator-version evidence, the 60% usable
 movement coverage floor, complete/minimum estimate evidence-tier controls,
 scale-specific input provenance, a reviewer-agreement artifact meeting the
 paired-label and distinct validation-case floors, distinct pseudonymous reviewer

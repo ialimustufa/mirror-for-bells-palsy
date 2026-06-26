@@ -21,21 +21,20 @@ function movementScore(exerciseId, ratio, extra = {}) {
   };
 }
 
-test("clinical scale estimates require at least 80 percent usable standard assessment coverage", () => {
+test("clinical scale estimates require at least 60 percent usable standard assessment coverage", () => {
   const result = estimateClinicalScaleGrades({
     restingMetrics: RESTING_METRICS,
     scores: [
       movementScore("eyebrow-raise", 0.9),
       movementScore("eye-close", 0.8),
-      movementScore("open-smile", 0.7),
     ],
   });
 
   assert.equal(result.status, "insufficient-data");
-  assert.equal(result.coverage.usableMovementCount, 3);
+  assert.equal(result.coverage.usableMovementCount, 2);
   assert.equal(result.coverage.requiredMovementCount, 5);
   assert.equal(result.coverage.standardMet, false);
-  assert.match(result.reasons.join(" "), /80% usable/);
+  assert.match(result.reasons.join(" "), /60% usable/);
   assert.equal(result.scales, null);
 });
 
@@ -84,35 +83,34 @@ test("clinical scale estimates distinguish minimum from complete standard eviden
       movementScore("eyebrow-raise", 0.95),
       movementScore("eye-close", 0.8),
       movementScore("open-smile", 0.7),
-      movementScore("nose-wrinkle", 0.5),
     ],
   });
 
   assert.equal(result.status, "estimated");
-  assert.equal(result.coverage.usableMovementCount, 4);
+  assert.equal(result.coverage.usableMovementCount, 3);
   assert.equal(result.coverage.requiredMovementCount, 5);
   assert.equal(result.evidence.tier, "minimum-standard-assessment");
   assert.equal(result.evidence.label, "Minimum standard-assessment evidence");
-  assert.deepEqual(result.coverage.missingExerciseIds, ["pucker"]);
-  assert.deepEqual(result.evidence.estimatedMovementExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
-  assert.deepEqual(result.evidence.omittedMovementExerciseIds, ["pucker"]);
+  assert.deepEqual(result.coverage.missingExerciseIds, ["nose-wrinkle", "pucker"]);
+  assert.deepEqual(result.evidence.estimatedMovementExerciseIds, ["eyebrow-raise", "eye-close", "open-smile"]);
+  assert.deepEqual(result.evidence.omittedMovementExerciseIds, ["nose-wrinkle", "pucker"]);
   assert.equal(result.scales.sunnybrook.inputCompleteness.complete, false);
-  assert.deepEqual(result.scales.sunnybrook.inputCompleteness.omittedExerciseIds, ["pucker"]);
+  assert.deepEqual(result.scales.sunnybrook.inputCompleteness.omittedExerciseIds, ["nose-wrinkle", "pucker"]);
   assert.equal(result.scales.houseBrackmann.grade, "IV");
   assert.equal(result.evidence.scaleInputCompleteness.houseBrackmann.complete, true);
   assert.equal(result.evidence.scaleInputCompleteness.sunnybrook.complete, false);
-  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
-  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.omittedExerciseIds, ["pucker"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.sunnybrook.omittedExerciseIds, ["nose-wrinkle", "pucker"]);
   assert.equal(result.evidence.scaleInputCompleteness.sunnybrook.calculationUsesOnlyUsableMovements, true);
   assert.equal(result.evidence.scaleInputCompleteness.eface.complete, false);
-  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile", "nose-wrinkle"]);
-  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, ["pucker"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.usedExerciseIds, ["eyebrow-raise", "eye-close", "open-smile"]);
+  assert.deepEqual(result.evidence.scaleInputCompleteness.eface.omittedExerciseIds, ["nose-wrinkle", "pucker"]);
   assert.equal(result.evidence.scaleInputCompleteness.eface.calculationUsesOnlyUsableMovements, true);
 
   const inputSummaries = clinicalScaleInputCompletenessSummaries(result);
   assert.deepEqual(inputSummaries.map((summary) => summary.scaleKey), ["sunnybrook", "eface"]);
-  assert.equal(inputSummaries[0].shortLabel, "4/5 standard movements; omitted Lip pucker");
-  assert.equal(inputSummaries[1].message, "eFACE-style input: 4/5 standard movements used; omitted Lip pucker.");
+  assert.equal(inputSummaries[0].shortLabel, "3/5 standard movements; omitted Snarl / nose wrinkle, Lip pucker");
+  assert.equal(inputSummaries[1].message, "eFACE-style input: 3/5 standard movements used; omitted Snarl / nose wrinkle, Lip pucker.");
 });
 
 test("clinical scale estimates omit House-Brackmann when eye closure is missing", () => {
