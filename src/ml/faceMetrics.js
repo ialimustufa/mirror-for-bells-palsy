@@ -1294,9 +1294,14 @@ const NOSE_PROFILE_THRESHOLD_MAX = 0.0014;
 const SUBTLE_PROFILE_THRESHOLD_MAX_BY_KEY = {
   eyeClosure: 0.012,        // captured: working ~0.0103, achievable peaks 0.01-0.05
   smilePull: 0.45,          // captured (open-smile): working ~0.39, peaks 0.20-0.86
-  puckerInward: 0.45,       // captured (pucker): working ~0.43, peaks 0.22-0.64
-  cheekSuckInward: 0.18,    // provisional (no capture)
-  cheekPuffOutward: 0.18,   // provisional (no capture)
+  // pucker: the earlier 0.45 was set to the INFLATED baseline value (~0.43) and dropped 23%
+  // of genuine reps. Captured pucker peaks are p10/p50/p90 = 0.27/0.52/0.70 with ~zero noise,
+  // so minimumVisible should be ~20% of the median peak (~0.10). Cap at 0.12 — a non-inflated
+  // baseline derives ~0.10 (unclamped); only an inflated baseline is clamped. Lifts activation
+  // 78% -> 97% on the captured data.
+  puckerInward: 0.12,       // captured (pucker): peaks 0.27-0.70, ~zero noise floor
+  cheekSuckInward: 0.18,    // validated: captured peaks 0.38-1.19, threshold ~0.17, 100% activation
+  cheekPuffOutward: 0.18,   // provisional (no capture; same signal scale as cheek-suck)
 };
 const SUBTLE_PROFILE_THRESHOLD_MAX_BY_EXERCISE = {
   "lip-press": 0.1,         // provisional (pairwise-scored, no capture)
