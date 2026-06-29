@@ -1230,6 +1230,33 @@ const NOSE_SCRUNCH_EXERCISES = new Set(["emoji-nose-scrunch"]);
 const NOSE_EXERCISES = new Set([...NOSTRIL_FLARE_EXERCISES, ...NOSE_SCRUNCH_EXERCISES]);
 const NOSE_PROFILE_THRESHOLD_FLOOR = 0.0008;
 const NOSE_PROFILE_THRESHOLD_MAX = 0.0014;
+// Subtle exercises occasionally capture a transient spike during calibration (e.g. a blink
+// while calibrating eye closure), inflating the baseline peak so the activation threshold
+// (peak*0.35) becomes unreachable and every rep is force-skipped. Cap each family's threshold
+// the same way the nose family is capped, so a mis-scaled baseline can never push the gate
+// above what the scorer actually produces. Caps are set just above the achievable threshold
+// observed in real captures, so good calibrations are untouched and only gross inflation is
+// clamped. eyeClosure/smilePull/puckerInward are grounded in captured peak distributions
+// (2026-06-26 dataset); cheek and lip-press lack capture data and use provisional ceilings in
+// the same vector-scale ballpark — validate these against a capture that includes them.
+const SUBTLE_PROFILE_THRESHOLD_MAX_BY_KEY = {
+  eyeClosure: 0.012,        // captured: working ~0.0103, achievable peaks 0.01-0.05
+  smilePull: 0.45,          // captured (open-smile): working ~0.39, peaks 0.20-0.86
+  puckerInward: 0.45,       // captured (pucker): working ~0.43, peaks 0.22-0.64
+  cheekSuckInward: 0.18,    // provisional (no capture)
+  cheekPuffOutward: 0.18,   // provisional (no capture)
+};
+const SUBTLE_PROFILE_THRESHOLD_MAX_BY_EXERCISE = {
+  "lip-press": 0.1,         // provisional (pairwise-scored, no capture)
+};
+
+function subtleProfileThresholdMax(exerciseId) {
+  const key = DIRECTIONAL_EXERCISE_SIGNALS[exerciseId]?.key;
+  const keyCap = key != null ? SUBTLE_PROFILE_THRESHOLD_MAX_BY_KEY[key] : undefined;
+  const exerciseCap = SUBTLE_PROFILE_THRESHOLD_MAX_BY_EXERCISE[exerciseId];
+  const cap = Math.min(keyCap ?? Infinity, exerciseCap ?? Infinity);
+  return Number.isFinite(cap) ? cap : null;
+}
 
 function avgXY(frame, idxs) {
   let sx = 0, sy = 0, c = 0;
@@ -1989,6 +2016,8 @@ function thresholdBandsForExercise(exerciseId, peak) {
 function effectiveProfileThreshold(exerciseId, threshold) {
   if (threshold == null) return null;
   if (NOSE_EXERCISES.has(exerciseId)) return Math.min(threshold, NOSE_PROFILE_THRESHOLD_MAX);
+  const subtleCap = subtleProfileThresholdMax(exerciseId);
+  if (subtleCap != null) return Math.min(threshold, subtleCap);
   return threshold;
 }
 
