@@ -46,7 +46,10 @@ const EXERCISE_BLENDSHAPES = {
 
 const MOVEMENT_SIDE_CONVENTION = "user-anatomical-v1";
 const LEGACY_MOVEMENT_SIDE_CONVENTION = "legacy-image-left-v0";
-const SCORING_MODEL_VERSION = 2;
+// v3: directional blendshape fusion gates rep activation only; the symmetry ratio is
+// computed from geometry alone (previously the per-side assist inflated the healthy side
+// and dragged min/max symmetry down). See computeDirectionalExerciseSymmetry.
+const SCORING_MODEL_VERSION = 3;
 const DEFAULT_SCORING_NOISE_MODE = "normal";
 const SCORING_NOISE_MODES = ["normal", "soft", "raw"];
 const SCORING_NOISE_MODE_SET = new Set(SCORING_NOISE_MODES);
@@ -122,8 +125,16 @@ function normalizeScoringNoiseMode(mode) {
 
 function scoringOptionsFrom(options = {}) {
   const scoringNoiseMode = normalizeScoringNoiseMode(typeof options === "string" ? options : options?.scoringNoiseMode);
+  // scoringNoiseOverrides lets the replay/calibration harness sweep individual noise-gate
+  // constants (e.g. directionalGateCap) without editing source — the mechanism the scoring
+  // model comments call for when tuning the gate against captured frames. Production callers
+  // never pass it, so the selected mode's config is used verbatim.
+  const overrides = (typeof options === "object" && options?.scoringNoiseOverrides && typeof options.scoringNoiseOverrides === "object")
+    ? options.scoringNoiseOverrides
+    : null;
   return {
     ...SCORING_NOISE_CONFIG[scoringNoiseMode],
+    ...(overrides ?? {}),
     scoringNoiseMode,
     scoringDiagnosticsEnabled: Boolean(typeof options === "object" && options?.scoringDiagnosticsEnabled),
   };
@@ -410,6 +421,15 @@ const DIRECTIONAL_BS_FUSION = {
   smilePull: { left: "mouthSmileLeft", right: "mouthSmileRight", weight: 0.02, minRaw: 0.002 },
   cheekSuckInward: { left: "cheekSquintLeft", right: "cheekSquintRight", weight: 0.02, minRaw: 0.002 },
 };
+
+// Whether an exercise's symmetry ratio is affected by the blendshape-fusion change in
+// scoring model v3. Only these exercises can score differently under the fix, so a
+// rescore/backfill can use the others as an untouched control to validate that its
+// neutral/noise reconstruction reproduces the live numbers.
+function exerciseUsesBlendshapeFusion(exerciseId) {
+  const key = DIRECTIONAL_EXERCISE_SIGNALS[exerciseId]?.key;
+  return key != null && Object.prototype.hasOwnProperty.call(DIRECTIONAL_BS_FUSION, key);
+}
 
 // Raw image-left is the user's anatomical right, so fuse the opposite-named blendshape
 // (matching the convention used by computeNostrilFlareSymmetry). The calibration-time
@@ -929,9 +949,19 @@ function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor,
   const rHasDirection = fusion != null && signals.right != null && signals.right >= fusion.minRaw;
   const lBsAssist = lHasDirection ? fusion.weight * directionalBsActivation(bsMap, neutralBs, fusion, "left") : 0;
   const rBsAssist = rHasDirection ? fusion.weight * directionalBsActivation(bsMap, neutralBs, fusion, "right") : 0;
-  const lAdjusted = left.adjusted + lBsAssist;
-  const rAdjusted = right.adjusted + rBsAssist;
-  const peak = Math.max(lAdjusted, rAdjusted);
+  // Gate, don't score: the blendshape assist only rescues a rep from being dropped
+  // (it feeds the fused peak the activation gate sees). The symmetry RATIO is computed
+  // from geometry alone. The blendshape model reports a stronger activation on the side
+  // that is actually moving (the healthy side on a palsy face), so folding the assist
+  // into the ratio inflated the larger side and pushed min/max down — making a face read
+  // as MORE asymmetric the harder the healthy side worked. Geometry already carries the
+  // true left/right balance; blendshapes only tell us movement happened at all.
+  const lGeom = left.adjusted;
+  const rGeom = right.adjusted;
+  const lFused = lGeom + lBsAssist;
+  const rFused = rGeom + rBsAssist;
+  const fusedPeak = Math.max(lFused, rFused);
+  const geomPeak = Math.max(lGeom, rGeom);
   const gate = directionalExerciseGate(config, left.noise, right.noise, options);
   const debugPayload = {
     signalType: config.type,
@@ -940,30 +970,52 @@ function computeDirectionalExerciseSymmetry(exerciseId, lm, neutral, noiseFloor,
       signal: debugMetric(left.raw),
       noisePenalty: debugMetric(left.noisePenalty),
       blendshapeAssist: debugMetric(lBsAssist),
-      adjusted: debugMetric(lAdjusted),
-      final: debugMetric(lAdjusted),
+      adjusted: debugMetric(lGeom),
+      fused: debugMetric(lFused),
+      final: debugMetric(lGeom),
     },
     rawImageRight: {
       signal: debugMetric(right.raw),
       noisePenalty: debugMetric(right.noisePenalty),
       blendshapeAssist: debugMetric(rBsAssist),
-      adjusted: debugMetric(rAdjusted),
-      final: debugMetric(rAdjusted),
+      adjusted: debugMetric(rGeom),
+      fused: debugMetric(rFused),
+      final: debugMetric(rGeom),
     },
-    returnedUserLeftDisp: debugMetric(rAdjusted),
-    returnedUserRightDisp: debugMetric(lAdjusted),
-    peak: debugMetric(peak),
+    returnedUserLeftDisp: debugMetric(rGeom),
+    returnedUserRightDisp: debugMetric(lGeom),
+    peak: debugMetric(fusedPeak),
+    geomPeak: debugMetric(geomPeak),
     gate: debugMetric(gate),
     noiseSource: config.key,
-    activationState: { aboveGate: peak >= gate },
+    activationState: { aboveGate: fusedPeak >= gate },
   };
-  if (peak < gate) {
+  if (fusedPeak < gate) {
     logScoringDiagnostics(exerciseId, "below signal gate", debugPayload, options);
     return null;
   }
-  const symmetry = Math.min(lAdjusted, rAdjusted) / peak;
+  // Movement detected only through the blendshape (geometry fully eaten by the noise
+  // floor on both sides): the rep moved, but there is no geometric balance to score, so
+  // drop it instead of returning a fabricated 0/0 symmetry that would tank the average.
+  if (geomPeak <= 0) {
+    logScoringDiagnostics(exerciseId, "blendshape-only, no geometric balance", debugPayload, options);
+    return null;
+  }
+  const symmetry = Math.min(lGeom, rGeom) / geomPeak;
   logScoringDiagnostics(exerciseId, "scored", { ...debugPayload, symmetry: debugMetric(symmetry) }, options);
-  return { symmetry, leftDisp: lAdjusted, rightDisp: rAdjusted, peak, directionalKey: config.key };
+  // gate/leftNoise/rightNoise/minSignal are surfaced for the calibration harness: they let a
+  // sweep recompute the admit decision for any gate constants without re-scoring each frame.
+  return {
+    symmetry,
+    leftDisp: lGeom,
+    rightDisp: rGeom,
+    peak: fusedPeak,
+    gate,
+    leftNoise: left.noise,
+    rightNoise: right.noise,
+    minSignal: config.minSignal ?? SCORING_ABSOLUTE_MIN_SIGNAL,
+    directionalKey: config.key,
+  };
 }
 
 function waterHoldSealLeakSignal(frame, neutralFrame, rawSide) {
@@ -2870,6 +2922,7 @@ export {
   effectiveProfileThreshold,
   profileLiveScoringThreshold,
   exerciseBaselineQuality,
+  exerciseUsesBlendshapeFusion,
   faceAlignmentFeedback,
   faceFrameNormalize,
   firstFacialTransformationMatrix,
