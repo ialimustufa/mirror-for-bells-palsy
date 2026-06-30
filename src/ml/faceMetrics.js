@@ -1062,6 +1062,13 @@ function computeWaterHoldSymmetry(exerciseId, lm, neutral, noiseFloor, facialTra
   const sealPenalty = leakSignal * WATER_HOLD_SEAL_LEAK_WEIGHT;
   const penalty = isolationPenalty + sealPenalty;
   const quality = targetSignal > 0 ? clampNumber(targetSignal / (targetSignal + penalty), 0, 1) : 0;
+  // Water hold is a one-sided isolation, not a left/right symmetry: even a clean hold keeps a
+  // little opposite-side movement and seal activity, so penalty ~ target and `quality` pins near
+  // 0.5 — a good hold then reads ~45% on the raw 0-1 scale and drags the session symmetry average
+  // (where two-sided exercises reach 90%+). Floor a scored hold at 50% and map the quality into
+  // [0.5, 1.0]: a neutral hold = 50%, a clean isolated hold climbs from there. Only applied once
+  // the hold clears the target gate below, so a non-attempt still scores nothing.
+  const scaledQuality = clampNumber(0.5 + quality * 0.5, 0.5, 1);
   const gate = Math.max(SCORING_ABSOLUTE_MIN_SIGNAL, options.pairwiseGate * 0.5);
   const debugPayload = {
     targetUserSide,
@@ -1093,9 +1100,9 @@ function computeWaterHoldSymmetry(exerciseId, lm, neutral, noiseFloor, facialTra
     logScoringDiagnostics(exerciseId, "below target gate", debugPayload, options);
     return null;
   }
-  logScoringDiagnostics(exerciseId, "scored", { ...debugPayload, symmetry: debugMetric(quality) }, options);
+  logScoringDiagnostics(exerciseId, "scored", { ...debugPayload, rawQuality: debugMetric(quality), symmetry: debugMetric(scaledQuality) }, options);
   return {
-    symmetry: quality,
+    symmetry: scaledQuality,
     leftDisp: rawSignals.left.adjusted,
     rightDisp: rawSignals.right.adjusted,
     peak: targetSignal,
