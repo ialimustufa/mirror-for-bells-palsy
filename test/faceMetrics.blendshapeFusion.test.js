@@ -71,6 +71,25 @@ test("blendshape assist rescues a subtle eye closure that the geometry alone dro
   assert.ok(withBlendshape.peak > 0, "assisted peak should be positive");
 });
 
+test("eye closure scores the lid convergence, not penalized for the upper lid leading", () => {
+  const neutral = makeNeutralFace();
+  // Two closures with the SAME aperture reduction (0.01 per eye):
+  // A) upper-lid dominant — the natural close: top descends 0.01, bottom static.
+  const topDominant = cloneLandmarks(neutral);
+  moveGroup(topDominant, [...LEFT_EYE_TOP, ...RIGHT_EYE_TOP], 0, 0.01);
+  // B) symmetric convergence: top descends 0.005, bottom rises 0.005.
+  const symmetric = cloneLandmarks(neutral);
+  moveGroup(symmetric, [...LEFT_EYE_TOP, ...RIGHT_EYE_TOP], 0, 0.005);
+  moveGroup(symmetric, [...LEFT_EYE_BOTTOM, ...RIGHT_EYE_BOTTOM], 0, -0.005);
+
+  const a = computeExerciseSymmetry("eye-close", topDominant, neutral, undefined, null, null);
+  const b = computeExerciseSymmetry("eye-close", symmetric, neutral, undefined, null, null);
+  assert.ok(a && b, "both closures should score on geometry alone");
+  // Same aperture change => same signal. The previous center-shift penalty halved the
+  // top-lid-dominant close; convergence is now scored directly, so the two agree.
+  assert.ok(Math.abs(a.peak - b.peak) < 1e-9, "upper-lid-dominant close must not be attenuated");
+});
+
 test("blendshape cannot fabricate a score in the opposite direction", () => {
   const neutral = makeNeutralFace();
   // Eye opening (aperture increase) is the opposite of eye closure, so there is no

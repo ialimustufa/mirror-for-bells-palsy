@@ -891,7 +891,19 @@ function eyeClosureRawSignal(frame, neutralFrame, rawSide) {
   const neutralAperture = Math.max(0, neutralBottom - neutralTop);
   const apertureClose = Math.max(0, neutralAperture - currentAperture);
   const centerShift = Math.abs(((curTop + curBottom) / 2) - ((neutralTop + neutralBottom) / 2));
-  return Math.max(0, apertureClose - centerShift);
+  // Eye closure is the upper and lower lids CONVERGING — the upper lid does most of the travel,
+  // so the lid-pair center naturally shifts downward during a normal close. We must still reject
+  // common-mode artifacts (a head bob, or a normalization scale change from lateral eye drift)
+  // that shrink the apparent gap without the lids actually converging. Use the center shift as a
+  // GATE rather than a linear subtraction. For lid travels a (top down) and b (bottom up),
+  // apertureClose = a + b and centerShift = |a - b| / 2, so a genuine convergent close has
+  // centerShift / apertureClose <= 0.5 (max 0.5 when only one lid moves — the normal upper-lid
+  // close). Translation/scale drives the center as hard as the gap, pushing the ratio above 0.5
+  // (the lateral-drift artifact sits at ~0.67). Reject above 0.5, otherwise score the FULL
+  // aperture reduction. Previously we SUBTRACTED centerShift, which cancelled the upper-lid
+  // travel that IS the close and roughly halved a genuine closure.
+  if (2 * centerShift > apertureClose) return 0;
+  return apertureClose;
 }
 
 function directionalRawSignal(frame, neutralFrame, mapping, config, rawSide) {
