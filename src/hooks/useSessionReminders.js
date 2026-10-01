@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { formatClock, isCountedSession, nextSessionAt, todayISO } from "../domain/session";
+import { formatClock, isCountedSession, localDateISO, nextSessionAt, todayISO } from "../domain/session";
 
 export const SESSION_REMINDER_TITLE = "Time for your Mirror session";
 export const SESSION_REMINDER_TAG = "mirror-session-reminder";
@@ -18,7 +18,7 @@ function validDate(value) {
 
 function dateISOFor(value) {
   try {
-    return validDate(value).toISOString().split("T")[0];
+    return localDateISO(validDate(value)) ?? todayISO();
   } catch {
     return todayISO();
   }
